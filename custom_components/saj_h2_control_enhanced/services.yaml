@@ -304,3 +304,62 @@ apply_schedules:
       required: false
       selector:
         text:
+
+supervised_outside_tou_fallback:
+  name: Outside TOU windows behaviour (LIVE WRITE)
+  description: >-
+    Change the SAJ H2 outside-TOU setting at 0x365F:
+    0 Standby, 1 Self-consumption. Selecting Standby may stop battery
+    charging/discharging when no TOU period is active. Standby needs an explicit
+    confirmation popup in the dashboard and corresponding authorization field.
+    A single Modbus write is followed by complete double-read verification.
+    Operating mode and all charging/discharging schedules must stay unchanged.
+    No retries or automatic rollback on uncertain outcome.
+  fields:
+    target_fallback:
+      name: New outside-TOU mode (0 Standby, 1 Self-consumption)
+      required: true
+      selector:
+        select:
+          options:
+            - label: Standby (0)
+              value: "0"
+            - label: Self-consumption (1)
+              value: "1"
+    expected_fallback:
+      name: Current outside-TOU mode (0 or 1)
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 1
+    expected_mode:
+      name: Current operating mode (0 or 1)
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 1
+          step: 1
+    standby_confirmation:
+      name: Explicit Standby authorization
+      description: Required for Standby only - I CONFIRM STANDBY OUTSIDE TOU
+      required: false
+      selector:
+        text:
+    device_model:
+      name: Verified inverter model
+      required: true
+      selector:
+        text:
+    control_firmware:
+      name: Verified control board firmware
+      required: true
+      selector:
+        text:
+    entry_id:
+      name: Optional SAJ TOU integration entry
+      required: false
+      selector:
+        text:
