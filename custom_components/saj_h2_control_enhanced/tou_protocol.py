@@ -1,8 +1,9 @@
 """Decode read-only SAJ H2 Time-of-Use registers. No Modbus writes.
 
 Validated on owner's inverter: mode 0/1; 7+7 slot blocks; discharge
-raw 100=9900W, 98=9702W, 50=4950W; weekday raw mask 4=Wednesday.
-Other weekday bits and charge power scaling remain unverified.
+discharge raw 100=9900W, 98=9702W, 50=4950W; charging raw 50=4950W.
+Wednesday weekday bit 4 and Friday bit 16 are verified. The remaining
+weekday bits and charge-side scaling beyond raw 50 are not yet verified.
 """
 from dataclasses import dataclass
 
@@ -31,13 +32,17 @@ class Slot:
             "start": self.start,
             "end": self.end,
             "weekday_mask_raw": self.day_mask,
-            "weekday_verified": "Wednesday" if self.day_mask == 4 else "Unverified",
+            "weekday_verified": {4: "Wednesday", 16: "Friday",
+                                 20: "Wednesday, Friday"}.get(self.day_mask, "Unverified"),
             "power_percent_raw": self.power_percent,
         }
         if discharge:
             result["power_watts_saj_display"] = self.power_percent * 99
+            result["power_conversion_verified"] = True
         else:
-            result["power_watts_saj_display"] = None
+            # Charge power has only one paired eLEKeeper/Modbus test so far.
+            result["power_watts_saj_display"] = 4950 if self.power_percent == 50 else None
+            result["power_conversion_verified"] = self.power_percent == 50
         return result
 
 
