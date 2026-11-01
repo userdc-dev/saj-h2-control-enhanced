@@ -152,3 +152,17 @@ Owner used **eLEKeeper only** to change the existing Wednesday discharge slot fr
 The owner has demonstrated that a schedule setting can be edited using eLEKeeper (while briefly in TOU) and returned to mode 0, leaving the scheduled weekday stored while not currently running. This tests readback correspondence, not real discharge effectiveness.
 
 No Modbus writes performed; this repository's control implementation remains non-writing.
+
+## Correction and breakthrough: app RE-READ shows 9702 W for raw 98 (2026-11-01)
+
+**Important correction to the previous paired test:** User initially entered/reported `9800 W` while changing the schedule in the SAJ app, but on reopening the app **the actually saved/displayed power was `9702 W`**, while read-only Modbus was `0x361D = 1122 = (weekday mask 4 << 8) + power raw 98`. Therefore the prior row `9800 W ↔ raw 98` describes a **requested input**, NOT a confirmed stored app setting; it is erroneous if presented as a confirmed pair. The saved/confirmed value is **9702 W ↔ raw 98**.
+
+Combined with original `9900 W ↔ raw 100` and owner's reported first nonzero `99 W`, the simple relation **displayed power W = Modbus power raw × 99** now fits all currently observed *stored* data:
+- raw 100 → 9900 W (confirmed saved in app);
+- raw 98 → 9702 W (confirmed saved in app);
+- raw 1 → 99 W (app minimum reported, raw pairing not independently read).
+Predicted, not yet tested: raw 99 → 9801 W; raw 50 → 4950 W.
+
+The app may **quantize, floor, round or normalize entered watts when saved and read back**; exact input handling is unverified. Do not conclude the UI permits arbitrary `9800 W` or implement a rounding rule without testing. Previous assumptions about being able to choose only 4900/5000 and not 4950 may reflect the input widget or the save-time normalization; check future official-app readback.
+
+**Developer action:** use `W = raw * 99` as the leading *read-only display hypothesis* for discharge on this 10 kW installation, but **do not authorize writes or apply this blindly to charge schedules** without additional paired confirmation at another point, power-limit validation and firmware-specific hardware testing. Do not ask user to set 9700 W based on earlier incorrect belief the confirmed saved value was 9800 W.
