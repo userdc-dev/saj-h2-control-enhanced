@@ -262,7 +262,7 @@ class SajTOUDynamicCard extends HTMLElement {
     const typed=window.prompt(
       "Type ONLY the confirmation phrase below (no quotes or extra characters):\n\n"+
       phrase,"");
-    if (typed!==phrase) {
+        if (typed!==phrase) {
       this._modeFeedback="Cancelled: confirmation phrase did not match.";
       this._modeFeedbackError=true;this.render();return;
     }
