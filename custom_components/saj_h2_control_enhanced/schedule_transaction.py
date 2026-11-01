@@ -202,8 +202,23 @@ def build_plan(snapshot, *, expected_charge, expected_discharge,
             enable|=1<<(n-1)
             packed=(mask<<8)|power
             new_words=(clock(start),clock(end),packed)
-            for j,value in enumerate(new_words):
-                idx=(2 if direction=="charge" else 0)+3*(n-1)+j
+            word_offset=(2 if direction=="charge" else 0)+3*(n-1)
+            old_start=words[word_offset]
+            old_end=words[word_offset+1]
+            # Existing enabled slots remain active during a multi-write
+            # change. Choose an order that never temporarily produces
+            # start >= end. For a later time window, extend end FIRST.
+            currently_enabled=bool(
+                (charge0[0] if direction=="charge" else charge0[1]) &
+                (1<<(n-1))
+            )
+            order=(1,0,2) if (
+                currently_enabled and new_words[0]>=old_end and
+                old_start<new_words[1]
+            ) else (0,1,2)
+            for j in order:
+                value=new_words[j]
+                idx=word_offset+j
                 if words[idx]!=value:
                     steps.append(WriteStep(
                         base+3*(n-1)+j,value,words[idx],
