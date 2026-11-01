@@ -51,8 +51,8 @@ async def async_setup(hass: HomeAssistant, config):
         config = coordinator.data["config"]
         if config.mode not in (0, 1):
             raise vol.Invalid("Inverter is in an unsupported operating mode")
-        if config.fallback != 1:
-            raise vol.Invalid("TOU fallback is not Self-consumption")
+        if config.fallback not in (0, 1):
+            raise vol.Invalid("Outside-TOU fallback code is unsupported")
         if not 0 <= config.charge_mask <= 127 or not 0 <= config.discharge_mask <= 127:
             raise vol.Invalid("Unrecognized schedule enable bits")
         if sum(s.enabled for s in config.charge_slots) != config.charge_mask.bit_count():
