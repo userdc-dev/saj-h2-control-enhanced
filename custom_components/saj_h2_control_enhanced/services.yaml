@@ -1,0 +1,24 @@
+preview_mode_change:
+  name: Preview inverter operating mode change
+  description: >-
+    Re-read the live SAJ H2 inverter twice and report whether switching to
+    Self-consumption or Time-of-Use would be safe to propose. This service
+    NEVER writes a register. It returns the result in Developer Tools > Actions.
+  fields:
+    target_mode:
+      name: Target operating mode
+      description: Which operating mode to check (does not activate it).
+      required: true
+      selector:
+        select:
+          options:
+            - label: Self-consumption
+              value: self_consumption
+            - label: Time-of-Use
+              value: time_of_use
+    entry_id:
+      name: Integration entry ID
+      description: Optional, required only when multiple SAJ control entries exist.
+      required: false
+      selector:
+        text:
