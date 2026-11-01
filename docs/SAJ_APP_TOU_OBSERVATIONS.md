@@ -174,3 +174,19 @@ User observes that eLEKeeper's editing field appears to accept **multiples of 10
 **Important nuance:** This does NOT demonstrate rounding to the nearest whole percent: 9800/9900×100≈98.99, for which nearest would be 99 (9801 W), yet observed raw 98. **Floor/truncation** of 9800/9900×100 would yield 98 (9702 W), matching observation; still only a hypothesis. Preserve exact observed raw percentage as the canonical device state for later HA sync. UI may show both input draft watts and canonical stored watts, clearly distinguishing them. A schedule should never be continually rewritten just to match its pre-save requested watt input, otherwise competing apps may oscillate.
 
 Before writes: verify another 100 W input pair and separate charge-side power scaling and firmware behavior. No hardware writes are authorized.
+
+## Third paired test — 5000 W entered and TOU mode active (2026-11-01)
+
+Owner selected **Time-of-Use mode** in official eLEKeeper and entered **5000 W** in existing Wednesday 22:00–22:40 discharge slot. Did not return to Self-consumption before read. Read-only Modbus subsequently reported:
+
+- **0x3647 = 1** — current overall mode **Time-of-Use** (confirmed first mode 1 readback).
+- **0x361D = 1074** = 0x0432, weekday mask **4** (Wednesday), stored raw schedule power **50**.
+- **0x3604 = 0** — no charge schedules enabled.
+- **0x3605 = 1** — one discharge schedule enabled.
+- **0x365F = 1** — outside-window fallback **Self-consumption**.
+
+This confirms app input of 5000 W produces **raw 50**, but we have **NOT yet observed the app's refreshed/reopened canonical displayed watts**. Hypothesis W = raw × 99 predicts **4950 W**. Ask owner to reopen the discharge schedule and report whether it displays 4950 W (do not adjust or save again).
+
+Observed raw pairs: app originally displayed 9900 W → 100; app reopened 9702 W → 98; user input 5000 W → 50. Device-side mode 1 and fallback 1 coexist; there was no enabled Sunday schedule in the earlier configuration. This tests configuration readback only, **not** whether scheduled battery discharge starts/stops correctly or safe direct Modbus writes.
+
+Do NOT assert live time-of-use control integration is implemented; there are still no hardware control writes from Home Assistant. Keep the owner informed of remaining uncertainties and avoid unapproved mode changes.
