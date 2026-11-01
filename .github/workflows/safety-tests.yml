@@ -12,6 +12,8 @@ jobs:
           python-version: '3.13'
       - name: Syntax compile
         run: python -m compileall -q control_core custom_components tests
+      - name: Check dynamic dashboard JavaScript syntax
+        run: node --check custom_components/saj_h2_control_enhanced/frontend/saj-tou-dynamic-card.js
       - name: Offline tests (never access inverter)
         run: |
           python -m unittest discover -s tests -p 'test_telemetry.py'
