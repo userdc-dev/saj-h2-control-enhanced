@@ -1,5 +1,30 @@
 # Changelog — SAJ H2 Control Enhanced
 
+## 0.5.3 — 2026-11-02 (combined energy visualization + TOU controls)
+
+- Recreated the owner's earlier **SAJ Energy → Live energy flow** five-column table inside the **independent SAJ TOU Control** dashboard: Solar, House, Battery, Grid and Forecast, using existing read-only Safe Monitor entities.
+- Added compact live relative-power bars for Solar / House / Battery / Grid, a battery SOC bar, contextual charging/discharging/grid-flow text and current solar outlook. Missing readings show **—** rather than fabricated values. Grid direction remains provisionally labelled; forecast is only an estimate.
+- Made read-only sensor updates refresh **only** the energy section, preserving focus/unsaved input in the TOU editor.
+- Preserved actual inverter controls, one-confirmation Standby warning and backend write checks. **Neither the separate `saj_h2_safe` repository nor existing SAJ Energy dashboard were modified.**
+- Replaced obsolete design-only README and developer handover with a full canonical current guide, preserved the old long development chronology in an archive, and corrected `docs/PROJECT_HANDOFF.md` entrypoint.
+- Frontend cache-busted at `/saj-h2-tou/v053/saj-tou-dynamic-card.js`. This is a **visualization change**; no new Modbus writes or control semantics are introduced.
+- The existing Standby write and broad schedule-write variants remain only partially field-validated despite offline tests; do not claim otherwise.
+
+## 0.5.2 — 2026-11-02 (editable outside-TOU fallback)
+
+- Added **Outside TOU windows** dropdown for Self-consumption (1) and Standby (0) using `0x365F`, with one mandatory Standby confirmation popup and no typed phrase.
+- Full preflight and post-write Modbus verification of mode and both schedule blocks; no automatic retries.
+- Updated mode and schedule code to recognise fallback 0 or 1. Added fake-Modbus fallback tests in CI.
+- No completed on-device fallback write confirmation captured at release time.
+
+## 0.5.1 — 2026-11-02 (power percentage and watts)
+
+- Charging/discharging sliders show both **% and approximate W** simultaneously, based on paired elekeeper/Modbus samples (99 W per raw unit).
+
+## 0.5.0 — 2026-11-02 (full schedule controls)
+
+- Full 7+7 charging/discharging schedule editor, one Save workflow, explicit confirmation, full Modbus readback verification, weekday masks, and overnight split helper.
+- Live schedule writes use individual register changes; incomplete transactions may leave partial settings. Fake-Modbus tests passed; some owner hardware combinations remain unverified.
 
 ## 0.2.4 — 2026-11-01 (second charging power pair)
 
