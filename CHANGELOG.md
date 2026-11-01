@@ -1,5 +1,13 @@
 # Changelog — SAJ H2 Control Enhanced
 
+
+## 0.2.4 — 2026-11-01 (second charging power pair)
+
+- Owner confirmed the official eLEKeeper app **saved 6930 W** after a 7000 W charging setpoint request; Modbus Friday charge raw 70. Earlier app confirmed raw50→4950 W. Both support discharge-calibrated **99 W per raw unit** for readback.
+- Decoder presents modeled charge watts `raw×99` across the slider with flags distinguishing direct confirmed raw 50/70 from modeled other raw values. No claim that predicted values are individually verified or actual delivered electrical power.
+- Dynamic read-only card displays canonical saved charging watts and modeled preview watts. Tests cover exact raw70 snapshot and estimated raw51 case.
+- Frontend cache-bust path `v024`; integration version 0.2.4. All controls still local preview-only and no HA Modbus writes.
+
 ## 0.2.3 — 2026-11-01 (confirmed Friday charging readback)
 
 - New official eLEKeeper ↔ read-only Modbus paired test: **Friday charge 22:00–22:40, saved 4950 W** appeared as raw 0x3604 enable 1, packed time 5632–5672, weekday/power combined **4146 = 0x1032** (weekday mask 16 Friday; raw 50).
