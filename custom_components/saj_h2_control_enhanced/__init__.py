@@ -14,7 +14,8 @@ from pymodbus.client import AsyncModbusTcpClient
 from .const import DEFAULT_SCAN_INTERVAL, UNIT_ID
 from .tou_protocol import (
     CHARGE_START, CHARGE_COUNT, DISCHARGE_START, DISCHARGE_COUNT,
-    MODE_ADDR, FALLBACK_ADDR, decode_config, InvalidTOUData,\n    active_signature, describe_changes,
+    MODE_ADDR, FALLBACK_ADDR, decode_config, InvalidTOUData,
+    active_signature, describe_changes,
 )
 
 _LOGGER = logging.getLogger(__name__)
