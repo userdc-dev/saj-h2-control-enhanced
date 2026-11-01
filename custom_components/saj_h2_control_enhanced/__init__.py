@@ -140,6 +140,52 @@ async def async_setup(hass: HomeAssistant, config):
     # This separate action requires a literal confirmation and exact old mode.
     pilot_lock = asyncio.Lock()
 
+    async def supervised_friday_charge_time_pilot(call):
+        """One explicitly authorized 21:30–22:00 Friday charging test."""
+        if pilot_lock.locked():
+            raise vol.Invalid("Another supervised inverter control is in progress")
+        entries = [
+            e for e in hass.config_entries.async_entries(DOMAIN)
+            if getattr(e, "runtime_data", None) is not None
+        ]
+        requested_id = call.data.get("entry_id")
+        if requested_id:
+            entries = [e for e in entries if e.entry_id == requested_id]
+        if len(entries) != 1:
+            raise vol.Invalid("Exactly one matching SAJ control entry is required")
+        coordinator = entries[0].runtime_data
+        from .supervised_schedule_write import (
+            run_friday_charge_time_pilot, ScheduleWriteError,
+        )
+        host, port = coordinator._connection_details()
+        async with pilot_lock:
+            try:
+                result = await run_friday_charge_time_pilot(
+                    host=host, port=int(port),
+                    confirmation=call.data["confirmation"],
+                    device_model=call.data["device_model"],
+                    control_firmware=call.data["control_firmware"],
+                )
+                await coordinator.async_request_refresh()
+                return result
+            except ScheduleWriteError as exc:
+                raise vol.Invalid(
+                    str(exc) + "; do not repeat a possibly partial write"
+                ) from exc
+
+    hass.services.async_register(
+        DOMAIN, "supervised_friday_charge_time_pilot",
+        supervised_friday_charge_time_pilot,
+        schema=vol.Schema({
+            vol.Required("confirmation"): vol.In(
+                ("I AUTHORIZE FRIDAY CHARGE TIME TEST",)),
+            vol.Required("device_model"): vol.In(("H2-10K-S3-A",)),
+            vol.Required("control_firmware"): vol.In(("v2.018",)),
+            vol.Optional("entry_id"): str,
+        }),
+        supports_response=SupportsResponse.ONLY,
+    )
+
     async def supervised_tou_pilot(call):
         if pilot_lock.locked():
             raise vol.Invalid("A supervised mode test is already running")
