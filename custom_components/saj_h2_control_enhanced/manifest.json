@@ -1,7 +1,7 @@
 {
   "domain": "saj_h2_control_enhanced",
-  "name": "SAJ H2 Control Enhanced (Read-only TOU Preview)",
-  "version": "0.2.6",
+  "name": "SAJ H2 Control Enhanced (TOU Mode Control + Schedule Preview)",
+  "version": "0.3.0",
   "documentation": "https://github.com/userdc-dev/saj-h2-control-enhanced",
   "issue_tracker": "https://github.com/userdc-dev/saj-h2-control-enhanced/issues",
   "requirements": [
