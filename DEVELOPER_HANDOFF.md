@@ -297,3 +297,20 @@ The user had to leave and asked for as much progress as possible in the current 
 6. Before any real writable mode/charge/discharge testing, require a new user approval, hardware-specific safe command proof and safe stop/recovery. Never write modes 2 Backup or 3 Off-grid/Passive.
 
 **Status boundary:** GitHub code updated and CI-tested, but `0.1.1` is not installed. Only `0.1.0` has been observed working live.
+
+## 22. v0.2.0 dynamic dashboard, preview sliders and automatic discovery (2026-11-01)
+
+The user requested a **dynamic self-updating dashboard with all 0–7 charge and 0–7 discharge schedules**, day/time/power sliders, and automatic inverter discovery and entity matching.
+
+**Implemented in GitHub under this separate repo, NOT deployed to Kamrui:**
+- Version `0.2.0` in `custom_components/saj_h2_control_enhanced/manifest.json`; includes `frontend`, `http` and `lovelace` dependencies.
+- `config_flow.py` discovers existing configured `saj_h2_safe` entries and offers them as a one-click selection instead of manual IP. Manual fallback if none. Existing v0.1.x entry unchanged; coordinator detects uniquely matching safe monitor host and follows its current host/port. Config entries with `source_monitor_entry_id` fail closed if that monitor disappears.
+- `sensor.py` includes stable `saj_tou_role` and `saj_tou_entry_id` attributes even while source unavailable. **Original entity unique IDs preserved**.
+- `frontend/saj-tou-dynamic-card.js`: custom card auto-discovers TOU device entities, groups by integration entry ID, includes device selector; reads mode, TOU fallback, 0–7/7 active schedule rows and live source status; supports 24h start/end inputs, seven weekday checkboxes and local-preview raw-% sliders, with discharge readback W=raw×99 (only this firmware profile). For charge watts and unverified weekday masks, avoids inventing conversion. Each row can be preview-added/removed up to 7. Local drafts not persistent; if no draft changes, UI sliders follow eLEKeeper readback, if editing, retain draft and show Reload draft from inverter.
+- **Absolutely NO WRITE PATH or real action buttons.** All editors are front-end previews. An Apply-to-inverter button is disabled. We have not tested actual mode switches or direct writes.
+- `frontend_setup.py`: registers static bundled card JS using `hass.http.async_register_static_paths` and frontend extra-JS loading; attempts to create a separate `SAJ TOU Control` Lovelace storage dashboard only when absent. Existing `SAJ Energy` never modified. HA storage dashboard internal APIs may change, so any error is caught/logged; user can add `type: custom:saj-tou-dynamic-card` to a Manual card if auto dashboard fails. **Auto dashboard not verified in owner's HA**.
+- CI includes Python syntax/offline unit tests/guard against Modbus write functions plus JS `node --check`; confirmed run success at commits before documentation changes. Check current HEAD CI.
+- Installation and limitations: [docs/DYNAMIC_DASHBOARD_V020.md](docs/DYNAMIC_DASHBOARD_V020.md). GitHub code edits **do NOT auto-update existing Home Assistant**.
+- Next: in-place update the **control integration only**, do not delete or re-add entries, do not change `saj_h2_safe` or `SAJ Energy`; restart Home Assistant and check sidebar for `SAJ TOU Control`. Confirm device/role auto discovery and that all 0–7 slots and preview editors render; fix HA-specific frontend setup errors if any. Only then consider backend writing research under explicit user authorization and hard mode 2/3 exclusions.
+
+**Critical promise boundary:** user requested operational sliders eventually but v0.2.0 is **only preview** because inverter write commands and safe cancellation have not been proven. Don't claim otherwise, and never run experimental Modbus writes without a new user-approved safety plan.
