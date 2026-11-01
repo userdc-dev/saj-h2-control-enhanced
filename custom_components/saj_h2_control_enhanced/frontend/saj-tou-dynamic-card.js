@@ -427,6 +427,9 @@ class SajTOUDynamicCard extends HTMLElement {
     if (!window.confirm("LIVE INVERTER CONTROL: switch from "+
       (current===0?"Self-consumption":"Time-of-Use")+" to "+label+
       "?\n\nThis may change battery charging/discharging and grid exports."+
+      (target===1 && fallback===0 ?
+        "\nWARNING: Outside TOU windows is set to Standby. "+
+        "The battery may enter Standby outside your scheduled periods." : "")+
       "\nSaved schedules will not be edited. Have elekeeper available.")) return;
     this._modeBusy=true;
     this._modeBusyEntry=group.id;
