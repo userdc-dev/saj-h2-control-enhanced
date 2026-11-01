@@ -1,6 +1,6 @@
 """Register a dynamic SAJ TOU card and independent SAJ TOU dashboard.
 
-Safe-by-default: never modify an existing dashboard, never touch SAJ Energy.
+Safe-by-default: only migrate the original generated view title when its\nexact stored layout matches. Never touch user-customized dashboards or SAJ Energy.
 The card uses actual Home Assistant entity registry IDs and state attributes,
 not assumed sensor names. Schedule drafts support opt-in validated writes; mode changes require confirmation; fallback supports confirmed live control.
 """
