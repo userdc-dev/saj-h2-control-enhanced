@@ -1,5 +1,14 @@
 # Changelog — SAJ H2 Control Enhanced
 
+## 0.5.6 — 2026-11-02 (inverter controls visual alignment)
+
+- Matched the owner's screenshot: placed **Refresh inverter state** in the right side of the unified Inverter controls header, rather than underneath the operating-mode buttons.
+- Current device modes now appear inline beside Operating mode and Outside TOU windows; improved column alignment, button contrast, spacing, focus states and narrow-screen stacking.
+- **No backend Modbus write behaviour changed**; existing one-confirmation actions and readback checks remain.
+- Cache-busted the card at `/saj-h2-tou/v056/saj-tou-dynamic-card.js`.
+- Owner's release policy: all incremental improvements remain small `0.x.y` versions; **v1.0.0 is reserved for the final stable, hardware-verified release**.
+
+
 ## 0.5.5 — 2026-11-02 (native page title and multi-inverter header picker)
 
 - Changed the integration-generated Lovelace view title from **Time of Use** to **SAJ H2 Control**, including a safe one-time migration of the existing single-card storage dashboard.
