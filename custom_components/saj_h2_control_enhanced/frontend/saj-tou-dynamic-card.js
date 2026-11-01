@@ -87,8 +87,9 @@ function cloneDraft(group) {
       start:cleanTime(v.start),end:cleanTime(v.end),
       percent:Math.max(0,Math.min(100,Number(v.power_percent_raw)||0)),
       dayMask:Number(v.weekday_mask_raw)||0,
-      days: ((Number(v.weekday_mask_raw)||0) & ~21) === 0 ?
+      days: ((Number(v.weekday_mask_raw)||0) & ~23) === 0 ?
         [...((Number(v.weekday_mask_raw)||0)&1 ? ["Mon"] : []),
+         ...((Number(v.weekday_mask_raw)||0)&2 ? ["Tue"] : []),
          ...((Number(v.weekday_mask_raw)||0)&4 ? ["Wed"] : []),
          ...((Number(v.weekday_mask_raw)||0)&16 ? ["Fri"] : [])] : [],
       original:true
@@ -190,7 +191,7 @@ class SajTOUDynamicCard extends HTMLElement {
     if (Array.isArray(change)&&change.length) {
       add(card,el("p","muted","Last detected change: "+change.join("; ")));
     }
-    add(card,el("div","warn","Local draft only: sliders, times and weekday selectors DO NOT save to SAJ or eLEKeeper. Monday, Wednesday and Friday weekday bits are confirmed. Charge power at raw 50 = 4950 W and raw 70 = 6930 W is app-confirmed; other raw levels are modeled at 99 W per unit. Other weekday bits still require testing. Device settings follow HA readback unless you have an edited draft. Click Reload draft to accept external changes."));
+    add(card,el("div","warn","Local draft only: sliders, times and weekday selectors DO NOT save to SAJ or eLEKeeper. Monday, Tuesday, Wednesday and Friday weekday bits are confirmed. Charge power at raw 50 = 4950 W and raw 70 = 6930 W is app-confirmed; other raw levels are modeled at 99 W per unit. Other weekday bits still require testing. Device settings follow HA readback unless you have an edited draft. Click Reload draft to accept external changes."));
   }
   choice(options,current,onChange) {
     const select=el("select");
@@ -216,7 +217,7 @@ class SajTOUDynamicCard extends HTMLElement {
       remove.addEventListener("click",()=>{rows.splice(index,1);draft.changed=true;this.render()});
       add(bar,el("strong",null,title+" "+(index+1)),remove);
       add(container,bar);
-      if (row.original && (row.dayMask & ~21)) add(container,el("div","saved","Device weekday mask: "+row.dayMask+" (unverified weekday bits present; preview cannot safely show every day)"));
+      if (row.original && (row.dayMask & ~23)) add(container,el("div","saved","Device weekday mask: "+row.dayMask+" (unverified weekday bits present; preview cannot safely show every day)"));
       const times=el("div","inputs");
       for (const key of ["start","end"]) {
         const wrapper=el("label","muted",key==="start"?"Start · 24h":"End · 24h");
