@@ -4,7 +4,7 @@
 
 > **New developer / AI assistant:** [READ THE COMPLETE DEVELOPER_HANDOFF.md FIRST](DEVELOPER_HANDOFF.md). The handover includes exact inverter registers, code architecture, real-vs-simulated testing evidence, safety gates, recovery steps, and outstanding requirements. The historical chronology is preserved in [the archive](docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md).
 >
-> **Version in this README:** v0.5.6. Inspect [manifest.json](custom_components/saj_h2_control_enhanced/manifest.json) and [GitHub Actions](https://github.com/userdc-dev/saj-h2-control-enhanced/actions) to confirm the current release.
+> **Version in this README:** v0.5.7. Inspect [manifest.json](custom_components/saj_h2_control_enhanced/manifest.json) and [GitHub Actions](https://github.com/userdc-dev/saj-h2-control-enhanced/actions) to confirm the current release.
 
 **Versioning rule:** Keep iterative improvements in the pre-1.0 patch series (`0.5.6`, `0.5.7`, etc.) until the complete feature set is stable and hardware-verified. Reserve **v1.0.0** for the final release; do not prematurely claim stability with a major version bump.
 
@@ -13,10 +13,10 @@
 - Controls operating mode: **Self-consumption ↔ Time-of-Use**. Both directions have been verified on the owner's actual SAJ H2-10K-S3-A inverter and in elekeeper.
 - Edits **up to seven charge** and **seven discharge** time slots, with 24-hour time pickers, Monday–Sunday day choices, add/remove, and a power slider showing **both percentage and estimated watts**.
 - Uses **Save schedule changes to inverter** with internal validation and **one confirmation popup**; each changed Modbus word is verified. Multiple writes are not atomic; an interruption could leave partial settings.
-- Supports **Outside TOU windows: Self-consumption or Standby**. Selecting Standby displays one warning popup. The new fallback write has been offline-tested but has **not** been independently verified in a completed field test.
+- Supports **Outside TOU windows: Self-consumption or Standby** through a dark, accessible in-card menu (avoiding white native popup on Windows/Brave). Selecting Standby displays one warning popup. The new fallback write has been offline-tested but has **not** been independently verified in a completed field test.
 - Offers **Split overnight into two schedules** in the UI because elekeeper does not support a single schedule crossing midnight.
 - Includes a polished **Live energy flow** inside the TOU dashboard, based on existing read-only SAJ Safe Monitor entities: Solar, House, Battery, Grid and Forecast table; relative power bars; battery SOC and estimated stored energy. This visualization is read-only and must not modify the monitoring integration.
-- Auto-creates a **separate SAJ TOU Control** sidebar dashboard with the native page title **SAJ H2 Control**. Existing integration-generated dashboards receive a safe title-only migration; customized dashboard layouts are never overwritten. With multiple inverters, the device switcher appears immediately below the native Home Assistant header.
+- Provides a **Refresh / reload data** action next to Last verified; it requests fresh read-only TOU settings, Safe Monitor live data and forecast data without any Modbus writes. Auto-creates a **separate SAJ TOU Control** sidebar dashboard with the native page title **SAJ H2 Control**. Existing integration-generated dashboards receive a safe title-only migration; customized dashboard layouts are never overwritten. With multiple inverters, the device switcher appears immediately below the native Home Assistant header.
 
 The integration is **not** a completed universal inverter controller: forced timed charging/discharging, OCPP, HVAC, and automatic tariff optimisation remain future work. Inferred Saturday/Sunday individual bits and some schedule-write combinations still need additional field verification.
 
