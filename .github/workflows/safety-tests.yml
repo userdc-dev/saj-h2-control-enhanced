@@ -17,6 +17,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_telemetry.py'
           python -m unittest discover -s tests -p 'test_tou_readback.py'
           python -m unittest discover -s tests -p 'test_ha_tou_protocol.py'
+          python -m unittest discover -s tests -p 'test_reconciliation.py'
           python tests/test_safety_policy.py
       - name: Reject Modbus write implementations
         run: |
