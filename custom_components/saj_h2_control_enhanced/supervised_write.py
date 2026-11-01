@@ -5,7 +5,7 @@ must manually invoke the HA action with an exact confirmation phrase.
 This module is NOT imported by any polling path or dashboard.
 
 Only write: Modbus function 06 to 0x3647, value 0 or 1. Never write schedules/fallback.
-No automatic retry or rollback because a VPP/eLEKeeper may act concurrently.
+No automatic retry or rollback because a VPP/elekeeper may act concurrently.
 """
 import asyncio
 import inspect
@@ -118,7 +118,7 @@ async def run_supervised_tou_test(
         if response is None or response.isError():
             raise SupervisedWriteError(
                 "Mode write not acknowledged; result uncertain. Inspect live "
-                "readback and restore using eLEKeeper if needed; no retry issued")
+                "readback and restore using elekeeper if needed; no retry issued")
         # Read twice per check to detect a changing controller/app.
         for check in range(6):
             await sleep(2)
@@ -130,7 +130,7 @@ async def run_supervised_tou_test(
                     before.fallback != after.fallback):
                 raise SupervisedWriteError(
                     "Schedules or fallback changed after mode write; "
-                    "inspect eLEKeeper immediately")
+                    "inspect elekeeper immediately")
             if after.mode == target_mode:
                 return {
                     "status": "VERIFIED_BY_MODBUS",
@@ -141,17 +141,17 @@ async def run_supervised_tou_test(
                     "fallback_unchanged": True,
                     "verification_checks": check + 1,
                     "message": (
-                        f"Inverter reports {after.mode_text}. eLEKeeper may lag. "
+                        f"Inverter reports {after.mode_text}. elekeeper may lag. "
                         "Check for external VPP/controller overrides."),
                 }
         raise SupervisedWriteError(
             f"Mode write sent but no confirmed mode {target_mode} within 12 seconds; "
-            "check eLEKeeper and direct readback. Do not repeat command")
+            "check elekeeper and direct readback. Do not repeat command")
     except Exception:
         if sent:
             _LOGGER.exception(
                 "Supervised SAJ mode write sent or attempted; state uncertain "
-                "until eLEKeeper and Modbus readback checked")
+                "until elekeeper and Modbus readback checked")
         raise
     finally:
         client.close()
