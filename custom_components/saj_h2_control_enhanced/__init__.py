@@ -82,6 +82,60 @@ async def async_setup(hass: HomeAssistant, config):
         }),
         supports_response=SupportsResponse.ONLY,
     )
+    async def preview_schedule_change(call):
+        """Validate one edited existing slot against a fresh double-read."""
+        entries = [
+            entry for entry in hass.config_entries.async_entries(DOMAIN)
+            if getattr(entry, "runtime_data", None) is not None
+        ]
+        requested_id = call.data.get("entry_id")
+        if requested_id:
+            entries = [entry for entry in entries if entry.entry_id == requested_id]
+        if len(entries) != 1:
+            raise vol.Invalid("Exactly one SAJ TOU control integration required")
+        coordinator = entries[0].runtime_data
+        await coordinator.async_request_refresh()
+        if not coordinator.last_update_success or not coordinator.data:
+            raise vol.Invalid("Fresh double-read unavailable; preview refused")
+        from .schedule_preview import (
+            preview_existing_slot, SlotValue, SchedulePreviewError,
+        )
+        d = call.data
+        try:
+            return preview_existing_slot(
+                coordinator.data["config"],
+                direction=d["direction"], slot_number=d["slot"],
+                expected=SlotValue(
+                    d["expected_start"], d["expected_end"],
+                    d["expected_day_mask"], d["expected_power_percent"],
+                ),
+                new_start=d["start"], new_end=d["end"],
+                days=d["weekdays"], power_percent=d["power_percent"],
+            )
+        except SchedulePreviewError as exc:
+            raise vol.Invalid(str(exc)) from exc
+
+    hass.services.async_register(
+        DOMAIN, "preview_schedule_change", preview_schedule_change,
+        schema=vol.Schema({
+            vol.Required("direction"): vol.In(("charge", "discharge")),
+            vol.Required("slot"): vol.All(vol.Coerce(int), vol.Range(min=1, max=7)),
+            vol.Required("expected_start"): str,
+            vol.Required("expected_end"): str,
+            vol.Required("expected_day_mask"): vol.All(
+                vol.Coerce(int), vol.Range(min=0, max=127)),
+            vol.Required("expected_power_percent"): vol.All(
+                vol.Coerce(int), vol.Range(min=0, max=100)),
+            vol.Required("start"): str,
+            vol.Required("end"): str,
+            vol.Required("weekdays"): [vol.In(("Mon", "Tue", "Wed", "Thu", "Fri"))],
+            vol.Required("power_percent"): vol.All(
+                vol.Coerce(int), vol.Range(min=1, max=100)),
+            vol.Optional("entry_id"): str,
+        }),
+        supports_response=SupportsResponse.ONLY,
+    )
+
     # Manual, single-shot hardware pilot: NOT invoked from dashboards or polls.
     # This separate action requires a literal confirmation and exact old mode.
     pilot_lock = asyncio.Lock()
