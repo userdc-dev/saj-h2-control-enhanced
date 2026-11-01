@@ -52,6 +52,18 @@ async def _snapshot(client):
                 "Pilot limited to original one-charge/one-discharge schedule masks")
         if len(result.summary("charge")) != 1 or len(result.summary("discharge")) != 1:
             raise SupervisedWriteError("Invalid active slot count")
+        # Pilot is additionally bound to the exact schedules the owner
+        # restored and previously confirmed. Any new/edited active schedule
+        # requires an entirely new review rather than activating by surprise.
+        c = result.charge_slots[0]
+        d = result.discharge_slots[0]
+        if not (c.enabled and c.start == "22:00" and c.end == "22:40"
+                and c.day_mask == 16 and c.power_percent == 70
+                and d.enabled and d.start == "22:00" and d.end == "22:40"
+                and d.day_mask == 4 and d.power_percent == 50):
+            raise SupervisedWriteError(
+                "Active schedules differ from owner-verified Friday charge "
+                "and Wednesday discharge: no write")
         return result
 
     first = await once()
