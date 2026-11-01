@@ -1,5 +1,14 @@
 # Changelog — SAJ H2 Control Enhanced
 
+## 0.5.7 — 2026-11-02 (compact energy, dark fallback popup, refresh near Last verified)
+
+- Replaced the native Outside TOU dropdown, whose white Windows/Brave popup clashed with the dark theme, with a dark accessible in-card option menu. Preserved one confirmation for Standby and existing readback safeguards.
+- Reordered Live energy into **Battery SOC → compact Solar/House/Battery/Grid power bars → condensed 5-column table**, matching the owner's reference screenshot. Reduced vertical space and duplicated status text; grid direction uses provisional sensor data rather than always “Import”.
+- Added **⟳ Refresh / reload data** beside **Last verified**, explicitly requesting fresh read-only TOU, Safe Monitor live and forecast readings. Refresh targets one coordinator representative per source, not all sensor entities; it displays completion/error feedback beside the timestamp.
+- Removed the redundant header refresh inside the inverter controls panel. No inverter write paths or existing SAJ Energy dashboard changed.
+- Bumped cached card path to `/saj-h2-tou/v057/saj-tou-dynamic-card.js`; manifest `0.5.7`. GitHub CI validates syntax/offline tests; owner's browser must confirm appearance.
+
+
 ## 0.5.6 — 2026-11-02 (inverter controls visual alignment)
 
 - Matched the owner's screenshot: placed **Refresh inverter state** in the right side of the unified Inverter controls header, rather than underneath the operating-mode buttons.
