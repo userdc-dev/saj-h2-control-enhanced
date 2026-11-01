@@ -256,29 +256,27 @@ class SajTOUDynamicCard extends HTMLElement {
     const columns=el("div","grid");
     add(columns,this.scheduleSection(group,"charge",draft),this.scheduleSection(group,"discharge",draft));
     add(card,columns);
-    if (draft.changed) add(card,el("div","warn","Unsaved local draft. Device values above continue updating, but preview edits are preserved until you click Reload draft."));
+    if (draft.changed) add(card,el("div","warn","Unsaved changes — use Save schedule changes to inverter. Reload discards these edits; the saved device schedule remains unchanged until a confirmed save succeeds."));
     const footer=el("div","row");
     const reset=el("button",null,"Reload draft from inverter");
     reset.addEventListener("click",()=>{this._drafts.set(group.id,cloneDraft(group));this._schedulePlan=null;this._schedulePlanKey="";this._schedulePreview.clear();this.render();});
-    const full=el("button",null,this._previewBusy?"Validating…":"Validate all changes");
-    full.disabled=!draft.changed||this._scheduleWriteBusy||this._previewBusy;
-    full.addEventListener("click",()=>this._planSchedules(group));
-    const payload=this._fullDraftPayload(group);
-    const key=JSON.stringify(payload);
-    const ready=this._schedulePlan && this._schedulePlanKey===key &&
-      this._schedulePlan.status==="SCHEDULE_PLAN_ONLY" &&
-      this._schedulePlan.register_writes_required>0 &&
-      e.operating_mode?.attributes.raw_mode_code===0;
-    const apply=el("button",null,this._scheduleWriteBusy?
-      "Applying & verifying…":"Apply validated schedules to inverter (LIVE)");
-    apply.disabled=!ready||this._scheduleWriteBusy||this._modeBusy;
-    apply.addEventListener("click",()=>this._applySchedules(group));
-    add(footer,reset,full,apply);add(card,footer);
-    if(this._schedulePlan && this._schedulePlanKey===key)
-      add(card,el("div","liveResult okay",
-        this._schedulePlan.register_writes_required+
-        " register changes planned across up to 7 charging and 7 discharging slots. "+
-        "No writes sent by validation."));
+    const save=el("button",null,
+      this._scheduleWriteBusy?"Applying & verifying…":
+      this._previewBusy?"Validating saved settings…":
+      "Save schedule changes to inverter");
+    const canSave=draft.changed &&
+      e.operating_mode?.attributes.raw_mode_code===0 &&
+      !this._scheduleWriteBusy && !this._previewBusy && !this._modeBusy;
+    save.disabled=!canSave;
+    save.title=canSave?
+      "Validate live device settings, confirm, and save changed schedule registers":
+      "Make a schedule edit while in Self-consumption mode to enable saving";
+    save.addEventListener("click",()=>this._saveSchedules(group));
+    add(footer,reset,save);add(card,footer);
+    if(draft.changed && e.operating_mode?.attributes.raw_mode_code!==0)
+      add(card,el("div","warn",
+        "To save schedule edits, first switch to Self-consumption mode. "+
+        "Your changes are not saved to the inverter."));
     if(this._scheduleWriteFeedback)
       add(card,el("div","liveResult "+(this._scheduleWriteError?"bad":"okay"),
         this._scheduleWriteFeedback));
@@ -286,7 +284,7 @@ class SajTOUDynamicCard extends HTMLElement {
     if (Array.isArray(change)&&change.length) {
       add(card,el("p","muted","Last detected change: "+change.join("; ")));
     }
-    add(card,el("div","warn","Schedule edits require Self-consumption operating mode, then Validate all changes and explicit Apply. Monday–Friday edits are available; weekend and overnight schedule writes are blocked pending individual hardware validation. Multiple register writes are not atomic: interruptions can leave partial settings. Fallback remains preview-only. Power display is based on 99 W per raw percent, not guaranteed actual delivery."));
+    add(card,el("div","warn","Select times, weekdays and power, then click Save schedule changes to inverter. The app validates the complete live settings before asking for confirmation. No changes are sent without your approval. Monday–Friday edits only; weekend/overnight writes are blocked. Multiple writes are not atomic: if interrupted, check the inverter in eLEKeeper before trying again. Power labels are estimates based on stored raw values."));
   }
   async _refreshMode(group) {
     if(this._refreshBusy||this._modeBusy)return;
@@ -432,6 +430,31 @@ class SajTOUDynamicCard extends HTMLElement {
     if(group.id && !group.id.startsWith("sensor."))payload.entry_id=group.id;
     return payload;
   }
+  async _saveSchedules(group) {
+    // Single user-facing Save action: dry-run against live inverter FIRST,
+    // then show write count and require two explicit confirmations.
+    if(this._previewBusy||this._scheduleWriteBusy||this._modeBusy)return;
+    const current=this._hass?findDevices(this._hass).find(g=>g.id===group.id):null;
+    const draft=this._drafts.get(group.id);
+    if(!current || !draft?.changed ||
+       current.entities.operating_mode?.attributes.raw_mode_code!==0) {
+      this._scheduleWriteFeedback=
+        "Save blocked: use Self-consumption mode and make a schedule edit.";
+      this._scheduleWriteError=true;this.render();return;
+    }
+    await this._planSchedules(group);
+    const data=this._fullDraftPayload(group);
+    const key=JSON.stringify(data);
+    const plan=this._schedulePlan;
+    if(!plan || this._schedulePlanKey!==key ||
+       plan.status!=="SCHEDULE_PLAN_ONLY" ||
+       !Number.isInteger(plan.register_writes_required) ||
+       plan.register_writes_required<1) {
+      // _planSchedules already surfaced an actionable error/no-change message.
+      return;
+    }
+    await this._applySchedules(group);
+  }
   async _planSchedules(group) {
     if(this._previewBusy||this._scheduleWriteBusy||this._modeBusy)return;
     const data=this._fullDraftPayload(group);
@@ -478,7 +501,7 @@ class SajTOUDynamicCard extends HTMLElement {
         this._schedulePlan?.status!=="SCHEDULE_PLAN_ONLY"||
         this._schedulePlan?.register_writes_required<=0 ||
         group.entities.operating_mode?.attributes.raw_mode_code!==0){
-      this._scheduleWriteFeedback="Live apply blocked: validate draft and use Self-consumption mode.";
+      this._scheduleWriteFeedback="Save blocked: draft changed, or inverter is not in Self-consumption mode. Try Save again after checking the inverter.";
       this._scheduleWriteError=true;this.render();return;
     }
     if(!window.confirm("LIVE SAJ SCHEDULE WRITES\n\n"+
@@ -589,15 +612,6 @@ class SajTOUDynamicCard extends HTMLElement {
       const actualSlots=(state?.attributes.schedules||[]);
       const saved=actualSlots.find(item => Number(item.slot) === row.slotNumber);
       if (saved) add(container,el("div","saved","Saved on inverter: "+saved.start+"–"+saved.end+" · "+saved.power_watts_saj_display+" W"+(saved.power_conversion_verified ? " (paired)" : " (estimated)")));
-      const previewButton=el("button",null,this._previewBusy?"Validating…":"Validate schedule draft (no write)");
-      previewButton.type="button";
-      previewButton.disabled=!saved||this._previewBusy||!row.original||!isValid(state) ||
-        (row.savedStart===undefined);
-      previewButton.addEventListener("click",()=>this._validateSchedule(group,direction,row,saved));
-      add(container,previewButton);
-      const previewKey=group.id+":"+direction+":"+row.slotNumber;
-      const preview=this._schedulePreview.get(previewKey);
-      if(preview) add(container,el("div","liveResult "+(preview.error?"bad":"okay"),preview.message));
       const power=el("div","row");
       const label=el("span","muted","Draft power");
       const slider=el("input");slider.type="range";slider.min="0";slider.max="100";slider.step="1";slider.value=String(row.percent);
@@ -641,7 +655,7 @@ window.customCards=window.customCards||[];
 if(!window.customCards.some(c=>c.type==="saj-tou-dynamic-card")) window.customCards.push({
   type:"saj-tou-dynamic-card",
   name:"SAJ H2 TOU Dynamic",
-  description:"Live mode controls and verified charge/discharge schedule plan/apply with explicit confirmation.",
+  description:"Live mode controls and charging/discharging schedule Save with automatic validation and explicit confirmation.",
   preview:true
 });
 })();
