@@ -1,7 +1,7 @@
 {
   "domain": "saj_h2_control_enhanced",
-  "name": "SAJ H2 Control Enhanced (TOU Mode Control + Schedule Preview)",
-  "version": "0.3.0",
+  "name": "SAJ H2 Control Enhanced (TOU Mode Control + Schedule Draft Validation)",
+  "version": "0.3.1",
   "documentation": "https://github.com/userdc-dev/saj-h2-control-enhanced",
   "issue_tracker": "https://github.com/userdc-dev/saj-h2-control-enhanced/issues",
   "requirements": [
