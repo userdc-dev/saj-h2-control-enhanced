@@ -221,3 +221,13 @@ Charge enable mask = **1**, discharge enable mask = **1**, confirming one slot o
 **Do not overgeneralize** from only one charge power point: charge raw 50→4950 W is independently confirmed, but full charge power mapping, especially at other values or firmware, still requires read-only paired tests. Source was the SAJ app for settings, and no experimental Modbus write commands were sent.
 
 **Project code v0.2.3** adds Friday label, read-only charge raw50→4950 W formatting with explicit power verification flag, and matching snapshot regression tests. Live Home Assistant is still on v0.2.2 until manually updated.
+
+## Fourth charging power test — 7000 W entered, raw70 (2026-11-01, 19:04)
+
+Owner entered **7000 W** into existing **Friday charge slot 1** through official eLEKeeper. A read-only Modbus snapshot returned:
+
+- Charge: `[1, 1, 5632, 5672, 4166, 0, 827, 6170, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]`
+- Discharge: `[5632, 5672, 1074, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]`
+- Operating mode `[1]` (TOU), outside schedule fallback `[1]` (Self-consumption).
+
+Charge mixed register `4166 = (16 × 256) + 70`. Friday weekday mask 16 and 22:00–22:40 times unchanged; charge raw power **70** after entering 7000 W. **Expected eLEKeeper reopened/canonical stored watts `70 × 99 = 6930 W` is a PREDICTION, NOT YET confirmed by user**. Earlier charge raw50 ↔ app saved4950W confirmed. Do NOT label 6930W as verified or generalize charge-side conversion in production until user confirms the eLEKeeper saved value. User should reopen app and report exact watt number **without saving again**. No experimental Modbus writes.
