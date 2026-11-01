@@ -27,6 +27,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_schedule_preview.py'
           python -m unittest discover -s tests -p 'test_schedule_transaction.py'
           python -m unittest discover -s tests -p 'test_supervised_fallback.py'
+          python -m unittest discover -s tests -p 'test_dashboard_title.py'
       - name: Reject Modbus write implementations
         run: |
           if grep -R -nE '(write_registers?|write_coils?)\(' control_core custom_components --include='*.py'; then
