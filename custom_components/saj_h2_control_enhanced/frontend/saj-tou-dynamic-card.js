@@ -55,10 +55,12 @@ const el = (tag, cls, text) => {
 };
 const add = (parent, ...children) => {children.forEach(c => parent.append(c)); return parent;};
 const isValid = state => state && !["unknown","unavailable"].includes(state.state);
-const roles = ["operating_mode","outside_schedule","charge_schedules","discharge_schedules","sync_status"];
+const roles = ["operating_mode","outside_schedule","charge_count","discharge_count","charge_schedules","discharge_schedules","sync_status"];
 const suffixes = {
   operating_mode:"_operating_mode",
   outside_schedule:"_outside_schedule_behaviour",
+  charge_count:"_enabled_charge_schedules",
+  discharge_count:"_enabled_discharge_schedules",
   charge_schedules:"_charge_schedules",
   discharge_schedules:"_discharge_schedules",
   sync_status:"_tou_device_sync"
@@ -186,8 +188,8 @@ class SajTOUDynamicCard extends HTMLElement {
       e.outside_schedule?.attributes.raw_fallback_code===1 &&
       Number.isFinite(ageSeconds) && ageSeconds>=0 && ageSeconds<=180 &&
       !this._modeBusy && !draft.changed &&
-      e.charge_schedules?.attributes.slot_enable_mask===1 &&
-      e.discharge_schedules?.attributes.slot_enable_mask===1;
+      e.charge_count?.attributes.slot_enable_mask===1 &&
+      e.discharge_count?.attributes.slot_enable_mask===1;
     const controls=el("div","liveModeButtons");
     for (const [target,text,service] of [
       [0,"Self-consumption","supervised_self_consumption_pilot"],
@@ -207,7 +209,7 @@ class SajTOUDynamicCard extends HTMLElement {
         this._modeBusy?"Applying and verifying mode; do not click again.":
         !good?"Device readback unavailable; write blocked.":
         draft.changed?"Reload local schedule draft before live mode control.":
-        !canOperate?"Live controls need recent readback, verified masks [1,1] and fallback Self-consumption.":
+        !canOperate?"Live control unavailable: check fresh readback, schedule masks [1,1], fallback and enabled sensors.":
         "Live mode control uses a separate confirmed one-shot Modbus action. eLEKeeper overview can lag."));
     if (this._modeFeedback) {
       add(modepane,el("div","liveResult "+(this._modeFeedbackError?"bad":"okay"),this._modeFeedback));
@@ -238,8 +240,8 @@ class SajTOUDynamicCard extends HTMLElement {
     if (this._modeBusy) return;
     const current=group.entities.operating_mode?.attributes.raw_mode_code;
     const fallback=group.entities.outside_schedule?.attributes.raw_fallback_code;
-    const charge=group.entities.charge_schedules?.attributes.slot_enable_mask;
-    const discharge=group.entities.discharge_schedules?.attributes.slot_enable_mask;
+    const charge=group.entities.charge_count?.attributes.slot_enable_mask;
+    const discharge=group.entities.discharge_count?.attributes.slot_enable_mask;
     const source=group.entities.operating_mode?.attributes.last_verified_read;
     const age=source ? (Date.now()-new Date(source).getTime())/1000 : Infinity;
     const draft=this._drafts.get(group.id);
