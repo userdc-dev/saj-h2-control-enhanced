@@ -194,6 +194,8 @@ const CSS = [
   ".energyHeading{display:flex;flex-direction:row;align-items:baseline;gap:14px;flex-wrap:wrap}",
   ".energyHeading h3{font-size:16px}",
   ".energyHeading .muted{font-size:12px}",
+  ".energyCadence{font-size:11px;line-height:1.4;color:var(--secondary-text-color,#aaa);white-space:nowrap;font-weight:500}",
+
   ".socFlow{margin:12px 0 0;padding:0;border:0}",
   ".socFlowTop{font-size:13px;line-height:1.5;margin-bottom:6px}",
   ".socFlowTop span{font-weight:700}",
@@ -347,8 +349,11 @@ class SajTOUDynamicCard extends HTMLElement {
     const panel=el("section","energyOverview");
     const header=el("div","flowTop");
     const energyHeading=el("div","energyHeading");
+    const cadence=el("span","energyCadence","↻ Updates ~10 sec (default)");
+    cadence.title="SAJ Safe Monitor live polling defaults to 10 seconds and can be changed in integration options. Solar forecasts refresh on a separate schedule.";
     add(energyHeading,el("h3",null,"Live energy"),
-      el("div","muted","Solar · Home · Battery · Grid · Forecast"));
+      el("div","muted","Solar · Home · Battery · Grid · Forecast"),
+      cadence);
     add(header,energyHeading);
     add(panel,header);
     const keys=["solar","home","battery","soc","stored","gridImport",
