@@ -1,0 +1,55 @@
+# SAJ TOU control project's READ-ONLY dashboard card.
+# Add as ONE Manual card to an existing dashboard; do NOT replace SAJ Energy.
+# No controls: this card mirrors confirmed device register readback.
+# Entity IDs assume the default HA device name "SAJ H2 TOU Readback".
+# If names were customized after install, replace them with actual IDs.
+type: markdown
+content: |
+  ## Battery time-of-use · Read-only
+
+  | Inverter setting | Device readback |
+  |:--|--:|
+  | Operating mode | **{{ states('sensor.saj_h2_tou_readback_operating_mode') }}** |
+  | Outside scheduled periods | **{{ states('sensor.saj_h2_tou_readback_outside_schedule_behaviour') }}** |
+  | Charge schedules | **{{ states('sensor.saj_h2_tou_readback_enabled_charge_schedules') }} / 7** |
+  | Discharge schedules | **{{ states('sensor.saj_h2_tou_readback_enabled_discharge_schedules') }} / 7** |
+
+  {% set status_id = 'sensor.saj_h2_tou_readback_tou_device_sync' %}
+  {% set status = states(status_id) %}
+  {% if status not in ['unknown', 'unavailable'] %}
+  **Device readback:** {{ status }}
+  {% set changed = state_attr(status_id, 'last_changes') or [] %}
+  {% if changed %}
+  {% for item in changed %}
+  - {{ item }}
+  {% endfor %}
+  {% endif %}
+  {% else %}
+  **Device readback unavailable** — no control decisions should be made from stale settings.
+  {% endif %}
+
+  ### Charging periods
+  {% set charges = state_attr('sensor.saj_h2_tou_readback_charge_schedules', 'schedules') or [] %}
+  {% if charges %}
+  | Slot | Days | Time | Raw power |
+  |:--|:--|:--|--:|
+  {% for slot in charges %}
+  | {{ slot.slot }} | {% if slot.weekday_verified != 'Unverified' %}{{ slot.weekday_verified }}{% else %}Mask {{ slot.weekday_mask_raw }} (unverified){% endif %} | {{ slot.start }}–{{ slot.end }} | {{ slot.power_percent_raw }}% |
+  {% endfor %}
+  {% else %}
+  No charge schedules enabled.
+  {% endif %}
+
+  ### Discharging periods
+  {% set discharges = state_attr('sensor.saj_h2_tou_readback_discharge_schedules', 'schedules') or [] %}
+  {% if discharges %}
+  | Slot | Days | Time | Saved power |
+  |:--|:--|:--|--:|
+  {% for slot in discharges %}
+  | {{ slot.slot }} | {% if slot.weekday_verified != 'Unverified' %}{{ slot.weekday_verified }}{% else %}Mask {{ slot.weekday_mask_raw }} (unverified){% endif %} | {{ slot.start }}–{{ slot.end }} | {{ slot.power_watts_saj_display }} W |
+  {% endfor %}
+  {% else %}
+  No discharge schedules enabled.
+  {% endif %}
+
+  *Saved inverter settings, not a command console. eLEKeeper changes may take several minutes to propagate. Discharge W scaling verified for this installation; charge W scaling and most weekday bit assignments remain unverified.*
