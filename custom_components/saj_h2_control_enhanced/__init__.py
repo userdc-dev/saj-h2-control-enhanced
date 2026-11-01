@@ -35,10 +35,26 @@ class SajTOUCoordinator(DataUpdateCoordinator):
         self.last_device_change = None
         self.last_changes = ()
 
+    def _connection_details(self):
+        """Use a linked SAJ Safe Monitor rather than scanning LAN devices."""
+        monitors = self.hass.config_entries.async_entries("saj_h2_safe")
+        source_id = self.entry.data.get("source_monitor_entry_id")
+        if source_id:
+            monitor = next((e for e in monitors if e.entry_id == source_id), None)
+            if monitor is None or not monitor.data.get("host"):
+                raise UpdateFailed("Linked SAJ Safe Monitor missing")
+            return monitor.data["host"], monitor.data.get("port", 502)
+        current_host = self.entry.data.get("host")
+        matches = [e for e in monitors if e.data.get("host") == current_host]
+        if len(matches) == 1:
+            return matches[0].data["host"], matches[0].data.get("port", 502)
+        return current_host, self.entry.data.get("port", 502)
+
     async def _async_update_data(self):
+        host, port = self._connection_details()
         client = AsyncModbusTcpClient(
-            self.entry.data["host"],
-            port=self.entry.data["port"],
+            host,
+            port=port,
             timeout=5, retries=0,
         )
         try:
