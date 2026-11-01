@@ -1,5 +1,17 @@
 # Changelog — SAJ H2 Control Enhanced
 
+## 0.2.3 — 2026-11-01 (confirmed Friday charging readback)
+
+- New official eLEKeeper ↔ read-only Modbus paired test: **Friday charge 22:00–22:40, saved 4950 W** appeared as raw 0x3604 enable 1, packed time 5632–5672, weekday/power combined **4146 = 0x1032** (weekday mask 16 Friday; raw 50).
+- Existing Wednesday discharge 22:00–22:40 remains **1074 = 0x0432** (weekday 4; raw 50).
+- Mode 1 Time-of-use and TOU fallback 1 Self-consumption confirmed at same time; enabled charge **1/7**, discharge **1/7**.
+- Read-only decoder labels **Friday (16)** and **Wednesday (4)** and conservatively recognizes combined mask 20, without guessing any remaining weekday bits.
+- Charge saved-power display **4950 W is verified for raw 50 only**; other charging percentages remain unverified in the UI, not extrapolated.
+- Dynamic card now shows Friday checkbox selected for the observed charge slot, updated source settings and distinguishes unverified values.
+- Fixed source slot mapping of displayed saved values for nonconsecutive physical slots.
+- Exact-device register snapshot and new tests recorded in `docs/SAJ_APP_TOU_OBSERVATIONS.md` and `tests/test_ha_tou_protocol.py`.
+- Existing HA v0.2.2 still needs an in-place upgrade to v0.2.3. **No Modbus writes, no HA mode switch or real charging controls.**
+
 ## 0.2.0 — 2026-11-01 (dynamic TOU dashboard and discovered monitor setup)
 
 **Released in GitHub only; not installed on the owner's Kamrui yet. All editor controls are preview-only.**
