@@ -138,7 +138,7 @@ class SajTOUDynamicCard extends HTMLElement {
     const card=el("ha-card");
     root.append(card);
     const top=el("div","top");
-    add(top,el("h2",null,"Battery time-of-use"),el("span","pill","Device readback · Preview editor"));
+    add(top,el("h2",null,"Battery time-of-use"),el("span","pill","Device readback · Preview v0.2.2"));
     add(card,top);
     if (!group) {
       add(card,el("p","empty","No SAJ H2 TOU devices found. Install the read-only TOU integration and check its schedule entities."));
@@ -230,8 +230,11 @@ class SajTOUDynamicCard extends HTMLElement {
         add(wrapper,field);add(times,wrapper);
       }
       add(container,times);
+      const actualSlots=(state?.attributes.schedules||[]);
+      const saved=actualSlots[index];
+      if (saved) add(container,el("div","saved","Saved on inverter: "+saved.start+"–"+saved.end+" · "+(direction==="discharge" ? (saved.power_watts_saj_display+" W") : (saved.power_percent_raw+"% raw"))));
       const power=el("div","row");
-      const label=el("span","muted","Power");
+      const label=el("span","muted","Draft power");
       const slider=el("input");slider.type="range";slider.min="0";slider.max="100";slider.step="1";slider.value=String(row.percent);
       const display=el("strong",null,direction==="discharge"?(row.percent*99)+" W":row.percent+"% (W unverified)");
       slider.addEventListener("input",()=>{row.percent=Number(slider.value);draft.changed=true;display.textContent=direction==="discharge"?(row.percent*99)+" W":row.percent+"% (W unverified)"});
