@@ -31,7 +31,9 @@ class SajTOUCoordinator(DataUpdateCoordinator):
         )
         self.entry = entry
         self.last_successful_poll = None
-        self.change_count = 0\n        self.last_device_change = None\n        self.last_changes = ()
+        self.change_count = 0
+        self.last_device_change = None
+        self.last_changes = ()
 
     async def _async_update_data(self):
         client = AsyncModbusTcpClient(
