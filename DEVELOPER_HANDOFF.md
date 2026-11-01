@@ -271,3 +271,29 @@ The owner asked for faster substantive development. Committed `custom_components
 ## 20. Live installation milestone — HA TOU reader working (2026-11-01)
 
 Owner installed `saj_h2_control_enhanced` on Kamrui and shared the Home Assistant device page **SAJ H2 TOU Readback**. Screenshot shows seven new sensor entities available, with saved settings reporting: Operating mode **Time-of-use**, Outside schedule behaviour **Self-consumption**, charge schedule count **0**, discharge schedule count **1**, and sync status **Readback OK (not verified with eLEKeeper live)**. This validates that the HA integration starts and obtains TOU register data; exact Wednesday time/power attributes need a separate check via **Discharge schedules → Attributes**. The older `saj_h2_safe` configuration was accidentally removed/re-added and dashboard temporarily broke due to mismatched entity IDs; user renamed entities back and confirmed the SAJ Energy dashboard restored. Maintain existing stable naming and do not modify/reinstall the old read-only monitor. Next test: inspect discharge schedules attributes and compare Wednesday 22:00–22:40, 4950 W (raw 50) to eLEKeeper; then test app-originated change propagation. **No HA Modbus writes are implemented.**
+
+## 21. 2026-11-01: unattended development SESSION COMPLETED (without touching live inverter)
+
+The user had to leave and asked for as much progress as possible in the current conversation. **No asynchronous work continues after the reply.** Work completed in the separate control GitHub repo only:
+
+- Latest read-only HA TOU integration version bumped to **0.1.1**, **NOT deployed to Kamrui yet**. Existing **0.1.0** is working in Home Assistant. No new control functions.
+- `custom_components/saj_h2_control_enhanced/__init__.py`: double-read the **entire charge and discharge register blocks**, overall mode and fallback within one read cycle; reject mismatching snapshots instead of accidentally accepting a partially saved schedule. Continue low-frequency polling (120s default) and no Modbus writes.
+- `tou_protocol.py`: added `active_signature` and `describe_changes` so stale contents in DISABLED slots do not appear as actual eLEKeeper schedule changes. Unverified weekday masks are **not guessed**; Wednesday raw mask 4 is the only independently confirmed day.
+- `sensor.py`: preserved all prior unique IDs/entity names, added `last_device_change` and `last_changes` attributes to sync sensor; change counts since startup.
+- `examples/tou-compact-card.yaml`: read-only card for the existing HA dashboard, with actual mode, fallback, 0–7/7 slot counts, active schedules, confirmed Wednesday / unverified other weekday masks, confirmed discharge power W and source status. **Not auto-added to HA; requires Manual-card paste and entity ID check.**
+- `control_core/reconciliation.py`: a pure-Python fail-closed state model of future submitted/pending/device-saved/unconfirmed/stale settings, with explicit source timestamp and timeout; **not wired into HA and cannot send any command**. `tests/test_reconciliation.py` covers old observations, no auto retries, mismatch, timeouts.
+- Expanded `tests/test_ha_tou_protocol.py` for drift, disabled slots and weekday confidence.
+- CI caught a Python syntax issue in coordinator changes; this was fixed in commits preceding **b9902709**, and CI subsequently passed. Check the **latest** GitHub Actions status after remaining documentation commits.
+- `CHANGELOG.md` now documents the 0.1.1 upgrade and does not claim that GitHub updates auto-deploy.
+- **Do not remove/re-add `saj_h2_safe` or `saj_h2_control_enhanced`**: user had to restore old monitor and rebind entity IDs after an accidental deletion. For updates, copy just the new control component folder over itself and restart HA, keeping integration entry and entity IDs unchanged. See `docs/READ_ONLY_HA_PREVIEW.md`.
+
+### Immediate next owner-assisted work (one step at a time)
+
+1. Owner returns. Verify the existing HA read-only `Discharge schedules` entity **attributes** include Wednesday 22:00–22:40, raw 50, saved 4,950 W. Screenshot of device page alone has confirmed only 1 configured, not contents.
+2. Offer safe in-place upgrade to v0.1.1 (do not remove anything). The initial HA v0.1.0 is stable, so upgrade deliberately with rollback.
+3. Optionally paste `examples/tou-compact-card.yaml` as a separate Manual card in SAJ Energy, adjusting any renamed entity IDs rather than removing the dashboard.
+4. Check an **eLEKeeper-originated** schedule change propagates to HA with timestamp/change alert, without any Modbus write from HA.
+5. Confirm charge-side schedule power scaling and weekday bits using app changes plus read-only Modbus. Charge watts conversion remains **unverified**; no control writes.
+6. Before any real writable mode/charge/discharge testing, require a new user approval, hardware-specific safe command proof and safe stop/recovery. Never write modes 2 Backup or 3 Off-grid/Passive.
+
+**Status boundary:** GitHub code updated and CI-tested, but `0.1.1` is not installed. Only `0.1.0` has been observed working live.
