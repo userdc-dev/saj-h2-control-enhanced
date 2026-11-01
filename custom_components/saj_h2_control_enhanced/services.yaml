@@ -30,7 +30,7 @@ supervised_tou_pilot:
     only when the current mode is Self-consumption, the active schedule masks
     are both 1 and the full schedule readback remains unchanged. Requires
     explicit confirmation each time. Never invoked by dashboard automatically.
-    eLEKeeper or a VPP may later override this change.
+    elekeeper or a VPP may later override this change.
   fields:
     confirmation:
       name: Exact confirmation phrase
@@ -71,7 +71,7 @@ supervised_self_consumption_pilot:
     Sends exactly one Modbus function-06 operating-mode write (0x3647=0)
     only if current mode is Time-of-Use (1) and the owner-verified charge
     and discharge schedules have not changed. Requires explicit confirmation.
-    Never retries or automatically rolls back. eLEKeeper may take minutes
+    Never retries or automatically rolls back. elekeeper may take minutes
     to update and a former VPP controller could override the mode later.
   fields:
     confirmation:
@@ -195,7 +195,7 @@ supervised_friday_charge_time_pilot:
     Sends two individually verified Modbus single-register writes to
     0x3606=21:30 and 0x3607=22:00; weekdays/power/discharge untouched.
     Interrupted operation may leave a partially changed window. No automatic
-    retry/rollback. Keep eLEKeeper open for manual recovery.
+    retry/rollback. Keep elekeeper open for manual recovery.
   fields:
     confirmation:
       name: Exact confirmation phrase
@@ -261,7 +261,7 @@ apply_schedules:
     supported for Monday-Friday, non-overnight periods. Weekends and overnight
     writes remain blocked until verified on this inverter. Multiple writes
     are not atomic: on error, partial schedules may remain. No auto retry
-    or rollback. Recheck in eLEKeeper.
+    or rollback. Recheck in elekeeper.
   fields:
     confirmation:
       name: Exact authorization
