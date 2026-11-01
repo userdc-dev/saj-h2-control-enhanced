@@ -1,6 +1,6 @@
 # Developer handover — SAJ H2 Control Enhanced
 
-**Canonical current guide; updated 2026-11-02, Australia/Adelaide.** Read this before changing any code, dashboard, or Modbus control. **Current version at the time of this handover: 0.5.8.** The project was previously design-only, but now has a deployed Home Assistant control integration with working mode controls, schedule editing code, new fallback control, and read-only energy graphics/table within the TOU dashboard. **Not every writable feature has been proven on the owner's actual inverter.**
+**Canonical current guide; updated 2026-11-02, Australia/Adelaide.** Read this before changing any code, dashboard, or Modbus control. **Current version at the time of this handover: 0.5.9.** The project was previously design-only, but now has a deployed Home Assistant control integration with working mode controls, schedule editing code, new fallback control, and read-only energy graphics/table within the TOU dashboard. **Not every writable feature has been proven on the owner's actual inverter.**
 
 **Repository:** https://github.com/userdc-dev/saj-h2-control-enhanced  
 **Older full development diary:** [docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md](docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md) (57 KB historical archive; early claims of “planning-only” are OBSOLETE)  
@@ -379,6 +379,10 @@ Changes to `frontend/saj-tou-dynamic-card.js`:
 
 ## 18. v0.5.8 minimal header cleanup
 
-Owner explicitly requested removal of the redundant **“● Read-only telemetry”** badge from the top-right of the Live energy section, shown crossed out in their screenshot. The card now renders the Live energy heading and category subtitle without any redundant badge. All numerical readings, source sensors, inverter controls, single-confirmation workflows, refresh action and Modbus write logic remain unchanged. Frontend URL cache-busted to `/saj-h2-tou/v058/saj-tou-dynamic-card.js`. Reserve v1.0.0 for final stability; continue 0.5.x patches.
+Owner explicitly requested removal of the redundant **“● Read-only telemetry”** badge from the top-right of the Live energy section, shown crossed out in their screenshot. The card now renders the Live energy heading and category subtitle without any redundant badge. All numerical readings, source sensors, inverter controls, single-confirmation workflows, refresh action and Modbus write logic remain unchanged. Frontend URL cache-busted to `/saj-h2-tou/v059/saj-tou-dynamic-card.js`. Reserve v1.0.0 for final stability; continue 0.5.x patches.
+
+## 19. v0.5.9 Live energy update cadence caption
+
+Owner asked to show how frequently the live energy readings refresh after reviewing the clean v0.5.8 layout. The Live energy title row now contains a small **↻ Updates ~10 sec (default)** text label (not a separate badge). This reflects the separate safe monitor's `live_scan_interval` default of 10 seconds; the interval may be configured, and solar forecast updates are independent. The label has a tooltip explaining both limitations. This is **display-only**. No polling rates, sensor processing, dashboard refresh action, write controls, or other integrations were altered. Frontend cache URL is `/saj-h2-tou/v059/saj-tou-dynamic-card.js`; release v0.5.9. Browser visual verification remains needed.
 
 **Historical appendix:** The full earlier handover is retained unabridged at [docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md](docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md); it contains original 2026-11-01 experiments, paired screenshots, previous mode-control iterations, firmware discovery, dashboard cache fixes, and repeated user feedback. Its early “planning-only” language was true at the time but is no longer a current feature status.
