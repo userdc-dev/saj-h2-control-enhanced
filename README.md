@@ -35,3 +35,5 @@ SAJ H2 10 kW AC inverter; 30 × 440 W bifacial panels; SAJ battery **40.00 kWh c
 See [Developer Handoff](DEVELOPER_HANDOFF.md), [Safety and Roadmap](docs/SAFETY_AND_ROADMAP.md), [Project Handoff](docs/PROJECT_HANDOFF.md), [Mock Dashboard Card](examples/compact-control-preview.yaml) and [Safety Tests](tests/test_safety_policy.py).
 
 For all prior confirmed read-only register mappings, commissioning and v0.3.x dashboard history, consult the [read-only project handoff](https://github.com/userdc-dev/saj-h2-safe-enhanced/blob/main/PROJECT_HANDOFF.md).
+
+**New SAJ app evidence:** [TOU screenshot observations & required bidirectional device synchronization](docs/SAJ_APP_TOU_OBSERVATIONS.md) documents 7 charge + 7 discharge slots, weekday multiselect, 0–9900 W discharge UI range, TOU fallback to Self-consumption, and owner's observed up-to-5-minute activation delay. Device-side schedules/settings must be read back; local drafts must not masquerade as confirmed inverter state.
