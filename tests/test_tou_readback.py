@@ -28,6 +28,29 @@ class TestTOU(unittest.TestCase):
         self.assertEqual(config.discharge_slots[0].power_percent_raw, 99)
         self.assertFalse(config.mapping_verified)  # needs live app parity check
 
+    def test_zero_charge_and_zero_discharge_is_valid(self):
+        charge = [0, 0] + [0] * 21
+        discharge = [0] * 21
+        device = decode_tou(charge, discharge, 1, 1)
+        self.assertEqual(sum(s.enabled for s in device.charge_slots), 0)
+        self.assertEqual(sum(s.enabled for s in device.discharge_slots), 0)
+        self.assertEqual(len(device.charge_slots), 7)
+        self.assertEqual(len(device.discharge_slots), 7)
+
+    def test_all_seven_schedule_flags_allowed(self):
+        charge, discharge = sample()
+        charge[0], charge[1] = 127, 127
+        device = decode_tou(charge, discharge, 1, 1)
+        self.assertEqual(sum(s.enabled for s in device.charge_slots), 7)
+        self.assertEqual(sum(s.enabled for s in device.discharge_slots), 7)
+
+    def test_24_hour_clock_boundaries(self):
+        charge, discharge = sample()
+        discharge[0], discharge[1] = clock(0, 0), clock(23, 59)
+        device = decode_tou(charge, discharge, 1, 1)
+        self.assertEqual(device.discharge_slots[0].start, "00:00")
+        self.assertEqual(device.discharge_slots[0].end, "23:59")
+
     def test_external_changes_are_detected(self):
         charge, discharge = sample()
         before = decode_tou(charge, discharge, 1, 1)
