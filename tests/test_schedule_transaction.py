@@ -145,6 +145,32 @@ class FullScheduleTests(unittest.TestCase):
             ])
         asyncio.run(run())
 
+    def test_weekend_bit_roundtrip(self):
+        async def run():
+            fake=FakeModbus()
+            data=inputs()
+            data["proposed_charge"][0]["days"]=["Sat","Sun"]
+            plan=engine.build_plan(await engine.read_full(fake),**data)
+            self.assertIn(0x6046, [step.value for step in plan.steps])
+        asyncio.run(run())
+
+    def test_tou_mode_paused_and_restored_after_verified_schedule_writes(self):
+        async def run():
+            fake=FakeModbus(mode=1)
+            data=inputs()
+            data["proposed_charge"][0].update(start="21:30",end="22:00")
+            result=await engine.execute_plan(
+                host="127.0.0.1",port=502,
+                confirmation=engine.CONFIRM_PHRASE,
+                device_model="H2-10K-S3-A",control_firmware="v2.018",
+                transport=lambda *a,**k:fake,sleep=no_wait,**data)
+            self.assertEqual(result["status"],"SCHEDULE_VERIFIED_BY_MODBUS")
+            self.assertEqual(fake.writes,[
+                (0x3647,0),(0x3606,0x151e),(0x3607,0x1600),(0x3647,1)
+            ])
+            self.assertEqual(fake.registers[0x3647],1)
+        asyncio.run(run())
+
     def test_plan_noop(self):
         async def run():
             fake=FakeModbus()
@@ -160,7 +186,6 @@ class FullScheduleTests(unittest.TestCase):
             original=await engine.read_full(fake)
             invalids=[
                 {"expected_charge":[]},
-                {"proposed_charge":[dict(propose(BASE_CHARGE)[0],days=["Sat"])]},
                 {"proposed_charge":[dict(propose(BASE_CHARGE)[0],days=["Mon","Mon"])]},
                 {"proposed_charge":[dict(propose(BASE_CHARGE)[0],start="23:00",end="01:00")]},
                 {"proposed_charge":[dict(propose(BASE_CHARGE)[0],percent=0)]},
@@ -174,9 +199,9 @@ class FullScheduleTests(unittest.TestCase):
                     with self.assertRaises(engine.ScheduleTransactionError):
                         engine.build_plan(original,**{**inputs(),**change})
             fake.registers[0x3647]=1
-            with self.assertRaisesRegex(engine.ScheduleTransactionError,
-                                        "Self-consumption"):
-                await engine.read_full(fake)
+            live=await engine.read_full(fake)
+            self.assertEqual(live[2].mode,1)
+            self.assertEqual(engine.build_plan(live,**inputs()).changes,0)
             self.assertEqual(fake.writes,[])
         asyncio.run(run())
 
