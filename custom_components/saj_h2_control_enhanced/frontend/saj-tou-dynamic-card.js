@@ -341,9 +341,9 @@ class SajTOUDynamicCard extends HTMLElement {
       this._fallbackFeedbackError=true;this.render();return;
     }
     if(target===0 && !window.confirm(
-      "Enable Standby outside Time-of-Use periods?\\n\\n"+
+      "Enable Standby outside Time-of-Use periods?\n\n"+
       "The battery may stop charging or discharging when no TOU schedule is active. "+
-      "This can change grid imports and how solar energy is used.\\n\\n"+
+      "This can change grid imports and how solar energy is used.\n\n"+
       "Your charging/discharging schedules and operating mode will be preserved. "+
       "Continue?"))return;
     this._fallbackBusy=true;
