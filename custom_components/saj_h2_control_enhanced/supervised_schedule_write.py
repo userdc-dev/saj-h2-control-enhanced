@@ -2,7 +2,7 @@
 
 This is deliberately *not* a general schedule editor. The owner must invoke
 the action explicitly; the inverter must be in Self-consumption (mode 0), and
-the entire saved schedules must be the specific baseline tested in eLEKeeper.
+the entire saved schedules must be the specific baseline tested in elekeeper.
 
 One FC06 write at a time with verification between them. A failure after the
 first write MAY leave a partially modified schedule. Never retry or roll back
@@ -119,7 +119,7 @@ async def run_friday_charge_time_pilot(
         if ack is None or ack.isError():
             raise ScheduleWriteError(
                 "Start write acknowledgement missing, outcome unknown. "
-                "Inspect eLEKeeper/Modbus; DO NOT retry automatically")
+                "Inspect elekeeper/Modbus; DO NOT retry automatically")
         await sleep(1)
         partial = await read_complete(client)
         if not matches_expected(
@@ -127,7 +127,7 @@ async def run_friday_charge_time_pilot(
         ):
             raise ScheduleWriteError(
                 "After first write, unexpected inverter change detected; "
-                "second write NOT sent. Inspect charging slot 1 in eLEKeeper")
+                "second write NOT sent. Inspect charging slot 1 in elekeeper")
 
         # Second command: end time -> 22:00; power and days still unchanged.
         attempted.append(CHARGE_END_ADDR)
@@ -136,7 +136,7 @@ async def run_friday_charge_time_pilot(
         if ack is None or ack.isError():
             raise ScheduleWriteError(
                 "End write acknowledgement missing, outcome unknown. "
-                "Inspect eLEKeeper/Modbus; DO NOT retry automatically")
+                "Inspect elekeeper/Modbus; DO NOT retry automatically")
         for attempt in range(6):
             await sleep(2)
             final = await read_complete(client)
@@ -154,7 +154,7 @@ async def run_friday_charge_time_pilot(
                     "mode_unchanged": True,
                     "fallback_unchanged": True,
                     "verify_checks": attempt + 1,
-                    "message": "Reopen eLEKeeper to confirm; cloud may lag.",
+                    "message": "Reopen elekeeper to confirm; cloud may lag.",
                 }
             if not matches_expected(
                 baseline, final, expected_start=NEW_START, expected_end=OLD_END
@@ -164,7 +164,7 @@ async def run_friday_charge_time_pilot(
                     "Check both schedules immediately; no retry")
         raise ScheduleWriteError(
             "End time not confirmed; partial change possible. "
-            "Check eLEKeeper and Modbus; no retry")
+            "Check elekeeper and Modbus; no retry")
     except Exception:
         if attempted:
             _LOGGER.exception(
