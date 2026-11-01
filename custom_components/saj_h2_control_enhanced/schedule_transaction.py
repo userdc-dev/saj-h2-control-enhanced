@@ -32,7 +32,7 @@ from .tou_protocol import (
 
 _LOGGER = logging.getLogger(__name__)
 CONFIRM_PHRASE = "I AUTHORIZE TOU SCHEDULE CHANGES"
-BITS = {"Mon":1, "Tue":2, "Wed":4, "Thu":8, "Fri":16}
+BITS = {"Mon":1, "Tue":2, "Wed":4, "Thu":8, "Fri":16, "Sat":32, "Sun":64}
 MAX_WRITES_PER_ACTION = 44
 BASE_CHARGE, BASE_DISCHARGE = 0x3606, 0x361B
 
@@ -55,7 +55,7 @@ def parse_days(days):
         raise ScheduleTransactionError("Choose unique weekdays for each slot")
     if any(type(x) is not str or x not in BITS for x in days):
         raise ScheduleTransactionError(
-            "Live writes for Saturday/Sunday are disabled until individually tested"
+            "Invalid weekday. Choose Monday–Sunday"
         )
     return sum(BITS[x] for x in days)
 
@@ -71,9 +71,9 @@ def active_rows(config, direction):
 
 def validate_snapshot(snap):
     charge, discharge, config = snap
-    if config.mode != 0:
+    if config.mode not in (0,1):
         raise ScheduleTransactionError(
-            "Switch operating mode to Self-consumption before editing schedules"
+            "Schedule editing is allowed only in Self-consumption or Time-of-Use mode"
         )
     if config.fallback != 1:
         raise ScheduleTransactionError("Outside-TOU fallback must be Self-consumption")
@@ -173,8 +173,9 @@ class Plan:
             "final_charge_mask":self.desired_charge[0],
             "final_discharge_mask":self.desired_charge[1],
             "warning":(
-                "Live apply requires Self-consumption mode and a second explicit "
-                "confirmation. Changes to several registers are NOT atomic; "
+                "One explicit confirmation is required. If TOU is active, "
+                "it is paused during edits and restored after verification. "
+                "Changes to several registers are NOT atomic; "
                 "if interrupted, manual inspection/recovery is required."
             ),
         }
