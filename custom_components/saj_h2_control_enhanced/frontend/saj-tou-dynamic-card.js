@@ -416,6 +416,118 @@ class SajTOUDynamicCard extends HTMLElement {
         "Draft validation blocked: "+(err?.message||String(err))+" · NO WRITE"});
     }finally{this._previewBusy=false;this.render();}
   }
+  _fullDraftPayload(group) {
+    const d=this._drafts.get(group.id);
+    if(!d)return null;
+    const rows=name=>d[name].map(r=>({
+      slot:Number(r.slotNumber),start:r.start,end:r.end,
+      days:[...r.days],percent:Number(r.percent)
+    }));
+    const payload={
+      expected_charge:d.baselineCharge,
+      expected_discharge:d.baselineDischarge,
+      proposed_charge:rows("charge"),
+      proposed_discharge:rows("discharge")
+    };
+    if(group.id && !group.id.startsWith("sensor."))payload.entry_id=group.id;
+    return payload;
+  }
+  async _planSchedules(group) {
+    if(this._previewBusy||this._scheduleWriteBusy||this._modeBusy)return;
+    const data=this._fullDraftPayload(group);
+    if(!data)return;
+    const key=JSON.stringify(data);
+    this._previewBusy=true;
+    this._schedulePlan=null;
+    this._schedulePlanKey="";
+    this._scheduleWriteFeedback="Checking complete charge/discharge configuration against inverter…";
+    this._scheduleWriteError=false;
+    this.render();
+    try {
+      const answer=await this._hass.callWS({
+        type:"call_service",domain:"saj_h2_control_enhanced",
+        service:"plan_schedules",service_data:data,return_response:true
+      });
+      const plan=answer?.response||answer;
+      if(plan?.status!=="SCHEDULE_PLAN_ONLY"||plan?.write_sent!==false)
+        throw new Error("Backend did not return a safe schedule plan");
+      if(JSON.stringify(this._fullDraftPayload(group))!==key)
+        throw new Error("Draft changed during validation; validate again");
+      this._schedulePlan=plan;
+      this._schedulePlanKey=key;
+      this._scheduleWriteFeedback=plan.register_writes_required+
+        " changed registers planned. No settings changed. "+
+        (plan.register_writes_required?
+          "Apply is enabled only in Self-consumption mode.":"Already matches inverter.");
+      this._scheduleWriteError=false;
+    } catch(err) {
+      this._schedulePlan=null;
+      this._schedulePlanKey="";
+      this._scheduleWriteFeedback="Validation blocked: "+
+        (err?.message||String(err))+". No writes sent.";
+      this._scheduleWriteError=true;
+    } finally {
+      this._previewBusy=false;this.render();
+    }
+  }
+  async _applySchedules(group) {
+    if(this._scheduleWriteBusy||this._modeBusy||this._previewBusy)return;
+    const data=this._fullDraftPayload(group);
+    const key=JSON.stringify(data);
+    if(!data||key!==this._schedulePlanKey||
+        this._schedulePlan?.status!=="SCHEDULE_PLAN_ONLY"||
+        this._schedulePlan?.register_writes_required<=0 ||
+        group.entities.operating_mode?.attributes.raw_mode_code!==0){
+      this._scheduleWriteFeedback="Live apply blocked: validate draft and use Self-consumption mode.";
+      this._scheduleWriteError=true;this.render();return;
+    }
+    if(!window.confirm("LIVE SAJ SCHEDULE WRITES\n\n"+
+       "Apply "+this._schedulePlan.register_writes_required+" individual register changes "+
+       "across charging/discharging periods?\n\n"+
+       "The inverter MUST remain in Self-consumption mode. "+
+       "An interruption may leave PARTIAL settings.\n"+
+       "Keep eLEKeeper open for inspection/recovery. No auto rollback or retries."))return;
+    const phrase="I AUTHORIZE TOU SCHEDULE CHANGES";
+    const typed=window.prompt(
+      "Type this EXACT confirmation phrase to authorize the real writes:\n\n"+
+      phrase,"");
+    if(typed!==phrase){
+      this._scheduleWriteFeedback="Cancelled: authorization phrase did not match.";
+      this._scheduleWriteError=true;this.render();return;
+    }
+    this._scheduleWriteBusy=true;
+    this._scheduleWriteFeedback="Writing changed registers individually and double-reading after each…";
+    this._scheduleWriteError=false;this.render();
+    try {
+      const answer=await this._hass.callWS({
+        type:"call_service",domain:"saj_h2_control_enhanced",
+        service:"apply_schedules",service_data:{
+          ...data,confirmation:phrase,device_model:"H2-10K-S3-A",
+          control_firmware:"v2.018"
+        },return_response:true
+      });
+      const result=answer?.response||answer;
+      if(result?.status!=="SCHEDULE_VERIFIED_BY_MODBUS" ||
+         result?.write_sent!==true || result?.mode_unchanged!==true ||
+         result?.fallback_unchanged!==true)
+        throw new Error("Device response not fully verified");
+      this._scheduleWriteFeedback=
+        "Verified: "+result.registers_written+" registers saved; both schedule "+
+        "blocks matched direct Modbus readback. Reopen eLEKeeper to confirm.";
+      this._scheduleWriteError=false;
+      this._schedulePlan=null;this._schedulePlanKey="";
+      this._drafts.delete(group.id);
+      this._schedulePreview.clear();
+    } catch(err) {
+      this._scheduleWriteFeedback="POSSIBLE PARTIAL WRITE: "+
+        (err?.message||String(err))+
+        ". DO NOT retry. Check all saved schedule times, days, and power in eLEKeeper.";
+      this._scheduleWriteError=true;
+      this._schedulePlan=null;this._schedulePlanKey="";
+    } finally {
+      this._scheduleWriteBusy=false;this.render();
+    }
+  }
   choice(options,current,onChange) {
     const select=el("select");
     options.forEach(v=>{const o=el("option",null,v);o.value=v;o.selected=v===current;select.append(o);});
