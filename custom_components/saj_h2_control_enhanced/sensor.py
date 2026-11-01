@@ -49,7 +49,7 @@ class SajTOUSensor(CoordinatorEntity, SensorEntity):
         if self.key == "discharge_schedules":
             return f"{sum(s.enabled for s in c.discharge_slots)} configured"
         if self.key == "sync_status":
-            return "Readback OK (not verified with eLEKeeper live)"
+            return "Readback OK (not verified with elekeeper live)"
 
     @property
     def extra_state_attributes(self):
@@ -89,7 +89,7 @@ class SajTOUSensor(CoordinatorEntity, SensorEntity):
             base["power_scale_status"] = "Discharge display W = raw × 99 verified for this installation"
         elif self.key == "sync_status":
             base["note"] = ("Device register readback succeeded. This is not proof "
-                            "of eLEKeeper cloud refresh or schedule execution.")
+                            "of elekeeper cloud refresh or schedule execution.")
         return base
 
 
