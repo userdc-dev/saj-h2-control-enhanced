@@ -1,0 +1,15 @@
+# MOCK DESIGN ONLY; no buttons, no backend actions, no Modbus writes.
+# Put in a future writable integration repository, not in saj-h2-safe-enhanced.
+type: markdown
+title: Battery controls · Design preview
+content: |
+  **Status:** Not installed · No inverter control available
+
+  **Quick actions (future):**
+  - Charge at verified safe limit for X minutes — disabled
+  - Discharge at verified safe limit for X minutes — disabled
+  - Cancel active action — disabled
+
+  **Schedules (future):** charging/discharging weekdays and time windows
+
+  **Strict exclusions:** Never command Backup (2) or Off-grid/Passive (3).
