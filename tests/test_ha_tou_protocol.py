@@ -35,6 +35,33 @@ class TestHAMonitorProtocol(unittest.TestCase):
         self.assertEqual(slot["power_percent_raw"], 50)
         self.assertEqual(slot["power_watts_saj_display"], 4950)
 
+
+    def test_confirmed_weekday_only(self):
+        cfg = module.decode_config([0, 1]+[0]*21,
+            [0x1600, 0x1628, 0x0432]+[0]*18, 1, 1)
+        self.assertEqual(cfg.summary("discharge")[0]["weekday_verified"], "Wednesday")
+        cfg2 = module.decode_config([0, 1]+[0]*21,
+            [0x1600, 0x1628, 0x0732]+[0]*18, 1, 1)
+        self.assertEqual(cfg2.summary("discharge")[0]["weekday_verified"], "Unverified")
+
+    def test_ignore_changes_to_disabled_stale_slots(self):
+        a = module.decode_config([0]*23, [0]*21, 1, 1)
+        inactive = [0]*21
+        inactive[2] = 99
+        b = module.decode_config([0]*23, inactive, 1, 1)
+        self.assertEqual(module.active_signature(a), module.active_signature(b))
+        self.assertEqual(module.describe_changes(a, b), ())
+
+    def test_track_actual_app_originated_changes(self):
+        before = module.decode_config([0, 1]+[0]*21,
+            [0x1600, 0x1628, 0x0464]+[0]*18, 0, 1)
+        after = module.decode_config([0, 1]+[0]*21,
+            [0x1600, 0x1628, 0x0432]+[0]*18, 1, 1)
+        changes = module.describe_changes(before, after)
+        self.assertTrue(any("Mode:" in x for x in changes))
+        self.assertIn("Discharge slot 1 changed", changes)
+        self.assertEqual(len(changes), 2)
+
     def test_zero_schedules_valid(self):
         cfg = module.decode_config([0] * 23, [0] * 21, 0, 1)
         self.assertFalse(cfg.summary("charge"))
