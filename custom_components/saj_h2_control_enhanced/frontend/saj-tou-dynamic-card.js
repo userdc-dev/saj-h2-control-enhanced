@@ -96,7 +96,9 @@ const CSS = [
   ".flowFoot{font-size:11px;color:var(--secondary-text-color,#aaa);line-height:1.5;margin-top:12px}",
 
   "ha-card{padding:18px 20px 22px;border-radius:16px;--control-accent:var(--primary-color,#16b9b1);background:var(--ha-card-background,var(--card-background-color,#1c1f23))}",
-  ".deviceChooser{display:flex;align-items:center;gap:10px;margin:0 0 10px}.deviceChooser select{min-width:220px}",
+  ".deviceChooser{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 14px;margin:0 0 14px;border:1px solid var(--divider-color,#45484c);border-radius:12px;background:var(--card-background-color,#222528);flex-wrap:wrap}",
+  ".deviceChooserHeading{display:flex;flex-direction:column;gap:4px}.deviceChooserHeading strong{font-size:14px}.deviceChooser select{min-width:230px;max-width:100%;flex:0 1 380px;font-weight:600}",
+
   ".readbackBar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 12px;font-size:12px}",
   ".readbackOk{color:var(--success-color,#77cf99);font-weight:650}.readbackBad{color:var(--error-color,#f66);font-weight:650}",
   ".energyOverview{margin:12px 0 16px;padding:18px;border-radius:14px;background:linear-gradient(140deg,rgba(31,167,175,.045),transparent 48%),var(--card-background-color,#22272a)}",
@@ -376,7 +378,7 @@ class SajTOUDynamicCard extends HTMLElement {
     add(root, el("style",null,CSS));
     const card=el("ha-card");
     root.append(card);
-    // Home Assistant already provides the "Time of Use" view title.
+    // Home Assistant provides the "SAJ H2 Control" native view title.
     // Avoid repeating that heading, a second large title, or an unnecessary
     // device dropdown when there is only one configured inverter.
     if (!group) {
@@ -384,17 +386,32 @@ class SajTOUDynamicCard extends HTMLElement {
       return;
     }
     if(devices.length>1){
+      // A custom Lovelace card cannot safely add a control inside Home
+      // Assistant's own native toolbar. Put the multi-device selector
+      // directly below that toolbar, ahead of telemetry or live controls.
       const chooser=el("div","deviceChooser");
-      add(chooser,el("span","muted","Inverter"));
+      const heading=el("div","deviceChooserHeading");
+      add(heading,el("strong",null,"Select SAJ inverter"),
+        el("span","muted",devices.length+" devices available"));
       const select=el("select");
+      select.setAttribute("aria-label","Active SAJ inverter");
+      const names=devices.map(g=>
+        (g.entities.operating_mode?.attributes.friendly_name||"SAJ H2")
+          .replace(/ Operating mode$/i,"").trim()||"SAJ H2");
       devices.forEach((g,index)=>{
-        const opt=el("option",null,
-          (g.entities.operating_mode?.attributes.friendly_name||"SAJ H2").replace(/ Operating mode$/i,"")+
-          " · "+(index+1));
+        const duplicated=names.filter(name=>name===names[index]).length>1;
+        const name=duplicated?names[index]+" · Device "+(index+1):names[index];
+        const opt=el("option",null,name);
         opt.value=g.id;opt.selected=g.id===group.id;select.append(opt);
       });
-      select.addEventListener("change",e=>{this._selected=e.target.value;this.render()});
-      add(chooser,select);add(card,chooser);
+      select.addEventListener("change",e=>{
+        this._selected=e.target.value;
+        this._schedulePlan=null;this._schedulePlanKey="";
+        this._modeFeedback="";this._fallbackFeedback="";
+        this._scheduleWriteFeedback="";
+        this.render();
+      });
+      add(chooser,heading,select);add(card,chooser);
     }
     const e=group.entities;
     const good=roles.every(r => isValid(e[r]));
