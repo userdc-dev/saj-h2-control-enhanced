@@ -1,5 +1,13 @@
 # Changelog — SAJ H2 Control Enhanced
 
+## 0.5.5 — 2026-11-02 (native page title and multi-inverter header picker)
+
+- Changed the integration-generated Lovelace view title from **Time of Use** to **SAJ H2 Control**, including a safe one-time migration of the existing single-card storage dashboard.
+- Added exact-match checks so user-customized dashboards and unrelated views are not overwritten, with offline migration tests.
+- When multiple SAJ control devices are configured, display a clearly labeled inverter switcher immediately below the native HA toolbar; hide it for one inverter. Never attempt unsupported injection into Home Assistant's global toolbar.
+- Frontend asset cache-busted to `/saj-h2-tou/v055/saj-tou-dynamic-card.js`. No changes to Modbus write behavior, authorization or separate SAJ Safe Monitor.
+
+
 ## 0.5.4 — 2026-11-02 (unified inverter control and visual polish)
 
 - Followed owner's annotated dashboard screenshot: removed duplicate Battery time-of-use heading, hid single-device dropdown, and **joined Operating mode and Outside TOU windows into one full-width two-column panel** with a single outer border.
