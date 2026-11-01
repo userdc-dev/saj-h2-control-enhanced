@@ -22,6 +22,13 @@ _LOGGER = logging.getLogger(__name__)
 PLATFORMS = ("sensor",)
 
 
+async def async_setup(hass: HomeAssistant, config):
+    """Register dynamic frontend resource, once per HA process."""
+    from .frontend_setup import async_register_frontend
+    await async_register_frontend(hass)
+    return True
+
+
 class SajTOUCoordinator(DataUpdateCoordinator):
     def __init__(self, hass, entry):
         super().__init__(
@@ -119,6 +126,8 @@ async def async_setup_entry(hass: HomeAssistant, entry):
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    from .frontend_setup import async_ensure_dashboard
+    await async_ensure_dashboard(hass)
     return True
 
 
