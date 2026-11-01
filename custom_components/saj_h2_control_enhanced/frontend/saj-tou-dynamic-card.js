@@ -141,7 +141,7 @@ class SajTOUDynamicCard extends HTMLElement {
     const card=el("ha-card");
     root.append(card);
     const top=el("div","top");
-    add(top,el("h2",null,"Battery time-of-use"),el("span","pill","Device readback · Preview v0.2.3"));
+    add(top,el("h2",null,"Battery time-of-use"),el("span","pill","Device readback · Preview v0.2.4"));
     add(card,top);
     if (!group) {
       add(card,el("p","empty","No SAJ H2 TOU devices found. Install the read-only TOU integration and check its schedule entities."));
@@ -189,7 +189,7 @@ class SajTOUDynamicCard extends HTMLElement {
     if (Array.isArray(change)&&change.length) {
       add(card,el("p","muted","Last detected change: "+change.join("; ")));
     }
-    add(card,el("div","warn","Local draft only: sliders, times and weekday selectors DO NOT save to SAJ or eLEKeeper. Friday and Wednesday weekday bits are confirmed. Charge power 50% = 4950 W was confirmed; remaining charge powers and other weekday bits still require testing. Device settings follow HA readback unless you have an edited draft. Click Reload draft to accept external changes."));
+    add(card,el("div","warn","Local draft only: sliders, times and weekday selectors DO NOT save to SAJ or eLEKeeper. Friday and Wednesday weekday bits are confirmed. Charge power at raw 50 = 4950 W and raw 70 = 6930 W is app-confirmed; other raw levels are modeled at 99 W per unit. Other weekday bits still require testing. Device settings follow HA readback unless you have an edited draft. Click Reload draft to accept external changes."));
   }
   choice(options,current,onChange) {
     const select=el("select");
@@ -235,11 +235,11 @@ class SajTOUDynamicCard extends HTMLElement {
       add(container,times);
       const actualSlots=(state?.attributes.schedules||[]);
       const saved=actualSlots.find(item => Number(item.slot) === row.slotNumber);
-      if (saved) add(container,el("div","saved","Saved on inverter: "+saved.start+"–"+saved.end+" · "+(saved.power_conversion_verified ? saved.power_watts_saj_display+" W" : saved.power_percent_raw+"% raw (W unverified)")));
+      if (saved) add(container,el("div","saved","Saved on inverter: "+saved.start+"–"+saved.end+" · "+saved.power_watts_saj_display+" W"+(saved.power_conversion_verified ? " (paired)" : " (estimated)")));
       const power=el("div","row");
       const label=el("span","muted","Draft power");
       const slider=el("input");slider.type="range";slider.min="0";slider.max="100";slider.step="1";slider.value=String(row.percent);
-      const previewText = () => direction==="discharge" ? (row.percent*99)+" W" : row.percent===50 ? "4950 W (verified)" : row.percent+"% (W unverified)";
+      const previewText = () => (row.percent*99)+" W"+(direction==="charge" && ![50,70].includes(row.percent) ? " (estimated)" : "");
       const display=el("strong",null,previewText());
       slider.addEventListener("input",()=>{row.percent=Number(slider.value);draft.changed=true;display.textContent=previewText()});
       add(power,label,slider,display);add(container,power);
