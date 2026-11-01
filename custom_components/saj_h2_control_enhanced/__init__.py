@@ -1,10 +1,11 @@
-"""SAJ H2 TOU readback coordinator. Modbus function 03 ONLY.
+"""SAJ H2 TOU coordinator and opt-in supervised operating-mode pilot.
 
-This module has NO inverter write functions, services, buttons or switches.
-An independent TCP connection is used once every 120s by default.
+Ordinary monitoring and dashboard preview remain read-only. Manual pilot
+is a separate confirmation-gated Home Assistant service; no auto writes.
 """
 from datetime import datetime, timedelta, timezone
 import inspect
+import asyncio
 import logging
 
 import voluptuous as vol
@@ -77,6 +78,55 @@ async def async_setup(hass: HomeAssistant, config):
         schema=vol.Schema({
             vol.Required("target_mode"): vol.In(
                 ("self_consumption", "time_of_use")),
+            vol.Optional("entry_id"): str,
+        }),
+        supports_response=SupportsResponse.ONLY,
+    )
+    # Manual, single-shot hardware pilot: NOT invoked from dashboards or polls.
+    # This separate action requires a literal confirmation and exact old mode.
+    pilot_lock = asyncio.Lock()
+
+    async def supervised_tou_pilot(call):
+        if pilot_lock.locked():
+            raise vol.Invalid("A supervised mode test is already running")
+        entries = [
+            e for e in hass.config_entries.async_entries(DOMAIN)
+            if getattr(e, "runtime_data", None) is not None
+        ]
+        requested_id = call.data.get("entry_id")
+        if requested_id:
+            entries = [e for e in entries if e.entry_id == requested_id]
+        if len(entries) != 1:
+            raise vol.Invalid("Exactly one matching SAJ control entry is required")
+        coordinator = entries[0].runtime_data
+        from .supervised_write import (
+            run_supervised_tou_test, SupervisedWriteError,
+        )
+        host, port = coordinator._connection_details()
+        async with pilot_lock:
+            try:
+                result = await run_supervised_tou_test(
+                    host=host, port=port,
+                    confirmed_phrase=call.data["confirmation"],
+                    expected_mode=call.data["expected_current_mode"],
+                    device_model=call.data["device_model"],
+                    control_firmware=call.data["control_firmware"],
+                )
+                await coordinator.async_request_refresh()
+                return result
+            except SupervisedWriteError as exc:
+                raise vol.Invalid(
+                    str(exc) + "; don't retry automatically"
+                ) from exc
+
+    hass.services.async_register(
+        DOMAIN, "supervised_tou_pilot", supervised_tou_pilot,
+        schema=vol.Schema({
+            vol.Required("confirmation"): vol.In(
+                ("I AUTHORIZE ONE TOU MODE WRITE",)),
+            vol.Required("expected_current_mode"): vol.In((0,)),
+            vol.Required("device_model"): vol.In(("H2-10K-S3-A",)),
+            vol.Required("control_firmware"): vol.In(("v2.018",)),
             vol.Optional("entry_id"): str,
         }),
         supports_response=SupportsResponse.ONLY,
