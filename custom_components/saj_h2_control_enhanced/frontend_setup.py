@@ -34,9 +34,9 @@ async def async_register_frontend(hass):
 
 
 async def async_ensure_dashboard(hass):
-    """Create a separate storage dashboard ONLY if one does not exist.
+    """Create our dashboard or migrate only its exact original view title.
 
-    Protects user-created dashboards. No in-place dashboard edits or deletion.
+    Protects user-created dashboards. No broad edits or deletion.
     If a HA release changes internal collection APIs, log error and allow a
     manual one-card dashboard instead; do not fail inverter monitoring.
     """
@@ -48,8 +48,30 @@ async def async_ensure_dashboard(hass):
         )
         from homeassistant.components.lovelace.const import MODE_STORAGE
         lovelace = hass.data.get(LOVELACE_DATA)
-        if lovelace is None or DASHBOARD_PATH in lovelace.dashboards:
+        if lovelace is None:
             return
+
+        # Update only our original, unmodified single-card storage view.
+        # Never reset user cards or write to another dashboard.
+        existing = lovelace.dashboards.get(DASHBOARD_PATH)
+        if existing is not None:
+            if existing.mode == MODE_STORAGE:
+                from .dashboard_title import migrate_generated_view_title
+                try:
+                    old_config = await existing.async_load(False)
+                    updated = migrate_generated_view_title(old_config)
+                    if updated is not None:
+                        await existing.async_save(updated)
+                        _LOGGER.info(
+                            "Renamed existing SAJ TOU view title to SAJ H2 Control"
+                        )
+                except Exception:
+                    _LOGGER.exception(
+                        "Unable to rename existing SAJ TOU view title; "
+                        "preserved its configuration and controls"
+                    )
+            return
+
         collection = DashboardsCollection(hass)
         await collection.async_load()
         if any(item.get("url_path") == DASHBOARD_PATH
@@ -66,7 +88,7 @@ async def async_ensure_dashboard(hass):
         await board.async_save({
             "title": "SAJ TOU Control",
             "views": [{
-                "title": "Time of Use",
+                "title": "SAJ H2 Control",
                 "path": "tou",
                 "icon": "mdi:clock-outline",
                 "type": "panel",
