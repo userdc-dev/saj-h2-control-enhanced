@@ -83,6 +83,7 @@ function cloneDraft(group) {
     const state = e[role];
     const active = (state && state.attributes.schedules) || [];
     return active.slice(0,7).map(v=>({
+      slotNumber:Number(v.slot),
       start:cleanTime(v.start),end:cleanTime(v.end),
       percent:Math.max(0,Math.min(100,Number(v.power_percent_raw)||0)),
       dayMask:Number(v.weekday_mask_raw)||0,
@@ -233,7 +234,7 @@ class SajTOUDynamicCard extends HTMLElement {
       }
       add(container,times);
       const actualSlots=(state?.attributes.schedules||[]);
-      const saved=actualSlots.find(item => Number(item.slot) === index+1);
+      const saved=actualSlots.find(item => Number(item.slot) === row.slotNumber);
       if (saved) add(container,el("div","saved","Saved on inverter: "+saved.start+"–"+saved.end+" · "+(saved.power_conversion_verified ? saved.power_watts_saj_display+" W" : saved.power_percent_raw+"% raw (W unverified)")));
       const power=el("div","row");
       const label=el("span","muted","Draft power");
@@ -259,7 +260,7 @@ class SajTOUDynamicCard extends HTMLElement {
     addButton.disabled=rows.length>=7;
     addButton.addEventListener("click",()=>{
       if(rows.length>=7)return;
-      rows.push({start:"00:00",end:"00:00",percent:0,dayMask:0,days:[],original:false});
+      rows.push({slotNumber:null,start:"00:00",end:"00:00",percent:0,dayMask:0,days:[],original:false});
       draft.changed=true;this.render();
     });
     add(pane,addButton);
