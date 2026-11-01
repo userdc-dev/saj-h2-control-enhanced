@@ -14,7 +14,7 @@ from pymodbus.client import AsyncModbusTcpClient
 from .const import DEFAULT_SCAN_INTERVAL, UNIT_ID
 from .tou_protocol import (
     CHARGE_START, CHARGE_COUNT, DISCHARGE_START, DISCHARGE_COUNT,
-    MODE_ADDR, FALLBACK_ADDR, decode_config, InvalidTOUData,
+    MODE_ADDR, FALLBACK_ADDR, decode_config, InvalidTOUData,\n    active_signature, describe_changes,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ class SajTOUCoordinator(DataUpdateCoordinator):
         )
         self.entry = entry
         self.last_successful_poll = None
-        self.change_count = 0
+        self.change_count = 0\n        self.last_device_change = None\n        self.last_changes = ()
 
     async def _async_update_data(self):
         client = AsyncModbusTcpClient(
@@ -52,26 +52,39 @@ class SajTOUCoordinator(DataUpdateCoordinator):
                     raise UpdateFailed(f"Invalid read-only response at {address:#06x}")
                 return reply.registers
 
-            # Non-atomic reads: another controller might change a schedule
-            # between blocks. Re-read masks and mode at the end; fail instead
-            # of publishing a mixed snapshot if those changed.
-            charge = await read(CHARGE_START, CHARGE_COUNT)
-            discharge = await read(DISCHARGE_START, DISCHARGE_COUNT)
-            mode = (await read(MODE_ADDR, 1))[0]
-            fallback = (await read(FALLBACK_ADDR, 1))[0]
-            masks_again = await read(CHARGE_START, 2)
-            mode_again = (await read(MODE_ADDR, 1))[0]
-            fallback_again = (await read(FALLBACK_ADDR, 1))[0]
-            if charge[:2] != masks_again or mode != mode_again or fallback != fallback_again:
-                raise UpdateFailed("TOU settings changed during snapshot; retry next poll")
+            # The SAJ app can save an individual slot while this client is
+            # polling. Verify the ENTIRE schedule block twice, not just masks.
+            # Otherwise an old slot could be paired with a new mode/mask.
+            async def complete_snapshot():
+                return (
+                    await read(CHARGE_START, CHARGE_COUNT),
+                    await read(DISCHARGE_START, DISCHARGE_COUNT),
+                    (await read(MODE_ADDR, 1))[0],
+                    (await read(FALLBACK_ADDR, 1))[0],
+                )
 
-            config = decode_config(charge, discharge, mode, fallback)
+            first = await complete_snapshot()
+            second = await complete_snapshot()
+            if first != second:
+                raise UpdateFailed(
+                    "TOU settings changed during readback; retry next poll")
+
+            config = decode_config(*first)
             previous = self.data
-            if previous is not None and config != previous["config"]:
+            checked_at = datetime.now(timezone.utc)
+            if (previous is not None and
+                    active_signature(config) != active_signature(previous["config"])):
                 self.change_count += 1
-            self.last_successful_poll = datetime.now(timezone.utc)
-            return {"config": config, "timestamp": self.last_successful_poll,
-                    "change_count": self.change_count}
+                self.last_device_change = checked_at
+                self.last_changes = describe_changes(previous["config"], config)
+            self.last_successful_poll = checked_at
+            return {
+                "config": config,
+                "timestamp": checked_at,
+                "change_count": self.change_count,
+                "last_device_change": self.last_device_change,
+                "last_changes": self.last_changes,
+            }
         except InvalidTOUData as exc:
             raise UpdateFailed(f"Invalid TOU settings readback: {exc}") from exc
         except UpdateFailed:
