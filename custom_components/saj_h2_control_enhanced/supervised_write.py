@@ -50,29 +50,19 @@ async def _snapshot(client):
         result = decode_config(ch, dis, mode, fallback)
         if result.mode not in (0, 1) or result.fallback != 1:
             raise SupervisedWriteError("Unsupported mode/fallback: no write")
-        if result.charge_mask != 1 or result.discharge_mask != 1:
-            raise SupervisedWriteError(
-                "Pilot limited to original one-charge/one-discharge schedule masks")
-        if len(result.summary("charge")) != 1 or len(result.summary("discharge")) != 1:
-            raise SupervisedWriteError("Invalid active slot count")
-        # Pilot is additionally bound to the exact schedules the owner
-        # restored and previously confirmed. Any new/edited active schedule
-        # requires an entirely new review rather than activating by surprise.
-        c = result.charge_slots[0]
-        d = result.discharge_slots[0]
-        allowed_charge_window = (
-            (c.start, c.end) in (
-                ("22:00", "22:40"),  # Original verified Friday schedule
-                ("21:30", "22:00"),  # Verified only after pilot write
-            )
-        )
-        if not (c.enabled and allowed_charge_window
-                and c.day_mask == 16 and c.power_percent == 70
-                and d.enabled and d.start == "22:00" and d.end == "22:40"
-                and d.day_mask == 4 and d.power_percent == 50):
-            raise SupervisedWriteError(
-                "Active schedules differ from owner-verified Friday charge "
-                "and Wednesday discharge: no write")
+        if not 0 <= result.charge_mask <= 127 or not 0 <= result.discharge_mask <= 127:
+            raise SupervisedWriteError("Unsupported active slot masks")
+        # Mode switching works after any valid schedule edit, not just the
+        # owner's initial Friday/Wednesday baseline.
+        for group in (result.charge_slots, result.discharge_slots):
+            for slot in group:
+                if not slot.enabled:
+                    continue
+                if not (1 <= slot.day_mask <= 127 and
+                        1 <= slot.power_percent <= 100 and
+                        slot.start != "unknown" and slot.end != "unknown"):
+                    raise SupervisedWriteError(
+                        "Invalid active slot; refuse mode change")
         return result
 
     first = await once()
