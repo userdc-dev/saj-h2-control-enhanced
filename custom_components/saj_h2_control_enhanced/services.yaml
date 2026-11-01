@@ -22,3 +22,45 @@ preview_mode_change:
       required: false
       selector:
         text:
+
+supervised_tou_pilot:
+  name: Supervised one-time Time-of-Use switch (LIVE WRITE)
+  description: >-
+    DANGER: Sends one real Modbus function-06 operating-mode write (0x3647=1)
+    only when the current mode is Self-consumption, the active schedule masks
+    are both 1 and the full schedule readback remains unchanged. Requires
+    explicit confirmation each time. Never invoked by dashboard automatically.
+    eLEKeeper or a VPP may later override this change.
+  fields:
+    confirmation:
+      name: Exact confirmation phrase
+      description: Type I AUTHORIZE ONE TOU MODE WRITE
+      required: true
+      selector:
+        text:
+    expected_current_mode:
+      name: Expected current mode
+      description: Enter 0 (Self-consumption).
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 0
+          step: 1
+    device_model:
+      name: Verified inverter model
+      description: H2-10K-S3-A
+      required: true
+      selector:
+        text:
+    control_firmware:
+      name: Verified control-board firmware
+      description: v2.018
+      required: true
+      selector:
+        text:
+    entry_id:
+      name: Control integration entry ID
+      required: false
+      selector:
+        text:
