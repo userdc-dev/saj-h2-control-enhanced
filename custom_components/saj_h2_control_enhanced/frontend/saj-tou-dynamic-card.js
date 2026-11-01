@@ -173,7 +173,7 @@ class SajTOUDynamicCard extends HTMLElement {
     const card=el("ha-card");
     root.append(card);
     const top=el("div","top");
-    add(top,el("h2",null,"Battery time-of-use"),el("span","pill","Live mode control · Schedules preview"));
+    add(top,el("h2",null,"Battery time-of-use"),el("span","pill","Mode & schedule control"));
     add(card,top);
     if (!group) {
       add(card,el("p","empty","No SAJ H2 TOU devices found. Install the read-only TOU integration and check its schedule entities."));
@@ -258,8 +258,13 @@ class SajTOUDynamicCard extends HTMLElement {
     add(card,columns);
     if (draft.changed) add(card,el("div","warn","Unsaved changes — use Save schedule changes to inverter. Reload discards these edits; the saved device schedule remains unchanged until a confirmed save succeeds."));
     const footer=el("div","row");
-    const reset=el("button",null,"Reload draft from inverter");
-    reset.addEventListener("click",()=>{this._drafts.set(group.id,cloneDraft(group));this._schedulePlan=null;this._schedulePlanKey="";this._schedulePreview.clear();this.render();});
+    const reset=el("button",null,"Discard edits / reload inverter");
+    reset.addEventListener("click",()=>{
+      if(draft.changed && !window.confirm("Discard unsaved schedule changes and reload inverter settings?"))return;
+      this._drafts.set(group.id,cloneDraft(group));
+      this._schedulePlan=null;this._schedulePlanKey="";this._schedulePreview.clear();
+      this.render();
+    });
     const save=el("button",null,
       this._scheduleWriteBusy?"Applying & verifying…":
       this._previewBusy?"Validating saved settings…":
@@ -613,7 +618,7 @@ class SajTOUDynamicCard extends HTMLElement {
       const saved=actualSlots.find(item => Number(item.slot) === row.slotNumber);
       if (saved) add(container,el("div","saved","Saved on inverter: "+saved.start+"–"+saved.end+" · "+saved.power_watts_saj_display+" W"+(saved.power_conversion_verified ? " (paired)" : " (estimated)")));
       const power=el("div","row");
-      const label=el("span","muted","Draft power");
+      const label=el("span","muted","Charging/discharging power");
       const slider=el("input");slider.type="range";slider.min="0";slider.max="100";slider.step="1";slider.value=String(row.percent);
       const previewText = () => (row.percent*99)+" W"+(direction==="charge" && ![50,70].includes(row.percent) ? " (estimated)" : "");
       const display=el("strong",null,previewText());
