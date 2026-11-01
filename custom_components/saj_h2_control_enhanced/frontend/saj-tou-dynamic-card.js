@@ -213,6 +213,39 @@ const CSS = [
   ".flowFoot{margin-top:8px;font-size:11px;line-height:1.45}",
   "@media(max-width:680px){.readbackRight{justify-content:flex-start}.readbackBar{align-items:flex-start}.energyHeading{gap:6px}.energyOverview{padding:12px}.flowGraph{gap:9px}.flowTable{min-width:590px}.flowTable .flowNumbers td{font-size:14px}}",
 
+  /* v0.5.10: current modes in one concise header; no duplicated device labels. */
+  ".controlPanelHead{min-height:0;padding:13px 17px;gap:14px;flex-wrap:wrap}",
+  ".controlPanelHead h3{font-size:17px;white-space:nowrap}",
+  ".controlSummary{display:flex;align-items:center;gap:9px;flex-wrap:wrap;justify-content:flex-end}",
+  ".summaryState{display:flex;align-items:baseline;gap:7px;padding:7px 10px;border:1px solid var(--divider-color,#43484c);border-radius:10px;background:rgba(128,128,128,.045);font-size:12px;line-height:1.3;white-space:nowrap}",
+  ".summaryLabel{color:var(--secondary-text-color,#aaa);font-weight:500}",
+  ".summaryState strong{color:var(--primary-text-color,#fff);font-weight:700;font-variant-numeric:tabular-nums}",
+  ".controlCell{padding:14px 18px 15px;min-height:0}",
+  ".controlSubhead{margin:0 0 11px}",
+  ".controlSubhead h4{font-size:14px}",
+  ".controlCell .liveModeButtons{margin:0 0 9px}",
+  ".controlCell p.controlHint,.controlCell p.muted:not(.controlHint){font-size:11px;line-height:1.5}",
+  /* Schedules use a shallow header+action row, not a 7-slot empty-state box. */
+  ".scheduleTitle{margin:14px 0 7px}",
+  ".scheduleTitle h3{font-size:16px}",
+  ".scheduleGrid{gap:10px;margin:0}",
+  ".scheduleGrid .pane{padding:12px 15px;border-radius:12px;min-height:0}",
+  ".scheduleGrid .pane .top{gap:10px}",
+  ".scheduleGrid .pane .top h3{font-size:15px;margin:0}",
+  ".scheduleGrid .pane .addSchedule{background:transparent;border-color:var(--divider-color,#52565c);font-size:12px;font-weight:600;padding:7px 11px;min-height:33px}",
+  ".scheduleGrid .pane .addSchedule:hover:not(:disabled){border-color:var(--control-accent);background:rgba(22,169,185,.075)}",
+  ".emptySchedule{padding:7px 0 1px;margin:7px 0 0;font-size:12px}",
+  ".scheduleGrid .slot{padding:11px 0 7px}",
+  ".scheduleActions{margin:10px 0 3px;gap:8px;display:flex;justify-content:space-between}",
+  ".scheduleActions button{font-size:12px;padding:9px 12px;min-height:37px}",
+  ".scheduleActions .primaryAction{margin-left:auto}",
+  ".scheduleFootnote{font-size:11px;line-height:1.5;color:var(--secondary-text-color,#aaa);margin:7px 1px 0}",
+  ".draftNotice{border-left:2px solid var(--warning-color,#d6ae57);padding:5px 9px;font-size:12px;color:var(--secondary-text-color,#bbb);margin-top:9px}",
+  ".unsavedPill{font-size:11px;color:var(--warning-color,#e1b663);font-weight:650}",
+  "@media(max-width:850px){.controlPanelHead{align-items:flex-start}.controlSummary{justify-content:flex-start}.summaryState{padding:6px 8px;font-size:11px}}",
+  "@media(max-width:520px){.scheduleGrid .pane{padding:11px 12px}.scheduleActions{flex-wrap:wrap}.scheduleActions button{flex:1}.controlPanelHead h3{width:100%}.summaryState{white-space:normal}.controlSummary{width:100%}}",
+
+
 
 ].join("");
 const el = (tag, cls, text) => {
