@@ -37,3 +37,5 @@ See [Developer Handoff](DEVELOPER_HANDOFF.md), [Safety and Roadmap](docs/SAFETY_
 For all prior confirmed read-only register mappings, commissioning and v0.3.x dashboard history, consult the [read-only project handoff](https://github.com/userdc-dev/saj-h2-safe-enhanced/blob/main/PROJECT_HANDOFF.md).
 
 **New SAJ app evidence:** [TOU screenshot observations & required bidirectional device synchronization](docs/SAJ_APP_TOU_OBSERVATIONS.md) documents 7 charge + 7 discharge slots, weekday multiselect, 0–9900 W discharge UI range, TOU fallback to Self-consumption, and owner's observed up-to-5-minute activation delay. Device-side schedules/settings must be read back; local drafts must not masquerade as confirmed inverter state.
+
+**Long-term roadmap:** [OCPP EV charging and air-conditioning/major-load coordination](docs/FUTURE_SMART_LOADS.md) — future only, conditioned on verified inverter controls, device readback and eLEKeeper consistency.
