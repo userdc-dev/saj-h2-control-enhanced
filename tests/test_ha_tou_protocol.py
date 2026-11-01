@@ -110,7 +110,7 @@ class TestHAMonitorProtocol(unittest.TestCase):
             [0x1600, 0x1628, 0x0432]+[0]*18, 1, 1)
         self.assertEqual(cfg.summary("discharge")[0]["weekday_verified"], "Wednesday")
         cfg2 = module.decode_config([0, 1]+[0]*21,
-            [0x1600, 0x1628, 0x0732]+[0]*18, 1, 1)
+            [0x1600, 0x1628, 0x2032]+[0]*18, 1, 1)
         self.assertEqual(cfg2.summary("discharge")[0]["weekday_verified"], "Unverified")
 
     def test_ignore_changes_to_disabled_stale_slots(self):
