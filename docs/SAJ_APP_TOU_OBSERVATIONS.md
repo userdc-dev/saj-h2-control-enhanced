@@ -204,3 +204,20 @@ Owner reopened eLEKeeper **without modifying settings** after entering 5000 W an
 Thus, for this inverter's **discharge schedule readback/display**, `watts = raw * 99` is validated by three independent paired app/Modbus observations. The user-entered value 5000 W was *normalized* to 4950 W on Save. The exact app **watts→raw quantization rule** is not yet established and is NOT a hardware-write specification; charger/charge-side mapping is also unverified. Do not assume the programmed power is the actual measured battery output.
 
 Added `discharge_display_watts()` to the offline read-only `control_core/tou_readback.py` and tests for all three paired points. This has NOT been installed in Home Assistant; no Modbus writes are implemented.
+
+## Confirmed Friday charging slot and matching saved watts (2026-11-01, 18:57)
+
+The owner created **one Friday charging schedule** in the official SAJ eLEKeeper app, **22:00–22:40, saved 4950 W**, while leaving the existing Wednesday discharge slot **22:00–22:40, saved 4950 W**. Using ONLY a read-only Modbus request, the live inverter returned:
+
+- Charge block **0x3604 count 23**: `[1, 1, 5632, 5672, 4146, 0, 827, 6170, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]`
+- Discharge block **0x361B count 21**: `[5632, 5672, 1074, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]`
+- Mode **0x3647 = [1]** = Time-of-use
+- TOU outside-window fallback **0x365F = [1]** = Self-consumption.
+
+Charge enable mask = **1**, discharge enable mask = **1**, confirming one slot of each type. Charge slot 1 = packed start **5632 = 0x1600 = 22:00**, end **5672 = 0x1628 = 22:40**, mixed **4146 = 0x1032**: high-byte weekday mask **16 = Friday**, low byte **50**. This matches the app's saved **4950 W** for charging, the first paired evidence that *charging and discharging* may use the same scaling. Discharge slot 1 **1074 = 0x0432** remains Wednesday mask 4 / raw 50 = 4950 W.
+
+**Confirmed weekday bits from two distinct app tests: Wednesday = bit 4; Friday = bit 16.** Combination of these bits (mask 20) is predictable, but a multi-day schedule mask 20 has not been directly validated in the official app. Monday, Tuesday, Thursday, Saturday and Sunday remain unconfirmed.
+
+**Do not overgeneralize** from only one charge power point: charge raw 50→4950 W is independently confirmed, but full charge power mapping, especially at other values or firmware, still requires read-only paired tests. Source was the SAJ app for settings, and no experimental Modbus write commands were sent.
+
+**Project code v0.2.3** adds Friday label, read-only charge raw50→4950 W formatting with explicit power verification flag, and matching snapshot regression tests. Live Home Assistant is still on v0.2.2 until manually updated.
