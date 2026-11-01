@@ -257,9 +257,11 @@ class SajTOUDynamicCard extends HTMLElement {
       "I AUTHORIZE ONE SELF CONSUMPTION MODE WRITE";
     if (!window.confirm("LIVE INVERTER CONTROL: switch from "+
       (current===0?"Self-consumption":"Time-of-Use")+" to "+label+
-      "?\\nThis may change battery charging/discharging and grid exports."+
-      "\\nThe saved schedules will not be edited. Have eLEKeeper available.")) return;
-    const typed=window.prompt("Type the following EXACT confirmation phrase:\\n"+phrase,"");
+      "?\n\nThis may change battery charging/discharging and grid exports."+
+      "\nSaved schedules will not be edited. Have eLEKeeper available.")) return;
+    const typed=window.prompt(
+      "Type ONLY the confirmation phrase below (no quotes or extra characters):\n\n"+
+      phrase,"");
     if (typed!==phrase) {
       this._modeFeedback="Cancelled: confirmation phrase did not match.";
       this._modeFeedbackError=true;this.render();return;
