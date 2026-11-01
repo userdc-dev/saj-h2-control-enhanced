@@ -349,7 +349,7 @@ class SajTOUDynamicCard extends HTMLElement {
     const energyHeading=el("div","energyHeading");
     add(energyHeading,el("h3",null,"Live energy"),
       el("div","muted","Solar · Home · Battery · Grid · Forecast"));
-    add(header,energyHeading,el("span","pill","● Read-only telemetry"));
+    add(header,energyHeading);
     add(panel,header);
     const keys=["solar","home","battery","soc","stored","gridImport",
       "gridExport","outlook","remaining","tomorrow"];
