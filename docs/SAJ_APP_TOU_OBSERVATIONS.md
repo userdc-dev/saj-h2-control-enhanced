@@ -81,3 +81,11 @@ Proposed architecture:
 - No unsupported register writes, no unverified automatic mode switch, and no claims of immediate effect after a save.
 
 **Implementation status:** observed specification only; no TOU readback registers have yet been verified; separate control repository remains *non-writing*.
+
+## Additional owner clarification — schedule counts, time and power (2026-11-01)
+
+- **Zero is a perfectly valid count**: 0–7 **charge schedules** and independently 0–7 **discharge schedules**. There is NO minimum of one. No active schedule must be fabricated or automatically inserted just because Time-of-use mode is selected.
+- All times use **24-hour `HH:MM`**, e.g. `00:00`, `09:05`, `22:40`. Never render AM/PM in SAJ schedule editors. Decode upstream packed hours/minutes only after checking valid 0–23 and 0–59 bounds.
+- The app shows **0–9900 W** for the discharge example. Owner suspects increments **may be 100 W** (0, 100, 200 … 9900), **NOT yet confirmed**. Do not restrict UI to multiples of 100 W or reject other values until the SAJ app or readback demonstrates this.
+- Upstream `modbus_readers.py` decodes the low byte of each packed schedule register as `power_percent` (0–100 expected in usual use), not watts. It is *plausible* that app watts = percent × 100 W for this 10 kW model (e.g. screenshot 9900 W ↔ raw 99). **This scaling is unverified on this inverter** and could depend on power configuration; never use it to issue writes before real readback parity checks.
+- With zero schedules, enable masks are expected to be zero *if* the upstream mapping applies. An all-zero slot's start/end/power may be stale data; use enable masks rather than inventing active slots.
