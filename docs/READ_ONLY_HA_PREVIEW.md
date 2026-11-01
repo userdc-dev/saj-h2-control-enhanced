@@ -35,3 +35,11 @@ A Modbus failure makes sensors unavailable; this is preferable to falsely claimi
 ## Rollback
 
 Remove the new integration from Home Assistant Devices & Services. If needed, remove only the `saj_h2_control_enhanced` directory and restart Home Assistant. Never delete the `saj_h2_safe` component.
+
+## In-place upgrade to v0.1.1 (after owner returns)
+
+**No need to delete an integration entry.** Fetch current main branch and copy **only** the `custom_components/saj_h2_control_enhanced` folder over the same existing custom component folder on Kamrui. Then restart Home Assistant. Do not overwrite `saj_h2_safe` and do not edit the `SAJ Energy` dashboard when updating. Existing entity unique IDs remain stable.
+
+Upgrade adds a robust double-read of the **complete** 7+7 schedule block, not just mode/masks. It also adds attributes `last_changes` and `last_device_change` (relative to restart), while ignoring stale inactive-slot data in change counts. [Compact optional read-only card](../examples/tou-compact-card.yaml) can be added as a **single Manual card** if desired; the card expects the default entity IDs generated from device name `SAJ H2 TOU Readback`.
+
+The separate [offline reconciliation model](../control_core/reconciliation.py) is planning/test code and has **not been deployed as a control path**. There are no HA write services, buttons or automatic mode changes in this release.
