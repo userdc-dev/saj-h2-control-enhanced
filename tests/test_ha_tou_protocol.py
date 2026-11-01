@@ -52,13 +52,26 @@ class TestHAMonitorProtocol(unittest.TestCase):
         self.assertTrue(slot["power_conversion_verified"])
         self.assertEqual(cfg.summary("discharge")[0]["weekday_verified"], "Wednesday")
 
-    def test_unknown_charge_power_watts_not_fabricated(self):
+    def test_confirmed_second_charging_power_pair(self):
+        # User entered 7000 W, raw 70 (0x1046), eLEKeeper reopened to 6930 W.
+        charge = [1, 1, 5632, 5672, 4166, 0, 827, 6170] + [0] * 15
+        discharge = [5632, 5672, 1074] + [0] * 18
+        cfg = module.decode_config(charge, discharge, 1, 1)
+        slot = cfg.summary("charge")[0]
+        self.assertEqual(slot["weekday_verified"], "Friday")
+        self.assertEqual(slot["power_percent_raw"], 70)
+        self.assertEqual(slot["power_watts_saj_display"], 6930)
+        self.assertTrue(slot["power_conversion_verified"])
+        self.assertEqual(slot["power_conversion_basis"], "direct paired app readback")
+
+    def test_other_charging_power_is_labeled_estimated(self):
         charge = [1, 0, 5632, 5672, (16 << 8) | 51] + [0] * 18
         cfg = module.decode_config(charge, [0] * 21, 1, 1)
         slot = cfg.summary("charge")[0]
         self.assertEqual(slot["power_percent_raw"], 51)
-        self.assertIsNone(slot["power_watts_saj_display"])
+        self.assertEqual(slot["power_watts_saj_display"], 5049)
         self.assertFalse(slot["power_conversion_verified"])
+        self.assertIn("interpolated", slot["power_conversion_basis"])
 
     def test_verified_weekday_combination(self):
         charge = [1, 0, 5632, 5672, (20 << 8) | 50] + [0] * 18
