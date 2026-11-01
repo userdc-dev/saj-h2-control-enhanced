@@ -109,3 +109,7 @@ Decoding by upstream layout:
 ### Next low-risk experiment
 
 Keep global mode Self-consumption; do not enable Time-of-use or schedule execution for a diagnostic. In official app, optionally change **only a future inactive discharge-slot power value** while keeping 22:00–22:40 Wednesday window, provided owner verifies this cannot activate unexpectedly. Allow app's observed propagation time (~5 min), then re-read the same four blocks and compare changed raw value. Prefer to first confirm current saved SAJ app screen, since app UI and register might be out of sync. If unsure, do no mutation and only inspect existing saved values.
+
+## Additional eLEKeeper confirmation (2026-11-01, 17:13 screenshot)
+
+User supplied a fresh screenshot showing Discharge Time 1 = **22:00–22:40, 9900 W, Wednesday**. This matches the previous Modbus-decoded time and weekday and confirms the application-reported watt value. In the last Modbus baseline, corresponding power low byte was **100**, so watt conversion remains **unverified**; do not assume 100 raw means 10,000 W. The screenshot's **Current mode dropdown reads Time-of-use Mode**, whereas the *earlier* Modbus mode was 0 (Self-consumption). The screenshot does not prove the selection was saved/effective, and the earlier mode reading may be stale. **Next step is re-read actual mode and enable masks before modifying schedule values or performing any time-of-use test.** No Modbus writes.
