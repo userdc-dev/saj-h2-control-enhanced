@@ -96,6 +96,7 @@ def check_before_execution(proposal: ModeProposal, current: Readback, *, now: da
             current.charge_mask != proposal.preserved_charge_mask or
             current.discharge_mask != proposal.preserved_discharge_mask):
         raise UnsafeControlRequest("Another controller changed the inverter configuration")
-    if (now - current.observed_at).total_seconds() not in range(0, 181):
+    age = (now - current.observed_at).total_seconds()
+    if not 0 <= age <= 180:
         raise UnsafeControlRequest("Device state is stale")
     raise UnsafeControlRequest("Live inverter writes are disabled: no authorized hardware adapter")
