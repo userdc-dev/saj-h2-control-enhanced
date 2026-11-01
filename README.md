@@ -2,7 +2,7 @@
 
 > **For any future developer or AI assistant: [READ DEVELOPER_HANDOFF.md FIRST](DEVELOPER_HANDOFF.md).** This is the canonical record of project goals, decisions, previous chat history, safety restrictions, architecture, milestones and exact implementation status. Do not implement control writes based on the README alone.
 
-**Status:** experimental planning, offline telemetry validation and control-request review only. **No live inverter controls or Modbus write implementation.**
+**Status:** first separate read-only Home Assistant TOU preview v0.1.0 committed, not yet field-tested. **No live inverter write controls.**
 
 This is a separate project from [SAJ H2 Safe Enhanced](https://github.com/userdc-dev/saj-h2-safe-enhanced), the owner's functioning read-only Home Assistant integration. The existing read-only repository must remain untouched by writable control development.
 
@@ -39,3 +39,7 @@ For all prior confirmed read-only register mappings, commissioning and v0.3.x da
 **New SAJ app evidence:** [TOU screenshot observations & required bidirectional device synchronization](docs/SAJ_APP_TOU_OBSERVATIONS.md) documents 7 charge + 7 discharge slots, weekday multiselect, 0–9900 W discharge UI range, TOU fallback to Self-consumption, and owner's observed up-to-5-minute activation delay. Device-side schedules/settings must be read back; local drafts must not masquerade as confirmed inverter state.
 
 **Long-term roadmap:** [OCPP EV charging and air-conditioning/major-load coordination](docs/FUTURE_SMART_LOADS.md) — future only, conditioned on verified inverter controls, device readback and eLEKeeper consistency.
+
+## Installable read-only TOU preview
+
+[Integration source](custom_components/saj_h2_control_enhanced) · [Install and verify](docs/READ_ONLY_HA_PREVIEW.md). Publishes actual inverter mode, unscheduled fallback, schedule counts and active 7+7 charge/discharge schedule details as read-only Home Assistant sensors; updates every 120 seconds by default. Existing `saj_h2_safe` is unchanged. Not installed or field-tested yet; no write functions.
