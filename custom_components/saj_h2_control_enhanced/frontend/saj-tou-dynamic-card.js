@@ -337,13 +337,6 @@ class SajTOUDynamicCard extends HTMLElement {
       (current===0?"Self-consumption":"Time-of-Use")+" to "+label+
       "?\n\nThis may change battery charging/discharging and grid exports."+
       "\nSaved schedules will not be edited. Have eLEKeeper available.")) return;
-    const typed=window.prompt(
-      "Type ONLY the confirmation phrase below (no quotes or extra characters):\n\n"+
-      phrase,"");
-    if (typed!==phrase) {
-      this._modeFeedback="Cancelled: confirmation phrase did not match.";
-      this._modeFeedbackError=true;this.render();return;
-    }
     this._modeBusy=true;
     this._modeBusyEntry=group.id;
     this._modeFeedback="Sending one confirmed command and checking inverter readback…";
@@ -437,7 +430,7 @@ class SajTOUDynamicCard extends HTMLElement {
   }
   async _saveSchedules(group) {
     // Single user-facing Save action: dry-run against live inverter FIRST,
-    // then show write count and require two explicit confirmations.
+    // then a single explicit confirmation before all verified writes.
     if(this._previewBusy||this._scheduleWriteBusy||this._modeBusy)return;
     const current=this._hass?findDevices(this._hass).find(g=>g.id===group.id):null;
     const draft=this._drafts.get(group.id);
@@ -516,13 +509,6 @@ class SajTOUDynamicCard extends HTMLElement {
        "An interruption may leave PARTIAL settings.\n"+
        "Keep eLEKeeper open for inspection/recovery. No auto rollback or retries."))return;
     const phrase="I AUTHORIZE TOU SCHEDULE CHANGES";
-    const typed=window.prompt(
-      "Type this EXACT confirmation phrase to authorize the real writes:\n\n"+
-      phrase,"");
-    if(typed!==phrase){
-      this._scheduleWriteFeedback="Cancelled: authorization phrase did not match.";
-      this._scheduleWriteError=true;this.render();return;
-    }
     this._scheduleWriteBusy=true;
     this._scheduleWriteFeedback="Writing changed registers individually and double-reading after each…";
     this._scheduleWriteError=false;this.render();
