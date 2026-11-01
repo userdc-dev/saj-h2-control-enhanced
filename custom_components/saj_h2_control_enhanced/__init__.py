@@ -72,7 +72,9 @@ class SajTOUCoordinator(DataUpdateCoordinator):
             self.last_successful_poll = datetime.now(timezone.utc)
             return {"config": config, "timestamp": self.last_successful_poll,
                     "change_count": self.change_count}
-        except (UpdateFailed, InvalidTOUData):
+        except InvalidTOUData as exc:
+            raise UpdateFailed(f"Invalid TOU settings readback: {exc}") from exc
+        except UpdateFailed:
             raise
         except Exception as exc:
             raise UpdateFailed(f"TOU read-only polling failed: {type(exc).__name__}: {exc}") from exc
