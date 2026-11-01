@@ -166,3 +166,11 @@ Predicted, not yet tested: raw 99 → 9801 W; raw 50 → 4950 W.
 The app may **quantize, floor, round or normalize entered watts when saved and read back**; exact input handling is unverified. Do not conclude the UI permits arbitrary `9800 W` or implement a rounding rule without testing. Previous assumptions about being able to choose only 4900/5000 and not 4950 may reflect the input widget or the save-time normalization; check future official-app readback.
 
 **Developer action:** use `W = raw * 99` as the leading *read-only display hypothesis* for discharge on this 10 kW installation, but **do not authorize writes or apply this blindly to charge schedules** without additional paired confirmation at another point, power-limit validation and firmware-specific hardware testing. Do not ask user to set 9700 W based on earlier incorrect belief the confirmed saved value was 9800 W.
+
+## Owner's explanation of app input versus device readback (2026-11-01)
+
+User observes that eLEKeeper's editing field appears to accept **multiples of 100 W** but **normalizes/quantizes the value to a whole-number device power percentage on Save**, then replaces the input field with the canonical power calculated from the stored value. The confirmed case is input **9800 W** → Modbus raw **98** → reopened app **9702 W** (98 × 99). The confirmed maximum is **9900 W** → raw **100** → reopened app **9900 W**.
+
+**Important nuance:** This does NOT demonstrate rounding to the nearest whole percent: 9800/9900×100≈98.99, for which nearest would be 99 (9801 W), yet observed raw 98. **Floor/truncation** of 9800/9900×100 would yield 98 (9702 W), matching observation; still only a hypothesis. Preserve exact observed raw percentage as the canonical device state for later HA sync. UI may show both input draft watts and canonical stored watts, clearly distinguishing them. A schedule should never be continually rewritten just to match its pre-save requested watt input, otherwise competing apps may oscillate.
+
+Before writes: verify another 100 W input pair and separate charge-side power scaling and firmware behavior. No hardware writes are authorized.
