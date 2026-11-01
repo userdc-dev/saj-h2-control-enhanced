@@ -65,6 +65,8 @@ class SajTOUSensor(CoordinatorEntity, SensorEntity):
             "external_changes_detected_since_start": data["change_count"],
             "read_only": True,
             "write_controls_available": False,
+            "saj_tou_role": self.key,
+            "saj_tou_entry_id": self.coordinator.entry.entry_id,
         }
         if self.key == "operating_mode":
             base.update({
