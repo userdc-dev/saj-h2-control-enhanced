@@ -136,6 +136,89 @@ async def async_setup(hass: HomeAssistant, config):
         supports_response=SupportsResponse.ONLY,
     )
 
+    async def schedule_transaction_action(call, *, perform_write=False):
+        """Full 7+7 slot plan; only explicit confirmation may reach Modbus writes."""
+        entries = [
+            e for e in hass.config_entries.async_entries(DOMAIN)
+            if getattr(e, "runtime_data", None) is not None
+        ]
+        wanted = call.data.get("entry_id")
+        if wanted:
+            entries = [e for e in entries if e.entry_id == wanted]
+        if len(entries) != 1:
+            raise vol.Invalid("Select exactly one SAJ control device")
+        coordinator = entries[0].runtime_data
+        from .schedule_transaction import (
+            read_full, build_plan, execute_plan, ScheduleTransactionError,
+        )
+        d = call.data
+        arguments = {
+            "expected_charge":d["expected_charge"],
+            "expected_discharge":d["expected_discharge"],
+            "proposed_charge":d["proposed_charge"],
+            "proposed_discharge":d["proposed_discharge"],
+        }
+        # Manual schedules and mode switches share exactly one lock.
+        async with pilot_lock:
+            try:
+                if perform_write:
+                    host,port = coordinator._connection_details()
+                    result = await execute_plan(
+                        host=host, port=int(port),
+                        confirmation=d["confirmation"],
+                        device_model=d["device_model"],
+                        control_firmware=d["control_firmware"],
+                        **arguments,
+                    )
+                else:
+                    host,port = coordinator._connection_details()
+                    client = AsyncModbusTcpClient(
+                        host,port=int(port),timeout=5,retries=0,
+                    )
+                    try:
+                        if not await client.connect():
+                            raise ScheduleTransactionError(
+                                "Cannot connect for fresh schedule read")
+                        snap = await read_full(client)
+                    finally:
+                        client.close()
+                    result = build_plan(snap,**arguments).summary()
+                await coordinator.async_request_refresh()
+                return result
+            except ScheduleTransactionError as exc:
+                raise vol.Invalid(
+                    str(exc) + (
+                        "; do not repeat if any write may have been sent"
+                        if perform_write else "; reload stale draft"
+                    )
+                ) from exc
+
+    _schedule_data_fields = {
+        vol.Required("expected_charge"): list,
+        vol.Required("expected_discharge"): list,
+        vol.Required("proposed_charge"): list,
+        vol.Required("proposed_discharge"): list,
+        vol.Optional("entry_id"): str,
+    }
+    hass.services.async_register(
+        DOMAIN, "plan_schedules",
+        lambda call: schedule_transaction_action(call,perform_write=False),
+        schema=vol.Schema(_schedule_data_fields),
+        supports_response=SupportsResponse.ONLY,
+    )
+    hass.services.async_register(
+        DOMAIN, "apply_schedules",
+        lambda call: schedule_transaction_action(call,perform_write=True),
+        schema=vol.Schema({
+            **_schedule_data_fields,
+            vol.Required("confirmation"): vol.In(
+                ("I AUTHORIZE TOU SCHEDULE CHANGES",)),
+            vol.Required("device_model"): vol.In(("H2-10K-S3-A",)),
+            vol.Required("control_firmware"): vol.In(("v2.018",)),
+        }),
+        supports_response=SupportsResponse.ONLY,
+    )
+
     # Manual, single-shot hardware pilot: NOT invoked from dashboards or polls.
     # This separate action requires a literal confirmation and exact old mode.
     pilot_lock = asyncio.Lock()
