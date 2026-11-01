@@ -1,7 +1,7 @@
 """Offline read-only TOU decoding tests. No device access or register writes."""
 import unittest
 from control_core.tou_readback import (
-    decode_tou, diff_device_configs, UnverifiedMapping,
+    decode_tou, diff_device_configs, discharge_display_watts, UnverifiedMapping,
 )
 
 def clock(h, m):
@@ -27,6 +27,14 @@ class TestTOU(unittest.TestCase):
         self.assertEqual(config.discharge_slots[0].day_mask_raw, 4)
         self.assertEqual(config.discharge_slots[0].power_percent_raw, 99)
         self.assertFalse(config.mapping_verified)  # needs live app parity check
+
+    def test_verified_discharge_watt_pairs(self):
+        self.assertEqual(discharge_display_watts(100), 9900)
+        self.assertEqual(discharge_display_watts(98), 9702)
+        self.assertEqual(discharge_display_watts(50), 4950)
+        self.assertEqual(discharge_display_watts(0), 0)
+        with self.assertRaises(UnverifiedMapping):
+            discharge_display_watts(101)
 
     def test_zero_charge_and_zero_discharge_is_valid(self):
         charge = [0, 0] + [0] * 21
