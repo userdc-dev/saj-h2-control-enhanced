@@ -75,8 +75,8 @@ def validate_snapshot(snap):
         raise ScheduleTransactionError(
             "Schedule editing is allowed only in Self-consumption or Time-of-Use mode"
         )
-    if config.fallback != 1:
-        raise ScheduleTransactionError("Outside-TOU fallback must be Self-consumption")
+    if config.fallback not in (0, 1):
+        raise ScheduleTransactionError("Outside-TOU fallback code is unsupported")
     if config.charge_mask > 127 or config.discharge_mask > 127:
         raise ScheduleTransactionError("Invalid enabled-slot masks")
     for direction in ("charge","discharge"):
