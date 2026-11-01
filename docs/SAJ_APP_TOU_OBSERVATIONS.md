@@ -231,3 +231,7 @@ Owner entered **7000 W** into existing **Friday charge slot 1** through official
 - Operating mode `[1]` (TOU), outside schedule fallback `[1]` (Self-consumption).
 
 Charge mixed register `4166 = (16 × 256) + 70`. Friday weekday mask 16 and 22:00–22:40 times unchanged; charge raw power **70** after entering 7000 W. **Expected eLEKeeper reopened/canonical stored watts `70 × 99 = 6930 W` is a PREDICTION, NOT YET confirmed by user**. Earlier charge raw50 ↔ app saved4950W confirmed. Do NOT label 6930W as verified or generalize charge-side conversion in production until user confirms the eLEKeeper saved value. User should reopen app and report exact watt number **without saving again**. No experimental Modbus writes.
+
+### 2026-11-01: official eLEKeeper 6930 W confirmation
+
+Owner reopened Friday charging schedule after input 7000 W and **explicitly confirmed app displays 6930 W**, while live Modbus `0x3608` mixed slot word returned `4166 = 16*256+70`: **charge raw 70 ↔ canonical saved 6930 W**. Together with prior charge raw 50 ↔ 4950 W, this establishes the same **99 W per raw unit readback display slope** for charging as observed discharging (raw 50/98/100). Other raw values are *modeled/interpolated* and not individually validated. Changes from eLEKeeper may normalize entered 100 W increments to device setpoints. No Modbus writes attempted.
