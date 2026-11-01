@@ -79,6 +79,18 @@ class TestHAMonitorProtocol(unittest.TestCase):
         self.assertEqual(cfg.summary("charge")[0]["weekday_verified"],
                          "Wednesday, Friday")
 
+    def test_monday_app_change_readback(self):
+        # Friday changed to Monday in eLEKeeper; observed 326 = 0x0146.
+        charge = [1, 1, 5632, 5672, 326, 0, 827, 6170] + [0] * 15
+        discharge = [5632, 5672, 1074] + [0] * 18
+        cfg = module.decode_config(charge, discharge, 1, 1)
+        slot = cfg.summary("charge")[0]
+        self.assertEqual(slot["weekday_mask_raw"], 1)
+        self.assertEqual(slot["weekday_verified"], "Monday")
+        self.assertEqual(slot["power_percent_raw"], 70)
+        self.assertEqual(slot["power_watts_saj_display"], 6930)
+        self.assertEqual((slot["start"], slot["end"]), ("22:00", "22:40"))
+
     def test_confirmed_weekday_only(self):
         cfg = module.decode_config([0, 1]+[0]*21,
             [0x1600, 0x1628, 0x0432]+[0]*18, 1, 1)
