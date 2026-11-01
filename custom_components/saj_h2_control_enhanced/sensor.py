@@ -59,6 +59,9 @@ class SajTOUSensor(CoordinatorEntity, SensorEntity):
         config = data["config"]
         base = {
             "last_verified_read": data["timestamp"].isoformat(),
+            "last_device_change": (data["last_device_change"].isoformat()
+                                   if data["last_device_change"] else None),
+            "last_changes": list(data["last_changes"]),
             "external_changes_detected_since_start": data["change_count"],
             "read_only": True,
             "write_controls_available": False,
@@ -81,7 +84,8 @@ class SajTOUSensor(CoordinatorEntity, SensorEntity):
             base["schedules"] = config.summary("discharge")
             base["power_scale_status"] = "Discharge display W = raw × 99 verified for this installation"
         elif self.key == "sync_status":
-            base["note"] = "Modbus confirms saved settings; actual scheduled execution and cloud app refresh may lag"
+            base["note"] = ("Device register readback succeeded. This is not proof "
+                            "of eLEKeeper cloud refresh or schedule execution.")
         return base
 
 
