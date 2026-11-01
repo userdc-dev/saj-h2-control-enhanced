@@ -124,3 +124,7 @@ Owner confirmed the eLEKeeper discharge power selector:
 - Do not assume a blanket 100 W step or naïve `raw * 100 W`. For example, 99% of 9900 is 9801 W, not 9800 W, indicating UI rounding or quantization may occur.
 - **Do not implement writable watts→raw conversion until multiple points (0%, 1%, 50%, 99%, 100%) are observed** on the owner's inverter with read-only Modbus before/after app changes. On a real inverter also validate charge-side scaling separately.
 
+
+## Correction from owner: midrange selection is quantized
+
+The previous illustrative **4950 W** value should NOT be treated as an accepted app input. The owner reports that eLEKeeper appears to accept **4900 W or 5000 W**, not 4950 W. This is still an observation pending paired app/Modbus test. The earlier suggestion that 50% necessarily displays as 4950 W was unjustified. Preserve exactly observed 9900 W ↔ raw 100; test other specific accepted inputs rather than deriving the UI scale from percentage arithmetic. Do not enforce exact step sizes without verification.
