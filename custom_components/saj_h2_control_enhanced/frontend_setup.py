@@ -1,8 +1,8 @@
-"""Register a dynamic read-only card and an independent SAJ TOU dashboard.
+"""Register a dynamic SAJ TOU card and independent SAJ TOU dashboard.
 
 Safe-by-default: never modify an existing dashboard, never touch SAJ Energy.
 The card uses actual Home Assistant entity registry IDs and state attributes,
-not assumed sensor names. All draft inputs are frontend-only.
+not assumed sensor names. Schedule and fallback drafts are frontend-only; live mode change requires confirmation.
 """
 from pathlib import Path
 import logging
@@ -10,8 +10,8 @@ import logging
 from homeassistant.components.http import StaticPathConfig
 
 _LOGGER = logging.getLogger(__name__)
-CARD_URL = "/saj-h2-tou/v026/saj-tou-dynamic-card.js"
-CARD_PATH = "/saj-h2-tou/v026/saj-tou-dynamic-card.js"
+CARD_URL = "/saj-h2-tou/v030/saj-tou-dynamic-card.js"
+CARD_PATH = "/saj-h2-tou/v030/saj-tou-dynamic-card.js"
 DASHBOARD_PATH = "saj-tou-control"
 
 
