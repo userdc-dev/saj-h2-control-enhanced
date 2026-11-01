@@ -1,0 +1,21 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "SAJ H2 Time-of-Use Read-only Settings",
+        "description": "This integration ONLY reads the saved TOU settings. It cannot change the inverter.",
+        "data": {
+          "host": "Inverter IPv4 address",
+          "port": "Modbus TCP port",
+          "scan_interval": "Update interval (seconds)"
+        }
+      }
+    },
+    "error": {
+      "invalid_host": "Enter a valid IP address"
+    },
+    "abort": {
+      "already_configured": "This device is already configured"
+    }
+  }
+}
