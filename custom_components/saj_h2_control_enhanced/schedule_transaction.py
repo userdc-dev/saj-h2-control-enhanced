@@ -71,7 +71,7 @@ def active_rows(config, direction):
 
 def validate_snapshot(snap):
     charge, discharge, config = snap
-    if config.mode not in (0,1):
+    if config.mode not in (0, 1):
         raise ScheduleTransactionError(
             "Schedule editing is allowed only in Self-consumption or Time-of-Use mode"
         )
@@ -292,45 +292,79 @@ async def execute_plan(
         write=client.write_register
         unit="device_id" if "device_id" in inspect.signature(write).parameters else "slave"
         charge=list(plan.initial_charge);discharge=list(plan.initial_discharge)
-        for step in plan.steps:
-            # No retry even if prior operation's ACK was lost.
-            attempted.append(hex(step.address))
-            ack=await write(address=step.address,value=step.value,**{unit:UNIT_ID})
+        starting_mode=baseline[2].mode
+        working_mode=starting_mode
+
+        async def one_write(address,value):
+            # One attempt only. No automatic retry and no automatic rollback.
+            attempted.append(hex(address))
+            ack=await write(address=address,value=value,**{unit:UNIT_ID})
             if ack is None or ack.isError():
                 raise ScheduleTransactionError(
-                    "Write acknowledgement absent at "+hex(step.address)+
-                    ". Outcome uncertain; DO NOT retry automatically")
+                    "Missing acknowledgement at "+hex(address)+
+                    "; state uncertain, do not retry; inspect eLEKeeper")
+
+        async def verify(charge_words,discharge_words,mode):
+            current=await read_full(client)
+            if (
+                current[0]!=tuple(charge_words) or
+                current[1]!=tuple(discharge_words) or
+                current[2].mode!=mode or
+                current[2].fallback!=baseline[2].fallback
+            ):
+                raise ScheduleTransactionError(
+                    "Unexpected Modbus change or competing controller. "
+                    "Partial edits possible; inspect live settings")
+            return current
+
+        # Both operating-mode directions were confirmed on this inverter.
+        # Pausing TOU avoids executing a partly updated live schedule.
+        if starting_mode==1:
+            await one_write(MODE_ADDR,0)
+            working_mode=0
+            await sleep(1)
+            await verify(charge,discharge,working_mode)
+
+        for step in plan.steps:
+            await one_write(step.address,step.value)
             if CHARGE_START<=step.address<CHARGE_START+CHARGE_COUNT:
                 charge[step.address-CHARGE_START]=step.value
             elif DISCHARGE_START<=step.address<DISCHARGE_START+DISCHARGE_COUNT:
                 discharge[step.address-DISCHARGE_START]=step.value
             else:
-                raise ScheduleTransactionError("Invalid planned address")
+                raise ScheduleTransactionError("Planned address out of range")
             await sleep(1)
-            readback=await read_full(client)
-            if (readback[0]!=tuple(charge) or readback[1]!=tuple(discharge) or
-                readback[2].mode!=baseline[2].mode or
-                readback[2].fallback!=baseline[2].fallback):
-                raise ScheduleTransactionError(
-                    "Unexpected register change after "+hex(step.address)+
-                    "; STOPPED. Partial changes possible")
+            await verify(charge,discharge,working_mode)
+
+        if starting_mode==1:
+            # Return to TOU ONLY when all changed register words are verified.
+            await one_write(MODE_ADDR,1)
+            working_mode=1
+            await sleep(1)
+            await verify(charge,discharge,working_mode)
+
         return {
             "status":"SCHEDULE_VERIFIED_BY_MODBUS",
             "write_sent":True,
-            "registers_written":len(attempted),
+            "registers_written":len(plan.steps),
+            "total_writes_including_mode":len(attempted),
             "verified_charge_mask":charge[0],
             "verified_discharge_mask":charge[1],
-            "mode_unchanged":True,"fallback_unchanged":True,
+            "mode_unchanged":starting_mode==working_mode,
+            "fallback_unchanged":True,
+            "mode_was_temporarily_paused":starting_mode==1,
+            "mode_restored":starting_mode==working_mode,
             "message":(
-                "Each register confirmed against full inverter readback. "
-                "Verify saved schedules in eLEKeeper. Cloud UI may lag."
+                "Both schedule blocks and original mode verified by full "
+                "Modbus readback. Check eLEKeeper cloud display for lag."
             ),
         }
     except Exception:
         if attempted:
             _LOGGER.exception(
-                "Partial TOU schedule write possible; attempted %s. "
-                "Manual eLEKeeper review required",attempted)
+                "TOU schedule operation interrupted, attempted writes %s. "
+                "Mode may be Self-consumption and schedules partly edited. "
+                "Manual eLEKeeper review required; no auto retry",attempted)
         raise
     finally:
         client.close()
