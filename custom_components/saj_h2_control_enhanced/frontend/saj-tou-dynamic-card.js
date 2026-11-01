@@ -9,6 +9,13 @@
 const TAG = "saj-tou-dynamic-card";
 if (customElements.get(TAG)) return;
 const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const is24Hour = value => /^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/.test(value);
+function formatLocalTime(value) {
+  if (!value) return "Not available";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Not available";
+  return date.toLocaleString(undefined, {hour12:false,year:"numeric",month:"short",day:"numeric",hour:"2-digit",minute:"2-digit",second:"2-digit"});
+}
 const CSS = [
   ":host{display:block;color:var(--primary-text-color,#fff)}",
   "ha-card{padding:16px;background:var(--ha-card-background,var(--card-background-color,#202127));border-radius:14px}",
@@ -26,7 +33,7 @@ const CSS = [
   ".day{border:1px solid var(--divider-color,#555);border-radius:6px;padding:5px;min-width:26px;text-align:center}",
   ".day input{margin:0 3px 0 0}",
   ".inputs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}",
-  "input[type=time]{max-width:100%;width:100%;box-sizing:border-box}",
+  ".time24{max-width:100%;width:100%;box-sizing:border-box;font-variant-numeric:tabular-nums;font-family:inherit}",
   "input[type=range]{width:100%;min-width:110px;accent-color:var(--primary-color,#16b9b1)}",
   "input,select,button{color:var(--primary-text-color,#fff);background:var(--card-background-color,#24252b);border:1px solid var(--divider-color,#777);border-radius:8px;padding:8px}",
   "button{cursor:pointer}button:disabled{opacity:.45;cursor:not-allowed}",
@@ -138,8 +145,8 @@ class SajTOUDynamicCard extends HTMLElement {
       return;
     }
     const select=el("select");
-    devices.forEach(g=>{
-      const opt=el("option",null,(g.entities.operating_mode?.attributes.friendly_name||"SAJ H2 TOU")+" · "+g.id.slice(-8));
+    devices.forEach((g,index)=>{
+      const opt=el("option",null, (g.entities.operating_mode?.attributes.friendly_name||"SAJ H2 TOU").replace(/ Operating mode$/i,"") + (devices.length>1?" · Device "+(index+1):""));
       opt.value=g.id;opt.selected=g.id===group.id;select.append(opt);
     });
     select.addEventListener("change",e=>{this._selected=e.target.value;this.render()});
@@ -149,7 +156,7 @@ class SajTOUDynamicCard extends HTMLElement {
     const good=roles.every(r => isValid(e[r]));
     const status=el("div","row");
     add(status,el("span",good?"okay":"bad",good?"● Settings read from device":"● Readback unavailable"),
-      el("span","muted","Last read: "+(e.sync_status?.attributes.last_verified_read||"unknown")));
+      el("span","muted","Last read: "+formatLocalTime(e.sync_status?.attributes.last_verified_read)));
     add(card,status);
     if (!this._drafts.has(group.id)) this._drafts.set(group.id,cloneDraft(group));
     const draft=this._drafts.get(group.id);
@@ -209,8 +216,17 @@ class SajTOUDynamicCard extends HTMLElement {
       const times=el("div","inputs");
       for (const key of ["start","end"]) {
         const wrapper=el("label","muted",key==="start"?"Start · 24h":"End · 24h");
-        const field=el("input");field.type="time";field.value=row[key];
-        field.addEventListener("change",()=>{row[key]=field.value;draft.changed=true});
+        const field=el("input","time24");field.type="text";field.inputMode="numeric";field.maxLength=5;
+        field.placeholder="HH:MM";field.pattern="(?:[01][0-9]|2[0-3]):[0-5][0-9]";field.value=row[key];
+        field.setAttribute("aria-label",key+" 24-hour time HH:MM");
+        field.addEventListener("change",()=>{
+          const next=field.value.trim();
+          if(!is24Hour(next)){
+            field.value=row[key];field.title="Use 24-hour HH:MM, e.g. 22:40";
+            return;
+          }
+          row[key]=next;draft.changed=true;field.title="";
+        });
         add(wrapper,field);add(times,wrapper);
       }
       add(container,times);
