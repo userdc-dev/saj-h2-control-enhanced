@@ -351,7 +351,21 @@ class SajTOUDynamicCard extends HTMLElement {
       values.tomorrow===null?"—":fmtEnergy(values.tomorrow)+" tomorrow"
     ])add(r3,el("td",null,cell));
     add(body,r1,r2,r3);add(table,body);add(tableWrap,table);
-    add(panel,tableWrap);
+    // Battery first: mode, SOC, and stored energy above the power bars.
+    if(values.soc!==null){
+      const socBox=el("div","socFlow");
+      const top=el("div","socFlowTop");
+      const mode=hass.states?.[SAFE_ENERGY_IDS.safeMode]?.state;
+      const status=mode && !["unknown","unavailable"].includes(mode)?
+        mode+" · ":"";
+      add(top,el("span",null,"Battery"),
+        el("strong",null,status+values.soc.toFixed(1)+"% · "+
+          fmtEnergy(values.stored)+" stored"));
+      const track=el("div","flowGraphTrack");
+      const fill=el("div","flowGraphFill");
+      fill.style.width=Math.max(0,Math.min(100,values.soc))+"%";
+      track.append(fill);add(socBox,top,track);add(panel,socBox);
+    }
     // Relative bar lengths use only current wattage values, not invented
     // energy-routing predictions or guessed historical samples.
     const powerItems=[
@@ -371,25 +385,14 @@ class SajTOUDynamicCard extends HTMLElement {
       track.append(fill);add(cell,caption,track);graph.append(cell);
     }
     add(panel,graph);
-    if(values.soc!==null){
-      const socBox=el("div","socFlow");
-      const top=el("div","socFlowTop");
-      add(top,el("span",null,"Battery state of charge"),
-        el("strong",null,values.soc.toFixed(1)+"% · "+
-          fmtEnergy(values.stored)+" stored"));
-      const track=el("div","flowGraphTrack");
-      const fill=el("div","flowGraphFill");
-      fill.style.width=Math.max(0,Math.min(100,values.soc))+"%";
-      track.append(fill);add(socBox,top,track);add(panel,socBox);
-    }
+    add(panel,tableWrap);
     const modeState=hass.states?.[SAFE_ENERGY_IDS.safeMode]?.state;
     add(panel,el("div","flowSummary",gridStatus+
       ((modeState&&!["unavailable","unknown"].includes(modeState))?
         " · "+modeState:"")));
     add(panel,el("div","flowFoot",
-      "Forecast combines measured and predicted energy and is an estimate. "+
-      "Grid import/export direction remains provisional. Monitoring and "+
-      "graphics are read-only; TOU control actions are separate."));
+      "Forecast is an estimate; grid import/export direction is provisional. "+
+      "This panel is read-only; TOU control actions are separate."));
     return panel;
   }
   render() {
