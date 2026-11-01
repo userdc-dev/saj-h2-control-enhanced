@@ -36,6 +36,36 @@ class TestHAMonitorProtocol(unittest.TestCase):
         self.assertEqual(slot["power_watts_saj_display"], 4950)
 
 
+    def test_live_friday_charge_snapshot(self):
+        # App Friday 22:00–22:40, 4950 W, confirmed Modbus charge 0x1032.
+        charge = [1, 1, 5632, 5672, 4146, 0, 827, 6170] + [0] * 15
+        discharge = [5632, 5672, 1074] + [0] * 18
+        cfg = module.decode_config(charge, discharge, 1, 1)
+        self.assertEqual(len(cfg.summary("charge")), 1)
+        self.assertEqual(len(cfg.summary("discharge")), 1)
+        slot = cfg.summary("charge")[0]
+        self.assertEqual((slot["start"], slot["end"]), ("22:00", "22:40"))
+        self.assertEqual(slot["weekday_mask_raw"], 16)
+        self.assertEqual(slot["weekday_verified"], "Friday")
+        self.assertEqual(slot["power_percent_raw"], 50)
+        self.assertEqual(slot["power_watts_saj_display"], 4950)
+        self.assertTrue(slot["power_conversion_verified"])
+        self.assertEqual(cfg.summary("discharge")[0]["weekday_verified"], "Wednesday")
+
+    def test_unknown_charge_power_watts_not_fabricated(self):
+        charge = [1, 0, 5632, 5672, (16 << 8) | 51] + [0] * 18
+        cfg = module.decode_config(charge, [0] * 21, 1, 1)
+        slot = cfg.summary("charge")[0]
+        self.assertEqual(slot["power_percent_raw"], 51)
+        self.assertIsNone(slot["power_watts_saj_display"])
+        self.assertFalse(slot["power_conversion_verified"])
+
+    def test_verified_weekday_combination(self):
+        charge = [1, 0, 5632, 5672, (20 << 8) | 50] + [0] * 18
+        cfg = module.decode_config(charge, [0] * 21, 1, 1)
+        self.assertEqual(cfg.summary("charge")[0]["weekday_verified"],
+                         "Wednesday, Friday")
+
     def test_confirmed_weekday_only(self):
         cfg = module.decode_config([0, 1]+[0]*21,
             [0x1600, 0x1628, 0x0432]+[0]*18, 1, 1)
