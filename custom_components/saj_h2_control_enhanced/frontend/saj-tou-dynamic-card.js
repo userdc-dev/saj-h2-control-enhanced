@@ -94,6 +94,51 @@ const CSS = [
   ".socFlow{margin-top:12px}",
   ".socFlowTop{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px}",
   ".flowFoot{font-size:11px;color:var(--secondary-text-color,#aaa);line-height:1.5;margin-top:12px}",
+
+  "ha-card{padding:18px 20px 22px;border-radius:16px;--control-accent:var(--primary-color,#16b9b1);background:var(--ha-card-background,var(--card-background-color,#1c1f23))}",
+  ".deviceChooser{display:flex;align-items:center;gap:10px;margin:0 0 10px}.deviceChooser select{min-width:220px}",
+  ".readbackBar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 12px;font-size:12px}",
+  ".readbackOk{color:var(--success-color,#77cf99);font-weight:650}.readbackBad{color:var(--error-color,#f66);font-weight:650}",
+  ".energyOverview{margin:12px 0 16px;padding:18px;border-radius:14px;background:linear-gradient(140deg,rgba(31,167,175,.045),transparent 48%),var(--card-background-color,#22272a)}",
+  ".energyHeading{display:flex;flex-direction:column;gap:4px}.energyHeading .muted{font-size:11px}",
+  ".energyOverview h3{font-size:17px;letter-spacing:.1px}",
+  ".flowScroll{margin-top:16px;border:1px solid var(--divider-color,#45484c);border-radius:11px}",
+  ".flowTable{border-collapse:separate;border-spacing:0;min-width:640px}",
+  ".flowTable th{border:none;border-right:1px solid var(--divider-color,#45484c);border-bottom:1px solid var(--divider-color,#45484c);padding:11px 7px;font-size:12px;background:rgba(128,128,128,.055)}",
+  ".flowTable th:last-child,.flowTable td:last-child{border-right:0}",
+  ".flowTable tr:last-child td{border-bottom:0}",
+  ".flowTable td{border:0;border-right:1px solid var(--divider-color,#45484c);border-bottom:1px solid var(--divider-color,#45484c);padding:10px 7px;font-size:12px}",
+  ".flowTable .flowNumbers td{font-size:17px;font-weight:750;letter-spacing:.1px}",
+  ".flowGraph{gap:14px;margin:18px 0 8px}.flowGraphTrack{height:9px}",
+  ".socFlow{margin-top:14px;padding-top:12px;border-top:1px solid var(--divider-color,#45484c)}",
+  ".flowSummary{margin-top:14px;font-size:12px}",
+  ".controlPanel{border:1px solid var(--divider-color,#45484c);border-radius:14px;margin:0 0 18px;background:var(--card-background-color,#222528);overflow:hidden}",
+  ".controlPanelHead{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:13px 18px;border-bottom:1px solid var(--divider-color,#45484c);background:rgba(128,128,128,.045)}",
+  ".controlPanelHead h3{margin:0;font-size:16px}",
+  ".controlColumns{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}",
+  ".controlCell{padding:16px 18px 17px;min-width:0}",
+  ".controlCell+.controlCell{border-left:1px solid var(--divider-color,#45484c)}",
+  ".controlCell h4{font-size:14px;font-weight:650;margin:0 0 5px}",
+  ".controlCell .saved{margin:0 0 12px}",
+  ".controlCell p.muted{font-size:12px;line-height:1.6;margin:11px 0 0;max-width:55ch}",
+  ".controlCell select{min-width:220px;max-width:100%;padding:10px 12px}",
+  ".controlCell .liveModeButtons{margin:8px 0 12px;flex-wrap:nowrap}",
+  ".controlCell .liveModeButtons button{min-width:0;flex:1;padding:12px 10px;font-size:12px}",
+  ".controlCell .liveModeButtons button[aria-pressed=true]{background:rgba(23,167,173,.12);border:1px solid var(--control-accent);opacity:1!important;color:var(--primary-text-color,#fff);font-weight:700}",
+  ".controlCell .liveModeButtons button[aria-pressed=true]:disabled{cursor:default}",
+  ".controlCell button:hover:not(:disabled),.scheduleActions button:hover:not(:disabled){border-color:var(--control-accent)}",
+  ".controlCell .liveResult{margin-top:12px}",
+  ".scheduleTitle{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:12px 0 4px}",
+  ".scheduleTitle h3{font-size:16px;margin:0}",
+  ".scheduleGrid{margin-top:10px;gap:12px}",
+  ".scheduleGrid .pane{padding:16px;border-radius:14px;background:var(--card-background-color,#222528)}",
+  ".scheduleGrid .pane h3{font-size:15px}",
+  ".scheduleActions{margin:14px 0 8px;gap:10px}",
+  ".scheduleActions button{font-weight:600;padding:11px 14px}",
+  ".primaryAction:not(:disabled){background:var(--control-accent);border-color:var(--control-accent);color:var(--text-primary-color,#07161a)}",
+  ".warn{font-size:12px;line-height:1.55;border-radius:0 9px 9px 0}",
+  "@media(max-width:780px){.controlColumns{grid-template-columns:1fr}.controlCell+.controlCell{border-left:0;border-top:1px solid var(--divider-color,#45484c)}.controlCell{padding:15px}.controlPanelHead{padding:12px 15px}.energyOverview{padding:13px}.flowTable .flowNumbers td{font-size:15px}}",
+
   "@media(max-width:650px){.flowGraph{grid-template-columns:repeat(2,minmax(0,1fr))}.flowTable th,.flowTable td{font-size:11px;padding:6px 4px}}",
 
 ].join("");
@@ -228,8 +273,10 @@ class SajTOUDynamicCard extends HTMLElement {
     const hass=this._hass;
     const panel=el("section","energyOverview");
     const header=el("div","flowTop");
-    add(header,el("h3",null,"Live energy flow"),
-      el("span","pill","Read-only · SAJ Safe Monitor"));
+    const energyHeading=el("div","energyHeading");
+    add(energyHeading,el("h3",null,"Live energy"),
+      el("div","muted","Solar · Home · Battery · Grid · Forecast"));
+    add(header,energyHeading,el("span","pill","● Read-only telemetry"));
     add(panel,header);
     const keys=["solar","home","battery","soc","stored","gridImport",
       "gridExport","outlook","remaining","tomorrow"];
@@ -329,33 +376,45 @@ class SajTOUDynamicCard extends HTMLElement {
     add(root, el("style",null,CSS));
     const card=el("ha-card");
     root.append(card);
-    const top=el("div","top");
-    add(top,el("h2",null,"Battery time-of-use"),el("span","pill","Mode & schedule control"));
-    add(card,top);
+    // Home Assistant already provides the "Time of Use" view title.
+    // Avoid repeating that heading, a second large title, or an unnecessary
+    // device dropdown when there is only one configured inverter.
     if (!group) {
-      add(card,el("p","empty","No SAJ H2 TOU devices found. Install the read-only TOU integration and check its schedule entities."));
+      add(card,el("p","empty","No SAJ H2 TOU devices found. Check the SAJ TOU control integration and its schedule sensors."));
       return;
     }
-    const select=el("select");
-    devices.forEach((g,index)=>{
-      const opt=el("option",null, (g.entities.operating_mode?.attributes.friendly_name||"SAJ H2 TOU").replace(/ Operating mode$/i,"") + (devices.length>1?" · Device "+(index+1):""));
-      opt.value=g.id;opt.selected=g.id===group.id;select.append(opt);
-    });
-    select.addEventListener("change",e=>{this._selected=e.target.value;this.render()});
-    const source=el("div","row");
-    add(source,el("span","muted","Detected TOU device"),select);add(card,source);
+    if(devices.length>1){
+      const chooser=el("div","deviceChooser");
+      add(chooser,el("span","muted","Inverter"));
+      const select=el("select");
+      devices.forEach((g,index)=>{
+        const opt=el("option",null,
+          (g.entities.operating_mode?.attributes.friendly_name||"SAJ H2").replace(/ Operating mode$/i,"")+
+          " · "+(index+1));
+        opt.value=g.id;opt.selected=g.id===group.id;select.append(opt);
+      });
+      select.addEventListener("change",e=>{this._selected=e.target.value;this.render()});
+      add(chooser,select);add(card,chooser);
+    }
     const e=group.entities;
     const good=roles.every(r => isValid(e[r]));
-    const status=el("div","row");
-    add(status,el("span",good?"okay":"bad",good?"● Settings read from device":"● Readback unavailable"),
-      el("span","muted","Last read: "+formatLocalTime(e.sync_status?.attributes.last_verified_read)));
+    const status=el("div","readbackBar");
+    const statusIndicator=el("span",good?"readbackOk":"readbackBad",
+      good?"● Connected to inverter":"● Readback unavailable");
+    add(status,statusIndicator,
+      el("span","muted","Last verified: "+formatLocalTime(e.sync_status?.attributes.last_verified_read)));
     add(card,status);
     add(card,this._energyOverview());
     if (!this._drafts.has(group.id)) this._drafts.set(group.id,cloneDraft(group));
     const draft=this._drafts.get(group.id);
-    const meta=el("div","grid");
-    const modepane=el("section","pane");
-    add(modepane,el("h3",null,"Operating mode"),
+    const meta=el("section","controlPanel");
+    const metaHead=el("div","controlPanelHead");
+    add(metaHead,el("h3",null,"Inverter controls"),
+      el("span","pill","Mode · Outside TOU"));
+    add(meta,metaHead);
+    const controlColumns=el("div","controlColumns");
+    const modepane=el("div","controlCell");
+    add(modepane,el("h4",null,"Operating mode"),
       el("div","saved","Device: "+(e.operating_mode?.state||"unknown")));
     const modeValue=e.operating_mode?.attributes.raw_mode_code;
     const freshTime=e.operating_mode?.attributes.last_verified_read;
@@ -405,8 +464,8 @@ class SajTOUDynamicCard extends HTMLElement {
     if (this._modeFeedback) {
       add(modepane,el("div","liveResult "+(this._modeFeedbackError?"bad":"okay"),this._modeFeedback));
     }
-    const fallbackPane=el("section","pane");
-    add(fallbackPane,el("h3",null,"Outside TOU windows"),
+    const fallbackPane=el("div","controlCell");
+    add(fallbackPane,el("h4",null,"Outside TOU windows"),
       el("div","saved","Device: "+(e.outside_schedule?.state||"unknown")));
     const fallbackRaw=e.outside_schedule?.attributes.raw_fallback_code;
     const fallbackSelect=el("select");
@@ -438,20 +497,25 @@ class SajTOUDynamicCard extends HTMLElement {
       add(fallbackPane,el("div","liveResult "+(this._fallbackFeedbackError?"bad":"okay"),
         this._fallbackFeedback));
     }
-    add(meta,modepane,fallbackPane);add(card,meta);
-    const columns=el("div","grid");
+    add(controlColumns,modepane,fallbackPane);
+    add(meta,controlColumns);add(card,meta);
+    const sectionHead=el("div","scheduleTitle");
+    add(sectionHead,el("h3",null,"Charging & discharging schedules"),
+      el("span","muted","Up to 7 periods each"));
+    add(card,sectionHead);
+    const columns=el("div","grid scheduleGrid");
     add(columns,this.scheduleSection(group,"charge",draft),this.scheduleSection(group,"discharge",draft));
     add(card,columns);
     if (draft.changed) add(card,el("div","warn","Unsaved changes — use Save schedule changes to inverter. Reload discards these edits; the saved device schedule remains unchanged until a confirmed save succeeds."));
-    const footer=el("div","row");
-    const reset=el("button",null,"Discard edits / reload inverter");
+    const footer=el("div","row scheduleActions");
+    const reset=el("button","secondaryAction","Discard edits / reload inverter");
     reset.addEventListener("click",()=>{
       if(draft.changed && !window.confirm("Discard unsaved schedule changes and reload inverter settings?"))return;
       this._drafts.set(group.id,cloneDraft(group));
       this._schedulePlan=null;this._schedulePlanKey="";this._schedulePreview.clear();
       this.render();
     });
-    const save=el("button",null,
+    const save=el("button","primaryAction",
       this._scheduleWriteBusy?"Applying & verifying…":
       this._previewBusy?"Validating saved settings…":
       "Save schedule changes to inverter");
