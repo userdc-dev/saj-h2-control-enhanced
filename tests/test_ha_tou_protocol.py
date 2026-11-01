@@ -91,6 +91,20 @@ class TestHAMonitorProtocol(unittest.TestCase):
         self.assertEqual(slot["power_watts_saj_display"], 6930)
         self.assertEqual((slot["start"], slot["end"]), ("22:00", "22:40"))
 
+    def test_real_tuesday_thursday_multiday_mask(self):
+        # eLEKeeper selected Tuesday + Thursday, read twice over Modbus:
+        # charge word 2630 = (10 << 8) | 70, 22:00-22:40, 6930W.
+        charge = [1, 1, 5632, 5672, 2630, 0, 827, 6170] + [0] * 15
+        discharge = [5632, 5672, 1074] + [0] * 18
+        cfg = module.decode_config(charge, discharge, 1, 1)
+        slot = cfg.summary("charge")[0]
+        self.assertEqual(slot["weekday_mask_raw"], 10)
+        self.assertEqual(slot["weekday_verified"], "Tuesday, Thursday")
+        self.assertEqual(slot["start"], "22:00")
+        self.assertEqual(slot["end"], "22:40")
+        self.assertEqual(slot["power_watts_saj_display"], 6930)
+        self.assertTrue(slot["power_conversion_verified"])
+
     def test_confirmed_weekday_only(self):
         cfg = module.decode_config([0, 1]+[0]*21,
             [0x1600, 0x1628, 0x0432]+[0]*18, 1, 1)
