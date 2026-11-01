@@ -1,14 +1,36 @@
-/* SAJ H2 TOU dynamic card v0.2 preview.
- * Displays inverter-saved schedules from actual HA entities, discovers all
- * installed SAJ TOU readback devices by entity attributes, no hardcoded IDs.
- * Only two explicitly confirmed operating-mode buttons invoke a live HA action.
- * All schedule, power, time, and fallback controls remain LOCAL DRAFTS ONLY.
+/* SAJ H2 Control Enhanced live TOU controller and read-only energy overview.
+ * Reads SAJ Safe Monitor sensors without modifying the safe integration.
+ * Live inverter actions require deliberate user interaction and verification.
  */
 (() => {
 "use strict";
 const TAG = "saj-tou-dynamic-card";
 if (customElements.get(TAG)) return;
 const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const SAFE_ENERGY_IDS={
+  solar:"sensor.saj_h2_safe_monitor_total_solar_power",
+  home:"sensor.saj_h2_safe_monitor_home_consumption",
+  battery:"sensor.saj_h2_safe_monitor_battery_power",
+  soc:"sensor.saj_h2_safe_monitor_battery_state_of_charge",
+  stored:"sensor.saj_h2_safe_monitor_estimated_battery_energy",
+  gridImport:"sensor.saj_h2_safe_monitor_grid_import_direction_unverified",
+  gridExport:"sensor.saj_h2_safe_monitor_grid_export_direction_unverified",
+  outlook:"sensor.saj_h2_safe_monitor_today_s_solar_outlook_actual_remaining",
+  remaining:"sensor.saj_h2_safe_monitor_solar_forecast_remaining_today",
+  tomorrow:"sensor.saj_h2_safe_monitor_tomorrow_s_solar_forecast",
+  safeMode:"sensor.saj_h2_safe_monitor_operating_mode"
+};
+const safeMetric=(hass,key)=>{
+  const state=hass?.states?.[SAFE_ENERGY_IDS[key]];
+  if(!state || ["unknown","unavailable",""].includes(state.state))return null;
+  const numeric=Number(state.state);
+  return Number.isFinite(numeric)?numeric:null;
+};
+const fmtPower=value=>value===null?"—":
+  Math.abs(value)>=1000?(Math.abs(value)/1000).toFixed(2)+" kW":
+  Math.round(Math.abs(value)).toLocaleString()+" W";
+const fmtEnergy=value=>value===null?"—":
+  value.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})+" kWh";
 const is24Hour = value => /^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/.test(value);
 function formatLocalTime(value) {
   if (!value) return "Not available";
@@ -53,6 +75,27 @@ const CSS = [
   ".liveModeButtons button{flex:1;min-width:135px}",
   ".liveModeButtons button[aria-pressed=true]{border:2px solid var(--primary-color,#16b9b1)}",
   ".liveResult{font-size:12px;line-height:1.6;overflow-wrap:anywhere;padding:8px;border:1px solid var(--divider-color,#555);border-radius:8px;margin-top:8px}",
+
+  ".energyOverview{border:1px solid var(--divider-color,#555);border-radius:12px;padding:12px;margin:16px 0;background:var(--secondary-background-color,transparent)}",
+  ".energyOverview .flowTop{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}",
+  ".energyOverview h3{font-size:17px;margin:0}",
+  ".flowScroll{overflow-x:auto;margin-top:12px}",
+  ".flowTable{width:100%;border-collapse:collapse;table-layout:fixed;min-width:610px}",
+  ".flowTable th,.flowTable td{border:1px solid var(--divider-color,#444);padding:7px 6px;text-align:center;font-size:12px;vertical-align:middle}",
+  ".flowTable th{font-weight:700;white-space:nowrap}",
+  ".flowTable .flowNumbers td{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums}",
+  ".flowSummary{font-weight:600;margin-top:12px;font-size:13px}",
+  ".flowGraph{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:16px 0 4px}",
+  ".flowGraphCell{min-width:0}",
+  ".flowGraphCaption{display:flex;justify-content:space-between;align-items:center;font-size:12px;gap:4px}",
+  ".flowGraphCaption b{font-variant-numeric:tabular-nums}",
+  ".flowGraphTrack{height:8px;border-radius:999px;background:var(--divider-color,#444);overflow:hidden;margin-top:6px}",
+  ".flowGraphFill{height:100%;background:var(--primary-color,#16b9b1);border-radius:999px}",
+  ".socFlow{margin-top:12px}",
+  ".socFlowTop{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px}",
+  ".flowFoot{font-size:11px;color:var(--secondary-text-color,#aaa);line-height:1.5;margin-top:12px}",
+  "@media(max-width:650px){.flowGraph{grid-template-columns:repeat(2,minmax(0,1fr))}.flowTable th,.flowTable td{font-size:11px;padding:6px 4px}}",
+
 ].join("");
 const el = (tag, cls, text) => {
   const node = document.createElement(tag);
@@ -133,6 +176,7 @@ class SajTOUDynamicCard extends HTMLElement {
     this._drafts = new Map();
     this._selected = "";
     this._lastSignature = "";
+    this._lastEnergySignature = "";
     this._modeBusy = false;
     this._fallbackBusy = false;
     this._fallbackFeedback = "";
@@ -158,18 +202,123 @@ class SajTOUDynamicCard extends HTMLElement {
     const sig = devices.map(g => [g.id, ...roles.map(r => {
       const s=g.entities[r]; return s ? s.state+"|"+JSON.stringify(s.attributes.schedules || [])+"|"+(s.attributes.last_verified_read||""):"";
     })].join(":")).join(";");
+    const energySig=Object.values(SAFE_ENERGY_IDS).map(id=>
+      hass.states?.[id]?.state??"—").join("|");
     if (sig!==this._lastSignature) {
       this._lastSignature=sig;
+      this._lastEnergySignature=energySig;
       // Follow external elekeeper changes unless the user is editing a draft.
       devices.forEach(g=>{
         const existing=this._drafts.get(g.id);
         if (existing && !existing.changed) this._drafts.set(g.id,cloneDraft(g));
       });
       this.render();
+    } else if(energySig!==this._lastEnergySignature) {
+      this._lastEnergySignature=energySig;
+      // Updating safe monitoring graphics must not reset an active time input
+      // or discard an in-progress TOU schedule draft.
+      const old=this.shadowRoot?.querySelector(".energyOverview");
+      if(old)old.replaceWith(this._energyOverview());
+      else this.render();
     }
   }
   getCardSize() {return 7;}
   getStubConfig() {return {};}
+  _energyOverview(){
+    const hass=this._hass;
+    const panel=el("section","energyOverview");
+    const header=el("div","flowTop");
+    add(header,el("h3",null,"Live energy flow"),
+      el("span","pill","Read-only · SAJ Safe Monitor"));
+    add(panel,header);
+    const keys=["solar","home","battery","soc","stored","gridImport",
+      "gridExport","outlook","remaining","tomorrow"];
+    const values=Object.fromEntries(keys.map(k=>[k,safeMetric(hass,k)]));
+    if(keys.every(k=>values[k]===null)){
+      add(panel,el("p","muted",
+        "Live energy readings unavailable. This visual panel uses existing "+
+        "SAJ H2 Safe Monitor sensors and never changes inverter settings."));
+      return panel;
+    }
+    const solar=values.solar,home=values.home,battery=values.battery;
+    const imp=values.gridImport,exp=values.gridExport;
+    const batteryStatus=battery===null?"Unavailable":
+      battery>15?"Discharging ↗":battery< -15?"Charging ↙":"Idle";
+    const gridStatus=imp!==null&&imp>15?"Import":
+      exp!==null&&exp>15?"Export":
+      imp!==null&&exp!==null?"No net exchange":"Direction not available";
+    const tableWrap=el("div","flowScroll");
+    const table=el("table","flowTable");
+    const head=el("thead");
+    const hr=el("tr");
+    for(const title of ["☀️ Solar","🏠 House","🔋 Battery","⚡ Grid","🔮 Forecast"])
+      add(hr,el("th",null,title));
+    add(head,hr);add(table,head);
+    const body=el("tbody");
+    const r1=el("tr","flowNumbers");
+    for(const cell of [
+      fmtPower(solar),fmtPower(home),fmtPower(battery),
+      fmtPower(imp),
+      values.outlook===null?"—":fmtEnergy(values.outlook)+" Today"
+    ]) add(r1,el("td",null,cell));
+    const r2=el("tr");
+    for(const cell of [
+      solar===null?"—":"Generating",
+      home===null?"—":"Using",
+      batteryStatus,
+      imp===null?"—":"Import",
+      values.remaining===null?"—":fmtEnergy(values.remaining)+" remaining"
+    ]) add(r2,el("td",null,cell));
+    const r3=el("tr");
+    const socLabel=values.soc===null?"—":values.soc.toFixed(1)+"% SOC";
+    for(const cell of [
+      "","",
+      socLabel+" · "+fmtEnergy(values.stored)+" stored",
+      exp===null?"—":fmtPower(exp)+" export",
+      values.tomorrow===null?"—":fmtEnergy(values.tomorrow)+" tomorrow"
+    ])add(r3,el("td",null,cell));
+    add(body,r1,r2,r3);add(table,body);add(tableWrap,table);
+    add(panel,tableWrap);
+    // Relative bar lengths use only current wattage values, not invented
+    // energy-routing predictions or guessed historical samples.
+    const powerItems=[
+      ["Solar",solar],["House",home],["Battery",battery===null?null:Math.abs(battery)],
+      ["Grid",imp===null&&exp===null?null:Math.max(imp||0,exp||0)]
+    ];
+    const maximum=Math.max(1,...powerItems.map(([,v])=>v===null?0:Math.abs(v)));
+    const graph=el("div","flowGraph");
+    for(const [label,value] of powerItems){
+      const cell=el("div","flowGraphCell");
+      const caption=el("div","flowGraphCaption");
+      add(caption,el("span",null,label),el("b",null,fmtPower(value)));
+      const track=el("div","flowGraphTrack");
+      const fill=el("div","flowGraphFill");
+      fill.style.width=value===null?"0%":
+        Math.min(100,Math.max(0,Math.abs(value)/maximum*100))+"%";
+      track.append(fill);add(cell,caption,track);graph.append(cell);
+    }
+    add(panel,graph);
+    if(values.soc!==null){
+      const socBox=el("div","socFlow");
+      const top=el("div","socFlowTop");
+      add(top,el("span",null,"Battery state of charge"),
+        el("strong",null,values.soc.toFixed(1)+"% · "+
+          fmtEnergy(values.stored)+" stored"));
+      const track=el("div","flowGraphTrack");
+      const fill=el("div","flowGraphFill");
+      fill.style.width=Math.max(0,Math.min(100,values.soc))+"%";
+      track.append(fill);add(socBox,top,track);add(panel,socBox);
+    }
+    const modeState=hass.states?.[SAFE_ENERGY_IDS.safeMode]?.state;
+    add(panel,el("div","flowSummary",gridStatus+
+      ((modeState&&!["unavailable","unknown"].includes(modeState))?
+        " · "+modeState:"")));
+    add(panel,el("div","flowFoot",
+      "Forecast combines measured and predicted energy and is an estimate. "+
+      "Grid import/export direction remains provisional. Monitoring and "+
+      "graphics are read-only; TOU control actions are separate."));
+    return panel;
+  }
   render() {
     if (!this.shadowRoot || !this._hass) return;
     const devices = findDevices(this._hass);
@@ -201,6 +350,7 @@ class SajTOUDynamicCard extends HTMLElement {
     add(status,el("span",good?"okay":"bad",good?"● Settings read from device":"● Readback unavailable"),
       el("span","muted","Last read: "+formatLocalTime(e.sync_status?.attributes.last_verified_read)));
     add(card,status);
+    add(card,this._energyOverview());
     if (!this._drafts.has(group.id)) this._drafts.set(group.id,cloneDraft(group));
     const draft=this._drafts.get(group.id);
     const meta=el("div","grid");
