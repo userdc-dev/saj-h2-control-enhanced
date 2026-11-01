@@ -127,6 +127,9 @@ class SajTOUDynamicCard extends HTMLElement {
     this._refreshBusy = false;
     this._schedulePreview = new Map();
     this._previewBusy = false;
+    this._scheduleWriteBusy = false;
+    this._scheduleWriteFeedback = "";
+    this._scheduleWriteError = false;
   }
   setConfig(config) {this._cfg=config||{};this.render();}
   set hass(hass) {
@@ -379,6 +382,65 @@ class SajTOUDynamicCard extends HTMLElement {
         "Draft validation blocked: "+(err?.message||String(err))+" · NO WRITE"});
     }finally{this._previewBusy=false;this.render();}
   }
+  async _applyChargePilot(group) {
+    if(this._scheduleWriteBusy||this._modeBusy)return;
+    const draft=this._drafts.get(group.id);
+    const row=draft?.charge?.find(r=>r.slotNumber===1);
+    const key=group.id+":charge:1";
+    if(!row || row.savedStart!=="22:00" || row.savedEnd!=="22:40" ||
+       row.savedDayMask!==16 || row.savedPercent!==70 ||
+       row.start!=="21:30" || row.end!=="22:00" ||
+       row.percent!==70 || row.days.length!==1 || row.days[0]!=="Fri" ||
+       group.entities.operating_mode?.attributes.raw_mode_code!==0 ||
+       !this._schedulePreview.get(key) || this._schedulePreview.get(key).error) {
+      this._scheduleWriteFeedback="Pilot blocked: invalid or unverified draft.";
+      this._scheduleWriteError=true;this.render();return;
+    }
+    if(!window.confirm(
+      "LIVE SCHEDULE WRITE: change Friday charging slot 1 from "+
+      "22:00–22:40 to 21:30–22:00?\n\n"+
+      "Power stays at 6930 W and Wednesday discharge remains unchanged.\n"+
+      "An interruption may leave a PARTIAL change. Keep eLEKeeper open."))return;
+    const phrase="I AUTHORIZE FRIDAY CHARGE TIME TEST";
+    const typed=window.prompt("Type this EXACT confirmation phrase:\n\n"+phrase,"");
+    if(typed!==phrase){
+      this._scheduleWriteFeedback="Cancelled: confirmation did not match.";
+      this._scheduleWriteError=true;this.render();return;
+    }
+    this._scheduleWriteBusy=true;
+    this._scheduleWriteFeedback="Sending and verifying individual time writes…";
+    this._scheduleWriteError=false;this.render();
+    try{
+      const data={
+        confirmation:phrase,device_model:"H2-10K-S3-A",
+        control_firmware:"v2.018"
+      };
+      if(group.id&&!group.id.startsWith("sensor."))data.entry_id=group.id;
+      const answer=await this._hass.callWS({
+        type:"call_service",domain:"saj_h2_control_enhanced",
+        service:"supervised_friday_charge_time_pilot",
+        service_data:data,return_response:true
+      });
+      const report=answer?.response||answer;
+      if(report?.status!=="SCHEDULE_VERIFIED_BY_MODBUS" ||
+         report?.write_sent!==true || report?.discharge_unchanged!==true)
+        throw new Error("No verified schedule response; manual inspection required");
+      this._scheduleWriteFeedback=
+        "Verified by Modbus: Friday charging 21:30–22:00 at 6930 W. "+
+        "Discharge unchanged. Confirm in eLEKeeper.";
+      this._scheduleWriteError=false;
+      this._schedulePreview.delete(key);
+      this._drafts.delete(group.id);
+    }catch(err){
+      this._scheduleWriteFeedback="UNCONFIRMED/POSSIBLY PARTIAL: "+
+        (err?.message||String(err))+
+        ". Do not repeat the action. Check charge start AND end in eLEKeeper.";
+      this._scheduleWriteError=true;
+    }finally{
+      this._scheduleWriteBusy=false;
+      this.render();
+    }
+  }
   choice(options,current,onChange) {
     const select=el("select");
     options.forEach(v=>{const o=el("option",null,v);o.value=v;o.selected=v===current;select.append(o);});
@@ -449,6 +511,28 @@ class SajTOUDynamicCard extends HTMLElement {
       const previewKey=group.id+":"+direction+":"+row.slotNumber;
       const preview=this._schedulePreview.get(previewKey);
       if(preview) add(container,el("div","liveResult "+(preview.error?"bad":"okay"),preview.message));
+      // The only enabled schedule write is the hard-coded pilot already
+      // checked against eLEKeeper. This is NOT a general Apply function.
+      if(direction==="charge"&&row.slotNumber===1){
+        const pilotValuesMatch=
+          row.savedStart==="22:00"&&row.savedEnd==="22:40"&&
+          row.savedDayMask===16&&row.savedPercent===70&&
+          row.start==="21:30"&&row.end==="22:00"&&
+          row.dayMask===16&&row.percent===70&&
+          row.days.length===1&&row.days[0]==="Fri";
+        const currentMode=group.entities.operating_mode?.attributes.raw_mode_code;
+        const pilot=el("button",null,this._scheduleWriteBusy?
+          "Applying charging time…":"Apply Friday charging-time pilot (LIVE)");
+        pilot.type="button";
+        pilot.disabled=!pilotValuesMatch||!preview||preview.error||
+          currentMode!==0||this._scheduleWriteBusy||this._modeBusy;
+        pilot.title="Only Friday charge 21:30–22:00, preserving 6930 W, is authorised";
+        pilot.addEventListener("click",()=>this._applyChargePilot(group));
+        add(container,pilot);
+        if(this._scheduleWriteFeedback)
+          add(container,el("div","liveResult "+(this._scheduleWriteError?"bad":"okay"),
+            this._scheduleWriteFeedback));
+      }
 
       const power=el("div","row");
       const label=el("span","muted","Draft power");
