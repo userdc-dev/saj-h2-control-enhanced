@@ -31,6 +31,7 @@ class Slot:
             "start": self.start,
             "end": self.end,
             "weekday_mask_raw": self.day_mask,
+            "weekday_verified": "Wednesday" if self.day_mask == 4 else "Unverified",
             "power_percent_raw": self.power_percent,
         }
         if discharge:
@@ -119,3 +120,37 @@ def decode_config(charge, discharge, mode, fallback):
         charge_slots=_decode_slots(charge[2:], charge_mask),
         discharge_slots=_decode_slots(discharge, discharge_mask),
     )
+
+
+
+def active_signature(config: Config):
+    """Only actual enabled slots count as active schedule changes.
+
+    Disabled slots may retain old times/power: their values do not mean
+    the eLEKeeper schedule changed.
+    """
+    return (
+        config.mode, config.fallback, config.charge_mask,
+        config.discharge_mask,
+        tuple(s for s in config.charge_slots if s.enabled),
+        tuple(s for s in config.discharge_slots if s.enabled),
+    )
+
+
+def describe_changes(previous: Config, current: Config) -> tuple[str, ...]:
+    """Human-readable device-readback changes, never presumed HA commands."""
+    differences = []
+    if previous.mode != current.mode:
+        differences.append(f"Mode: {previous.mode_text} → {current.mode_text}")
+    if previous.fallback != current.fallback:
+        differences.append(
+            f"Outside TOU: {previous.fallback_text} → {current.fallback_text}")
+    for direction in ("charge", "discharge"):
+        a = previous.charge_slots if direction == "charge" else previous.discharge_slots
+        b = current.charge_slots if direction == "charge" else current.discharge_slots
+        for before, after in zip(a, b):
+            before_value = before if before.enabled else None
+            after_value = after if after.enabled else None
+            if before_value != after_value:
+                differences.append(f"{direction.title()} slot {after.number} changed")
+    return tuple(differences)
