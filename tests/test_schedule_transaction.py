@@ -128,6 +128,23 @@ class FullScheduleTests(unittest.TestCase):
             self.assertEqual(fake.registers[0x361b+18],0x0c00)
         asyncio.run(run())
 
+    def test_later_window_extends_end_before_start(self):
+        async def run():
+            fake=FakeModbus()
+            data=inputs()
+            data["proposed_charge"][0].update(start="23:30",end="23:50")
+            result=await engine.execute_plan(
+                host="127.0.0.1",port=502,
+                confirmation=engine.CONFIRM_PHRASE,
+                device_model="H2-10K-S3-A",control_firmware="v2.018",
+                transport=lambda *a,**k:fake,sleep=no_wait,**data)
+            self.assertEqual(result["status"],"SCHEDULE_VERIFIED_BY_MODBUS")
+            self.assertEqual(fake.writes,[
+                (0x3607,0x1732),  # extend end before start crosses old end
+                (0x3606,0x171e)
+            ])
+        asyncio.run(run())
+
     def test_plan_noop(self):
         async def run():
             fake=FakeModbus()
