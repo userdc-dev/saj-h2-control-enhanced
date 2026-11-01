@@ -1,12 +1,12 @@
 # Developer handover — SAJ H2 Control Enhanced
 
-**Canonical current guide; updated 2026-11-02, Australia/Adelaide.** Read this before changing any code, dashboard, or Modbus control. **Current version at the time of this handover: 0.5.3.** The project was previously design-only, but now has a deployed Home Assistant control integration with working mode controls, schedule editing code, new fallback control, and read-only energy graphics/table within the TOU dashboard. **Not every writable feature has been proven on the owner's actual inverter.**
+**Canonical current guide; updated 2026-11-02, Australia/Adelaide.** Read this before changing any code, dashboard, or Modbus control. **Current version at the time of this handover: 0.5.4.** The project was previously design-only, but now has a deployed Home Assistant control integration with working mode controls, schedule editing code, new fallback control, and read-only energy graphics/table within the TOU dashboard. **Not every writable feature has been proven on the owner's actual inverter.**
 
 **Repository:** https://github.com/userdc-dev/saj-h2-control-enhanced  
 **Older full development diary:** [docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md](docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md) (57 KB historical archive; early claims of “planning-only” are OBSOLETE)  
 **Paired app evidence:** [docs/SAJ_APP_TOU_OBSERVATIONS.md](docs/SAJ_APP_TOU_OBSERVATIONS.md)  
 **Separate read-only integration (DO NOT MODIFY):** https://github.com/userdc-dev/saj-h2-safe-enhanced  
-**Baseline CI evidence:** https://github.com/userdc-dev/saj-h2-control-enhanced/actions/runs/41319913554 (v0.5.2 success, *offline* only). For v0.5.3 use the newest workflow on GitHub Actions.
+**Baseline CI evidence:** https://github.com/userdc-dev/saj-h2-control-enhanced/actions/runs/41319913554 (v0.5.2 success, *offline* only). For v0.5.4 use the newest workflow on GitHub Actions.
 
 > The owner wants this file to be detailed enough that a human developer or future assistant with **only this repo and these notes** understands the purpose, chronology, code, register mapping, tests, successful live observations, unresolved issues, installation, safety constraints, and next actions. Do not delete or hollow out this handover. Keep it current whenever changing actual features.
 >
@@ -262,7 +262,7 @@ Restoring the backed-up **code** does **not** revert already-saved inverter sett
 
 **P1 — usability and maintenance:**
 
-- **DONE in v0.5.3:** Integrated a read-only **Live energy flow** table and compact power/SOC graphics into the *separate* SAJ TOU Control card using existing Safe Monitor sensors. The original SAJ Energy dashboard and `saj_h2_safe` source remain unchanged. A built-in HA historical line graph is **not yet included**; the graphics show current comparative watts and SOC, not recorded 24-hour trends.
+- **DONE in v0.5.4:** Integrated a read-only **Live energy flow** table and compact power/SOC graphics into the *separate* SAJ TOU Control card using existing Safe Monitor sensors. The original SAJ Energy dashboard and `saj_h2_safe` source remain unchanged. A built-in HA historical line graph is **not yet included**; the graphics show current comparative watts and SOC, not recorded 24-hour trends.
 - **Verify on owner's browser** that source sensor values and mobile layout match expectations; absent/unavailable sensors should display "—", never invented zeros.
 - Add browser interaction tests (time inputs, weekends, split overnight, one-confirmation popup, Save, fallback selection). CI currently only validates JS syntax.
 - Update stale descriptions in `services.yaml`, `config_flow.py`, `docs/SAFETY_AND_ROADMAP.md`, `CHANGELOG.md`. Some are historical and should be marked archived rather than silently rewriting prior evidence.
@@ -283,7 +283,7 @@ Restoring the backed-up **code** does **not** revert already-saved inverter sett
 
 ---
 
-## 13. v0.5.3 combined dashboard: real Live energy flow data contract
+## 13. v0.5.4 combined dashboard: real Live energy flow data contract
 
 The user shared the earlier SAJ Energy **Live energy flow** panel screenshot and explicitly requested those **graphics and 5-column table be combined with the advanced TOU controls**, *after* completing this full handover. Implementation is in `frontend/saj-tou-dynamic-card.js`, and this stays in the **SAJ TOU Control** sidebar; the separate read-only SAJ Energy dashboard is **not** edited.
 
@@ -316,5 +316,21 @@ The new section is **read-only**, above the control panes. It shows:
 **Battery power sign** from read-only monitor: **positive = discharging**, **negative = charging**. Treat near-zero magnitude as idle. Grid sign has not been independently paired at nonzero import/export, so the UI explicitly labels direction as provisional. Forecast numbers are not controls and are subject to weather/model uncertainty.
 
 **Current limitations:** exact default entity IDs may change if user has manually renamed sensors; if optional Safe Monitor sensors are absent, visualize available values and display "—" for others. This feature should remain *optional* and must never prevent TOU controls from loading. A true recorder-backed 24-hour history graph would require its own tested implementation and is not implied by these instantaneous power bars.
+
+## 14. v0.5.4 visual redesign — annotated owner feedback
+
+Owner reviewed the combined energy/TOU screenshot and marked out duplicate headings and the redundant selector, and circled the two separate Mode and Outside-TOU cards with a large **“Join”** annotation. The explicit intent is **a cleaner unified control panel**, not changing Modbus semantics.
+
+Changes to `frontend/saj-tou-dynamic-card.js`:
+
+- The Home Assistant dashboard already has **Time of Use** as a native navigation header. Removed the card's duplicate **Battery time-of-use** heading and **Mode & schedule control** badge. The native HA view title is not manipulated by JS.
+- Hid the **Detected TOU device** chooser when only one TOU integration is present; if multiple integrations are detected, a compact **Inverter** selector still appears. Auto device discovery and source entity mapping remain unchanged.
+- Replaced the two neighbouring standalone panes with one full-width, rounded **Inverter controls** section. Operating mode and Outside TOU windows appear as aligned **columns within one border**, separated by a subtle internal divider. On narrow screens they stack vertically.
+- Improved selected mode-button contrast even while disabled (already active), richer tabular readings and softer spacing, captions, responsive energy bars and saved schedule action emphasis.
+- Refined read-only **Live energy** table with larger numerical values, subdued header row, better border rhythm, thin relative power bars, and legible SOC. Did not modify or reconnect `saj_h2_safe` or existing SAJ Energy dashboard.
+- Added a clear schedule section title and visually distinguished the primary **Save schedule changes to inverter** button.
+- **No Modbus register addresses, service commands, authorization prompts or write paths were changed in this styling release.**
+
+**Verify on the owner's browser:** one configured device should show no redundant chooser, one unified controls panel, readable energy data, responsive stacking on mobile, and unchanged mode/fallback/schedule functions. Existing unsaved drafts, selected statuses, Standby confirmation and stale-readback rules remain in effect.
 
 **Historical appendix:** The full earlier handover is retained unabridged at [docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md](docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md); it contains original 2026-11-01 experiments, paired screenshots, previous mode-control iterations, firmware discovery, dashboard cache fixes, and repeated user feedback. Its early “planning-only” language was true at the time but is no longer a current feature status.
