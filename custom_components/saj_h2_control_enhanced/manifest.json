@@ -1,12 +1,19 @@
 {
   "domain": "saj_h2_control_enhanced",
   "name": "SAJ H2 Control Enhanced (Read-only TOU Preview)",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "documentation": "https://github.com/userdc-dev/saj-h2-control-enhanced",
   "issue_tracker": "https://github.com/userdc-dev/saj-h2-control-enhanced/issues",
-  "requirements": ["pymodbus>=3.6.9,<4"],
+  "requirements": [
+    "pymodbus>=3.6.9,<4"
+  ],
   "codeowners": [],
   "config_flow": true,
   "iot_class": "local_polling",
-  "integration_type": "hub"
+  "integration_type": "hub",
+  "dependencies": [
+    "frontend",
+    "http",
+    "lovelace"
+  ]
 }
