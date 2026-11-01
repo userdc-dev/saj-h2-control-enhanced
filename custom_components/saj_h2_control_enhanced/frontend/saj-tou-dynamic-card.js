@@ -167,6 +167,49 @@ const CSS = [
 
   "@media(max-width:650px){.flowGraph{grid-template-columns:repeat(2,minmax(0,1fr))}.flowTable th,.flowTable td{font-size:11px;padding:6px 4px}}",
 
+  /* v0.5.7: manual read-only data refresh next to Last verified. */
+  ".readbackBar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:0 0 10px;min-height:32px}",
+  ".readbackRight{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:flex-end}",
+  ".readbackRefresh{font-size:12px;font-weight:650;min-height:32px;padding:6px 12px;white-space:nowrap;color:var(--primary-text-color,#fff);border:1px solid var(--divider-color,#45484c);background:var(--card-background-color,#25282b);border-radius:8px}",
+  ".readbackRefresh:hover:not(:disabled){border-color:var(--control-accent);background:rgba(20,172,184,.09)}",
+  ".readbackRefresh:focus-visible{outline:2px solid var(--control-accent);outline-offset:2px}",
+  /* Native select popups are OS-owned; render the outside-TOU popup inside
+     the shadow DOM to guarantee matching dark colors in Brave/Windows. */
+  ".controlPanel{overflow:visible}",
+  ".fallbackMenu{position:relative;width:min(100%,295px);max-width:100%;z-index:5}",
+  ".fallbackTrigger{display:flex;width:100%;min-height:43px;align-items:center;justify-content:space-between;gap:10px;text-align:left;font-size:13px;font-weight:600;padding:10px 13px;border:1px solid var(--divider-color,#50545a);background:var(--card-background-color,#24262a);border-radius:10px;cursor:pointer}",
+  ".fallbackMenu.open .fallbackTrigger{border-color:var(--control-accent);box-shadow:0 0 0 1px var(--control-accent)}",
+  ".fallbackChevron{font-size:19px;line-height:14px;color:var(--secondary-text-color,#aaa)}",
+  ".fallbackOptions{position:absolute;top:calc(100% + 4px);left:0;right:0;padding:5px;border:1px solid var(--divider-color,#4d5155);border-radius:10px;background:var(--card-background-color,#24262a);box-shadow:0 12px 32px rgba(0,0,0,.48);z-index:100;display:flex;flex-direction:column;gap:3px}",
+  ".fallbackOptions[hidden]{display:none!important}",
+  ".fallbackOption{width:100%;text-align:left;display:block;padding:11px 12px;border:0;border-radius:7px;background:transparent;color:var(--primary-text-color,#f8f8f8);font-size:13px;line-height:1.4;opacity:1!important}",
+  ".fallbackOption[aria-selected=true]{background:rgba(14,159,177,.18);color:var(--primary-text-color,#fff);font-weight:700;cursor:default}",
+  ".fallbackOption:hover:not(:disabled),.fallbackOption:focus-visible{background:rgba(20,172,184,.14);outline:none}",
+  ".fallbackTrigger:disabled{opacity:.55;cursor:not-allowed}",
+  /* Condensed battery-first live energy data display (no data/model changes). */
+  ".energyOverview{padding:13px 16px 14px;margin:10px 0 14px}",
+  ".energyOverview .flowTop{align-items:center;gap:10px}",
+  ".energyHeading{display:flex;flex-direction:row;align-items:baseline;gap:14px;flex-wrap:wrap}",
+  ".energyHeading h3{font-size:16px}",
+  ".energyHeading .muted{font-size:12px}",
+  ".socFlow{margin:12px 0 0;padding:0;border:0}",
+  ".socFlowTop{font-size:13px;line-height:1.5;margin-bottom:6px}",
+  ".socFlowTop span{font-weight:700}",
+  ".socFlowTop strong{font-size:13px;font-variant-numeric:tabular-nums}",
+  ".socFlow .flowGraphTrack{height:10px}",
+  ".flowGraph{gap:12px;margin:11px 0 13px}",
+  ".flowGraphCaption{font-size:12px;gap:8px}",
+  ".flowGraphCaption b{font-size:13px}",
+  ".flowGraphTrack{height:9px}",
+  ".flowScroll{margin:0;border-radius:10px}",
+  ".flowTable th{padding:8px 5px;font-size:12px}",
+  ".flowTable td{padding:7px 5px;font-size:12px}",
+  ".flowTable .flowNumbers td{font-size:16px}",
+  ".flowSummary{margin-top:9px;font-size:12px}",
+  ".flowFoot{margin-top:8px;font-size:11px;line-height:1.45}",
+  "@media(max-width:680px){.readbackRight{justify-content:flex-start}.readbackBar{align-items:flex-start}.energyHeading{gap:6px}.energyOverview{padding:12px}.flowGraph{gap:9px}.flowTable{min-width:590px}.flowTable .flowNumbers td{font-size:14px}}",
+
+
 ].join("");
 const el = (tag, cls, text) => {
   const node = document.createElement(tag);
