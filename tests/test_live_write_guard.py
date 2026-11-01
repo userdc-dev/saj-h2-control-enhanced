@@ -20,7 +20,7 @@ class GuardTests(unittest.TestCase):
         ]
         self.assertEqual(len(calls), 1)
 
-    def test_write_is_mode_register_and_one(self):
+    def test_write_is_mode_register_and_validated_target(self):
         calls = [
             n for n in ast.walk(self.tree)
             if isinstance(n, ast.Call)
@@ -28,8 +28,9 @@ class GuardTests(unittest.TestCase):
         ]
         kws = {k.arg: k.value for k in calls[0].keywords}
         self.assertEqual(kws["address"].id, "MODE_ADDR")
-        self.assertIsInstance(kws["value"], ast.Constant)
-        self.assertEqual(kws["value"].value, 1)
+        self.assertIsInstance(kws["value"], ast.Name)
+        self.assertEqual(kws["value"].id, "target_mode")
+        self.assertIn("target_mode not in (0, 1)", self.source)
 
     def test_only_one_register_writer_binding(self):
         attrs = [
@@ -44,11 +45,14 @@ class GuardTests(unittest.TestCase):
         self.assertNotIn("rollback", self.source.split("async def run_supervised_tou_test")[1].split('"""')[1])
 
     def test_requires_confirmation_and_expected_mode(self):
-        self.assertIn("confirmed_phrase != CONFIRM_PHRASE", self.source)
-        self.assertIn("expected_mode != 0", self.source)
+        self.assertIn("confirmed_phrase != CONFIRM_PHRASES[target_mode]", self.source)
+        self.assertIn("expected_mode != 1 - target_mode", self.source)
+        self.assertIn("before.mode != expected_mode", self.source)
         self.assertIn("if second != before:", self.source)
         self.assertIn("after.charge_slots", self.source)
         self.assertIn("after.discharge_slots", self.source)
+        self.assertIn("I AUTHORIZE ONE SELF CONSUMPTION MODE WRITE", self.source)
+        self.assertIn("I AUTHORIZE ONE TOU MODE WRITE", self.source)
 
 
 if __name__ == "__main__":
