@@ -132,3 +132,23 @@ The previous illustrative **4950 W** value should NOT be treated as an accepted 
 ## Clarification: TOU unscheduled fallback and controlled app-only test (2026-11-01)
 
 Owner clarified that at approximately 17:22 Sunday 2026-11-01 local time, the **only enabled** schedule was Wednesday 22:00–22:40 discharge (charge enable 0, discharge enable 1); no Sunday window existed. Owner's eLEKeeper workflow **requires selecting/enabling overall Time-of-use mode to edit schedules** and saving, then optionally returning overall mode to Self-consumption. The setting named *Non-charge/discharge time period settings* is **the fallback inside TOU mode outside all defined windows**, with Self-consumption and Standby choices. It is NOT a setting applied only when TOU is disabled. Existing Modbus fallback 0x365F returned 1, consistent with self-consumption fallback. Therefore, when TOU is selected outside Wednesday's window, expected behaviour is ordinary self-consumption; however actual activation/readback remains subject to propagation delay, independent controller interference, and accurate schedule verification. Proposed bounded, owner-operated test: confirm there are still no Sunday charge/discharge slots and fallback is Self-consumption; using official eLEKeeper only, change Wednesday discharge power 9900→9800 W, save with TOU enabled; read back 0x3604,0x361B,0x3647,0x365F after propagation, then return to Self-consumption if desired and verify mode 0. Do NOT transmit Modbus writes. Never imply no possible risk or assume five-minute propagation is guaranteed.
+
+## Second paired real-world test — 9800 W app ↔ raw 98 (2026-11-01)
+
+Owner used **eLEKeeper only** to change the existing Wednesday discharge slot from **9900 W** to **9800 W** and switched the operating mode back to Self-consumption. Then a **read-only** Modbus test returned:
+
+- `0x3647` mode = **0** (Self-consumption restored).
+- `0x361D` first discharge slot combined day/power word = **1122** = `0x0462`, where weekday mask **4** (unchanged Wednesday), raw power low byte **98**.
+- `0x365F` TOU unscheduled fallback = **1** (Self-consumption, unchanged).
+
+**Observed pairs:**
+| eLEKeeper discharge power | Actual raw low byte | Combined word with weekday mask 4 |
+|---|---:|---:|
+| 9900 W | 100 | 1124 |
+| 9800 W | 98 | 1122 |
+
+**Important:** 9800 W→98 disproves previous guess of 9800→99; 9900 W→100 is also not consistent with a blanket power_w = raw × 100 W. Device-side conversion may have special maximum/capping or UI-specific semantics; **do not interpolate or encode writable power from only these two points**. Future app-only test at 9700 W or a midrange point can narrow the mapping. Also possible firmware clamp/special 100 sentinel for max; not confirmed.
+
+The owner has demonstrated that a schedule setting can be edited using eLEKeeper (while briefly in TOU) and returned to mode 0, leaving the scheduled weekday stored while not currently running. This tests readback correspondence, not real discharge effectiveness.
+
+No Modbus writes performed; this repository's control implementation remains non-writing.
