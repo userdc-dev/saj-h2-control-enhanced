@@ -60,7 +60,13 @@ async def _snapshot(client):
         # requires an entirely new review rather than activating by surprise.
         c = result.charge_slots[0]
         d = result.discharge_slots[0]
-        if not (c.enabled and c.start == "22:00" and c.end == "22:40"
+        allowed_charge_window = (
+            (c.start, c.end) in (
+                ("22:00", "22:40"),  # Original verified Friday schedule
+                ("21:30", "22:00"),  # Verified only after pilot write
+            )
+        )
+        if not (c.enabled and allowed_charge_window
                 and c.day_mask == 16 and c.power_percent == 70
                 and d.enabled and d.start == "22:00" and d.end == "22:40"
                 and d.day_mask == 4 and d.power_percent == 50):
