@@ -633,15 +633,30 @@ class SajTOUDynamicCard extends HTMLElement {
       }
       const actualSlots=(state?.attributes.schedules||[]);
       const saved=actualSlots.find(item => Number(item.slot) === row.slotNumber);
-      if (saved) add(container,el("div","saved","Saved on inverter: "+saved.start+"–"+saved.end+" · "+saved.power_watts_saj_display+" W"+(saved.power_conversion_verified ? " (paired)" : " (estimated)")));
+      if (saved) add(container,el("div","saved","Saved on inverter: "+saved.start+"–"+saved.end+" · "+saved.power_percent_raw+"% · "+Number(saved.power_watts_saj_display).toLocaleString()+" W"+(saved.power_conversion_verified ? " (paired)" : " (estimated)")));
       const power=el("div","row");
-      const label=el("span","muted","Charging/discharging power");
-      const slider=el("input");slider.type="range";slider.min="0";slider.max="100";slider.step="1";slider.value=String(row.percent);
-      const previewText = () => (row.percent*99)+" W"+(direction==="charge" && ![50,70].includes(row.percent) ? " (estimated)" : "");
-      const display=el("strong",null,previewText());
-      slider.addEventListener("input",()=>{row.percent=Number(slider.value);draft.changed=true;this._schedulePreview.delete(group.id+":"+direction+":"+row.slotNumber);display.textContent=previewText()});
+      const label=el("span","muted",direction==="charge"?"Charging power":"Discharging power");
+      const slider=el("input");
+      slider.type="range";slider.min="1";slider.max="100";slider.step="1";
+      slider.value=String(Math.max(1,row.percent));
+      slider.setAttribute("aria-label",(direction==="charge"?"Charging":"Discharging")+" schedule power percentage");
+      const percentDisplay=el("strong",null,row.percent+"%");
+      const wattDisplay=el("strong",null,(row.percent*99).toLocaleString()+" W");
+      const updatePowerReadout=()=>{
+        percentDisplay.textContent=row.percent+"%";
+        wattDisplay.textContent=(row.percent*99).toLocaleString()+" W";
+        slider.setAttribute("aria-valuetext",row.percent+" percent, approximately "+(row.percent*99)+" watts");
+      };
+      updatePowerReadout();
+      slider.addEventListener("input",()=>{
+        row.percent=Number(slider.value);
+        draft.changed=true;
+        this._schedulePreview.delete(group.id+":"+direction+":"+row.slotNumber);
+        updatePowerReadout();
+      });
       slider.addEventListener("change",()=>this.render());
-      add(power,label,slider,display);add(container,power);
+      add(power,label,slider,percentDisplay,el("span","muted","·"),wattDisplay);
+      add(container,power);
       const dayrow=el("div","days");
       DAYS.forEach(day=>{
         const label=el("label","day");
