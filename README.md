@@ -1,59 +1,75 @@
-# SAJ H2 Control Enhanced — DESIGN ONLY
+# SAJ H2 Control Enhanced — Home Assistant
 
-> **For any future developer or AI assistant: [READ DEVELOPER_HANDOFF.md FIRST](DEVELOPER_HANDOFF.md).** This is the canonical record of project goals, decisions, previous chat history, safety restrictions, architecture, milestones and exact implementation status. Do not implement control writes based on the README alone.
+**Independent, actively developed battery controller for SAJ H2 with live operating mode, editable TOU schedules, outside-window fallback, and an optional read-only energy overview.**
 
-**Status:** Home Assistant **v0.1.0 is installed and working**; **v0.2.0 is now committed in GitHub** with an auto-discovered dynamic TOU dashboard and preview editors, but is **not installed on Kamrui yet**. **NO live inverter write controls.**
+> **New developer / AI assistant:** [READ THE COMPLETE DEVELOPER_HANDOFF.md FIRST](DEVELOPER_HANDOFF.md). The handover includes exact inverter registers, code architecture, real-vs-simulated testing evidence, safety gates, recovery steps, and outstanding requirements. The historical chronology is preserved in [the archive](docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md).
+>
+> **Version in this README:** v0.5.3. Inspect [manifest.json](custom_components/saj_h2_control_enhanced/manifest.json) and [GitHub Actions](https://github.com/userdc-dev/saj-h2-control-enhanced/actions) to confirm the current release.
 
-This is a separate project from [SAJ H2 Safe Enhanced](https://github.com/userdc-dev/saj-h2-safe-enhanced), the owner's functioning read-only Home Assistant integration. The existing read-only repository must remain untouched by writable control development.
+## What this integration does
 
-## Planned functionality
+- Controls operating mode: **Self-consumption ↔ Time-of-Use**. Both directions have been verified on the owner's actual SAJ H2-10K-S3-A inverter and in elekeeper.
+- Edits **up to seven charge** and **seven discharge** time slots, with 24-hour time pickers, Monday–Sunday day choices, add/remove, and a power slider showing **both percentage and estimated watts**.
+- Uses **Save schedule changes to inverter** with internal validation and **one confirmation popup**; each changed Modbus word is verified. Multiple writes are not atomic; an interruption could leave partial settings.
+- Supports **Outside TOU windows: Self-consumption or Standby**. Selecting Standby displays one warning popup. The new fallback write has been offline-tested but has **not** been independently verified in a completed field test.
+- Offers **Split overnight into two schedules** in the UI because elekeeper does not support a single schedule crossing midnight.
+- Includes **Live energy flow** inside the TOU dashboard, based on existing read-only SAJ Safe Monitor entities: Solar, House, Battery, Grid and Forecast table; relative power bars; battery SOC and estimated stored energy. This visualization is read-only and must not modify the monitoring integration.
+- Auto-creates a **separate SAJ TOU Control** sidebar dashboard, leaving existing dashboards and entities untouched.
 
-- **Quick actions:** charge or discharge the battery for a chosen number of minutes, with power bounded by verified hardware capabilities.
-- **Schedules:** configurable charging/discharging days, time windows and time-of-use rules.
-- **Safety:** explicit user confirmation, cancel, timeout, independent watchdog, state readback and verified restoration.
-- **UI:** compact controls in the space freed beneath the SAJ Energy Live flow; no oversized battery gauge or redundant PV cards.
+The integration is **not** a completed universal inverter controller: forced timed charging/discharging, OCPP, HVAC, and automatic tariff optimisation remain future work. Inferred Saturday/Sunday individual bits and some schedule-write combinations still need additional field verification.
 
-## Non-negotiable restrictions
+## Non-negotiable boundaries
 
-- **Never command Backup mode 2 or Off-grid/Passive mode 3.** Mode 3's name is inconsistent between upstream code and the owner's experience.
-- Don't change battery reserve SOC, depth of discharge, BMS protections, charging voltage or export limits.
-- No arbitrary `max power` commands. Discover and validate the exact inverter/battery permissible ratings first.
-- Don't begin any operation when readings are stale, control ownership is unclear, or expected safe stop/recovery isn't proven.
-- No automatic mode switching, or persistent active actions, until separate authorized safety testing.
+- Do not modify the separate [SAJ H2 Safe Enhanced](https://github.com/userdc-dev/saj-h2-safe-enhanced) monitor or the owner's existing **SAJ Energy** dashboard.
+- Modbus operating modes **2** (Backup) and **3** (Off-grid/Passive) remain blocked. No writing battery protections, reserve SOC, inverter export limits, off-grid settings, or BMS registers.
+- No startup/background/automated writes. Always require an explicit user action. Standby must have a clear confirmation popup.
+- Do not automatically retry or rollback an uncertain/partially committed multi-register write.
+- Actual on-device verification is different from fake-Modbus CI passing. See the [evidence matrix](DEVELOPER_HANDOFF.md#3-implementation-status-what-is-genuinely-verified).
 
-## Current hardware context
+## Architecture
 
-SAJ H2 10 kW AC inverter; 30 × 440 W bifacial panels; SAJ battery **40.00 kWh capacity reported by SAJ app**, not 40.96. Existing read-only Modbus monitoring uses device ID 1; operating-mode read register 0x3647. Any public repository should not contain private LAN addresses, precise home coordinates or passwords.
+| Component | Purpose |
+|---|---|
+| `custom_components/saj_h2_control_enhanced/__init__.py` | HA setup, read coordinator, user-invoked actions and shared write lock |
+| `tou_protocol.py` | 7+7 slot register decoder and current mode/fallback |
+| `schedule_transaction.py` | Full schedule plan, preflight, changed-register application and verification |
+| `supervised_write.py` | Single-mode writes (0 ↔ 1) |
+| `supervised_fallback.py` | Outside-TOU Self-consumption / Standby write with confirmation |
+| `frontend/saj-tou-dynamic-card.js` | Time-of-use control UI plus read-only live energy graphics and table |
+| `frontend_setup.py` | Versioned frontend resource and independent dashboard |
+| `sensor.py` | Device readback sensors; never speculative setting states |
 
-## Development status and next steps
+Core TOU registers: charge mask `0x3604`, discharge mask `0x3605`, charge slots `0x3606–0x361A`, discharge slots `0x361B–0x362F`, mode `0x3647`, outside fallback `0x365F`. See the [full handover](DEVELOPER_HANDOFF.md#4-authoritative-modbus-tou-layout-and-encodings) for bytes, masks, examples and provenance.
 
-1. **Milestone 0 complete:** separate repository, project handoff, safety roadmap, non-functional control preview and safety-policy tests committed.
-2. **Control-core groundwork:** [validated telemetry adapter](control_core/telemetry.py), [non-executable action review](control_core/planner.py), [telemetry contract](docs/TELEMETRY_CONTRACT.md), and automated offline [safety tests](.github/workflows/safety-tests.yml).
-3. **Next:** design interactive UI with all actions disabled; research read-only hardware status and control ownership; design and unit-test safe timeout/stop state machine.
-4. Hardware-write work requires a distinct explicit approval and controlled testing. **No control implementation is installed in Home Assistant.**
+## Installation / upgrades
 
-See [Developer Handoff](DEVELOPER_HANDOFF.md), [Safety and Roadmap](docs/SAFETY_AND_ROADMAP.md), [Project Handoff](docs/PROJECT_HANDOFF.md), [Mock Dashboard Card](examples/compact-control-preview.yaml) and [Safety Tests](tests/test_safety_policy.py).
+Install the integration under Home Assistant's `config/custom_components/saj_h2_control_enhanced/`, restart Home Assistant and open the sidebar **SAJ TOU Control** (path `/saj-tou-control/tou`). Existing HA safe-monitor entries are not removed or modified. The custom frontend is registered from `frontend_setup.py`; hard-reload your browser after an upgrade. To update the already-installed folder:
 
-For all prior confirmed read-only register mappings, commissioning and v0.3.x dashboard history, consult the [read-only project handoff](https://github.com/userdc-dev/saj-h2-safe-enhanced/blob/main/PROJECT_HANDOFF.md).
+~~~bash
+HA_CONFIG="/path/to/your/homeassistant/config"
+cp -a "$HA_CONFIG/custom_components/saj_h2_control_enhanced" "$HA_CONFIG/custom_components/saj_h2_control_enhanced.backup"
+tmp="$(mktemp -d)"
+curl -fL https://github.com/userdc-dev/saj-h2-control-enhanced/archive/refs/heads/main.tar.gz -o "$tmp/repo.tar.gz"
+tar -xzf "$tmp/repo.tar.gz" -C "$tmp"
+cp -a "$tmp/saj-h2-control-enhanced-main/custom_components/saj_h2_control_enhanced/." "$HA_CONFIG/custom_components/saj_h2_control_enhanced/"
+docker restart homeassistant
+~~~
 
-**New SAJ app evidence:** [TOU screenshot observations & required bidirectional device synchronization](docs/SAJ_APP_TOU_OBSERVATIONS.md) documents 7 charge + 7 discharge slots, weekday multiselect, 0–9900 W discharge UI range, TOU fallback to Self-consumption, and owner's observed up-to-5-minute activation delay. Device-side schedules/settings must be read back; local drafts must not masquerade as confirmed inverter state.
+`main` always means the current branch, not a pinned release; for production use a known tag or commit. **Restoring the backup code does not restore the inverter's saved settings.**
 
-**Long-term roadmap:** [OCPP EV charging and air-conditioning/major-load coordination](docs/FUTURE_SMART_LOADS.md) — future only, conditioned on verified inverter controls, device readback and eLEKeeper consistency.
+## Testing and evidence
 
-## Installable read-only TOU preview
+GitHub CI runs syntax checks and simulated Modbus unit tests. Readable verification notes in [docs/SAJ_APP_TOU_OBSERVATIONS.md](docs/SAJ_APP_TOU_OBSERVATIONS.md) trace real elekeeper pairing tests. The current [developer handover](DEVELOPER_HANDOFF.md) distinguishes verified live mode switching from schedule/fallback paths that remain only partially field-proven. No CI test connects to the physical inverter.
 
-[Integration source](custom_components/saj_h2_control_enhanced) · [Install and verify](docs/READ_ONLY_HA_PREVIEW.md). Publishes actual inverter mode, unscheduled fallback, schedule counts and active 7+7 charge/discharge schedule details as read-only Home Assistant sensors; updates every 120 seconds by default. Existing `saj_h2_safe` is unchanged. The owner confirmed v0.1.0 running in HA with correct mode, fallback, and 0/1 schedule counts. v0.1.1 adds more robust full-block verification and change detection, but is not yet installed. No write functions.
+Quick offline checks:
 
-## Latest development work
+~~~bash
+python -m compileall -q control_core custom_components tests
+node --check custom_components/saj_h2_control_enhanced/frontend/saj-tou-dynamic-card.js
+python -m unittest discover -s tests -p 'test_schedule_transaction.py'
+python -m unittest discover -s tests -p 'test_supervised_fallback.py'
+~~~
 
-- [v0.1.1 changes](CHANGELOG.md): stronger complete-register snapshot consistency checks, precise changed-setting records, and clearer verified-vs-unverified weekday reporting.
-- [Compact read-only TOU dashboard card](examples/tou-compact-card.yaml): a single Manual card for the existing SAJ Energy dashboard; no controls.
-- [Offline pending/readback reconciliation model](control_core/reconciliation.py): strict source timestamps and confirmation of device-stored settings before marking a future request successful; not wired into HA yet and no commands.
+## Continuing development
 
-**Do not delete/re-create either HA integration to update its files:** preserve the working entity IDs and the safe monitor.
-
-## NEW: Auto-discovered dynamic TOU dashboard v0.2.0
-
-[**Read the v0.2.0 upgrade and usage guide**](docs/DYNAMIC_DASHBOARD_V020.md). The custom card can select any loaded SAJ TOU device and automatically bind its actual entities—even if renamed in HA. It shows 0–7 charge and discharge schedules, live device readback, 24-hour time, weekdays, and adjustable **local-preview** power sliders. The integration attempts to create a separate **SAJ TOU Control** dashboard automatically, and the setup flow can use an already configured `saj_h2_safe` monitor rather than asking for another IP address.
-
-All inputs are **PREVIEW ONLY** until inverter write safety is proven. An Apply button is visibly disabled. No existing SAJ Energy dashboard or `saj_h2_safe` integration is modified by this GitHub release.
+Start with [DEVELOPER_HANDOFF.md](DEVELOPER_HANDOFF.md), then the source files named above. Preserve the one-confirmation UX and lowercase **elekeeper** branding, never overwrite the safe monitor, and record actual hardware results separately from offline simulations. Update the handover and changelog with every important change.
