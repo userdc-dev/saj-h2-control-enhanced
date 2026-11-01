@@ -89,3 +89,23 @@ Proposed architecture:
 - The app shows **0–9900 W** for the discharge example. Owner suspects increments **may be 100 W** (0, 100, 200 … 9900), **NOT yet confirmed**. Do not restrict UI to multiples of 100 W or reject other values until the SAJ app or readback demonstrates this.
 - Upstream `modbus_readers.py` decodes the low byte of each packed schedule register as `power_percent` (0–100 expected in usual use), not watts. It is *plausible* that app watts = percent × 100 W for this 10 kW model (e.g. screenshot 9900 W ↔ raw 99). **This scaling is unverified on this inverter** and could depend on power configuration; never use it to issue writes before real readback parity checks.
 - With zero schedules, enable masks are expected to be zero *if* the upstream mapping applies. An all-zero slot's start/end/power may be stale data; use enable masks rather than inventing active slots.
+
+## First live read-only TOU snapshot — confirmed 2026-11-01
+
+Owner ran **function 03 holding-register reads only**, while the inverter was in Self-consumption. Real raw results:
+
+- 0x3604 count 23: `[0, 1, 5888, 5947, 2103, 0, 827, 6170, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]`
+- 0x361B count 21: `[5632, 5672, 1124, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]`
+- 0x3647: `[0]` = Self-consumption
+- 0x365F: `[1]` = TOU unscheduled fallback Self-consumption
+
+Decoding by upstream layout:
+- Charge enable mask **0** (no active charge slots), discharge enable mask **1** (slot 1 selected). **Do not treat nonzero unused charge-slot words as active schedules**; first charge slot contains inactive data 23:00–23:59, combined raw 2103 = high-byte 8 and low-byte 55. A second inactive slot contains stale/nonzero data too.
+- Discharge slot 1: 5632=0x1600 → **22:00**, 5672=0x1628 → **22:40**, 1124=0x0464 → high byte weekday mask **4** and low byte power raw **100**. Start/end/weekday match user's SAJ app screenshot (Wednesday).
+- IMPORTANT POWER SCALING CONFLICT: screenshot indicated **9900 W** while raw low byte is **100**, not 99. The naive `raw × 100 W` model is **contradicted by this example**. Possibly UI remaps 100 to a capped 9900 W setting; must validate using a new *safe, future, non-active* schedule value through official app and then read again. Do not hardcode a conversion.
+- Mode **0** and discharge-enable mask **1** may coexist: slot configured but not currently being applied, because global mode is Self-consumption. Enabled/configured ≠ currently executing.
+- Snapshot is **read-only** and does not authorize any control commands. Real schedule may still be present in inverter memory even when global mode 0.
+
+### Next low-risk experiment
+
+Keep global mode Self-consumption; do not enable Time-of-use or schedule execution for a diagnostic. In official app, optionally change **only a future inactive discharge-slot power value** while keeping 22:00–22:40 Wednesday window, provided owner verifies this cannot activate unexpectedly. Allow app's observed propagation time (~5 min), then re-read the same four blocks and compare changed raw value. Prefer to first confirm current saved SAJ app screen, since app UI and register might be out of sync. If unsure, do no mutation and only inspect existing saved values.
