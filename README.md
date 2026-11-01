@@ -2,7 +2,7 @@
 
 > **For any future developer or AI assistant: [READ DEVELOPER_HANDOFF.md FIRST](DEVELOPER_HANDOFF.md).** This is the canonical record of project goals, decisions, previous chat history, safety restrictions, architecture, milestones and exact implementation status. Do not implement control writes based on the README alone.
 
-**Status:** experimental planning and mock interface only. **No live inverter controls or Modbus write implementation.**
+**Status:** experimental planning, offline telemetry validation and control-request review only. **No live inverter controls or Modbus write implementation.**
 
 This is a separate project from [SAJ H2 Safe Enhanced](https://github.com/userdc-dev/saj-h2-safe-enhanced), the owner's functioning read-only Home Assistant integration. The existing read-only repository must remain untouched by writable control development.
 
@@ -27,9 +27,10 @@ SAJ H2 10 kW AC inverter; 30 × 440 W bifacial panels; SAJ battery **40.00 kWh c
 
 ## Development status and next steps
 
-1. **Milestone 0 complete:** separate repository, project handoff, safety roadmap, non-functional control preview and initial safety-policy tests committed.
-2. **Next:** design interactive UI with all actions disabled; research read-only hardware status and control ownership; design and unit-test safe timeout/stop state machine.
-3. Hardware-write work requires a distinct explicit approval and controlled testing. **No control implementation is installed in Home Assistant.**
+1. **Milestone 0 complete:** separate repository, project handoff, safety roadmap, non-functional control preview and safety-policy tests committed.
+2. **Control-core groundwork:** [validated telemetry adapter](control_core/telemetry.py), [non-executable action review](control_core/planner.py), [telemetry contract](docs/TELEMETRY_CONTRACT.md), and automated offline [safety tests](.github/workflows/safety-tests.yml).
+3. **Next:** design interactive UI with all actions disabled; research read-only hardware status and control ownership; design and unit-test safe timeout/stop state machine.
+4. Hardware-write work requires a distinct explicit approval and controlled testing. **No control implementation is installed in Home Assistant.**
 
 See [Developer Handoff](DEVELOPER_HANDOFF.md), [Safety and Roadmap](docs/SAFETY_AND_ROADMAP.md), [Project Handoff](docs/PROJECT_HANDOFF.md), [Mock Dashboard Card](examples/compact-control-preview.yaml) and [Safety Tests](tests/test_safety_policy.py).
 
