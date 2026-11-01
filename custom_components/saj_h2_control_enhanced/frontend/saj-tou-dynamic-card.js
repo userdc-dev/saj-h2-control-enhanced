@@ -374,7 +374,7 @@ class SajTOUDynamicCard extends HTMLElement {
     const r1=el("tr","flowNumbers");
     for(const cell of [
       fmtPower(solar),fmtPower(home),fmtPower(battery),
-      fmtPower(imp),
+      fmtPower(imp===null&&exp===null?null:Math.max(imp||0,exp||0)),
       values.outlook===null?"—":fmtEnergy(values.outlook)+" Today"
     ]) add(r1,el("td",null,cell));
     const r2=el("tr");
@@ -382,7 +382,7 @@ class SajTOUDynamicCard extends HTMLElement {
       solar===null?"—":"Generating",
       home===null?"—":"Using",
       batteryStatus,
-      imp===null?"—":"Import",
+      gridStatus,
       values.remaining===null?"—":fmtEnergy(values.remaining)+" remaining"
     ]) add(r2,el("td",null,cell));
     const r3=el("tr");
@@ -429,10 +429,6 @@ class SajTOUDynamicCard extends HTMLElement {
     }
     add(panel,graph);
     add(panel,tableWrap);
-    const modeState=hass.states?.[SAFE_ENERGY_IDS.safeMode]?.state;
-    add(panel,el("div","flowSummary",gridStatus+
-      ((modeState&&!["unavailable","unknown"].includes(modeState))?
-        " · "+modeState:"")));
     add(panel,el("div","flowFoot",
       "Forecast is an estimate; grid import/export direction is provisional. "+
       "This panel is read-only; TOU control actions are separate."));
