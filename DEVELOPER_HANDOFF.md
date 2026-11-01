@@ -247,3 +247,7 @@ The user emphasized that existing read-only SAJ entities must be the **operation
 - Mode 2/3 remain permanently excluded. Instant active settings and simple HA-only timers must not be misrepresented as equivalent to device-configured schedules.
 
 **Status remains non-writing:** screenshot findings and sync contract committed as docs; no TOU register synchronization is implemented yet.
+
+## 16. Longer-term goal: OCPP EV chargers and HVAC load coordination
+
+The owner explicitly wants the SAJ + Home Assistant system, **once reliable**, to coordinate EV charging using **OCPP** (Open Charge Point Protocol) and other high-power loads including air conditioning. This is a future capability, **NOT implemented**. It must preserve HA↔SAJ eLEKeeper synchronization and use the read-only SAJ sensors as operational inputs; avoid fighting device-native apps and schedules. Details, staged architecture and safety constraints are in [docs/FUTURE_SMART_LOADS.md](docs/FUTURE_SMART_LOADS.md). Do not claim fault-free operation; implement detection, fail-safe behaviour and recovery. Preserve the hard prohibition on writing modes 2/3.
