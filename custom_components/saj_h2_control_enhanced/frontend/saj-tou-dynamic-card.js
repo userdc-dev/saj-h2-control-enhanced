@@ -109,6 +109,14 @@ function cloneDraft(group) {
     mode: e.operating_mode && e.operating_mode.state==="Time-of-use" ? "Time-of-use" : "Self-consumption",
     fallback: e.outside_schedule && e.outside_schedule.state==="Standby" ? "Standby" : "Self-consumption",
     charge:rows("charge_schedules"),discharge:rows("discharge_schedules"),
+    baselineCharge:(e.charge_schedules?.attributes.schedules||[]).map(v=>({
+      slot:Number(v.slot),start:v.start,end:v.end,
+      day_mask:Number(v.weekday_mask_raw),percent:Number(v.power_percent_raw)
+    })),
+    baselineDischarge:(e.discharge_schedules?.attributes.schedules||[]).map(v=>({
+      slot:Number(v.slot),start:v.start,end:v.end,
+      day_mask:Number(v.weekday_mask_raw),percent:Number(v.power_percent_raw)
+    })),
     changed:false
   };
 }
@@ -130,6 +138,8 @@ class SajTOUDynamicCard extends HTMLElement {
     this._scheduleWriteBusy = false;
     this._scheduleWriteFeedback = "";
     this._scheduleWriteError = false;
+    this._schedulePlan = null;
+    this._schedulePlanKey = "";
   }
   setConfig(config) {this._cfg=config||{};this.render();}
   set hass(hass) {
@@ -197,8 +207,12 @@ class SajTOUDynamicCard extends HTMLElement {
       e.outside_schedule?.attributes.raw_fallback_code===1 &&
       Number.isFinite(ageSeconds) && ageSeconds>=0 && ageSeconds<=180 &&
       !this._modeBusy && !draft.changed &&
-      e.charge_count?.attributes.slot_enable_mask===1 &&
-      e.discharge_count?.attributes.slot_enable_mask===1;
+      Number.isInteger(e.charge_count?.attributes.slot_enable_mask) &&
+      e.charge_count?.attributes.slot_enable_mask>=0 &&
+      e.charge_count?.attributes.slot_enable_mask<=127 &&
+      Number.isInteger(e.discharge_count?.attributes.slot_enable_mask) &&
+      e.discharge_count?.attributes.slot_enable_mask>=0 &&
+      e.discharge_count?.attributes.slot_enable_mask<=127;
     const controls=el("div","liveModeButtons");
     for (const [target,text,service] of [
       [0,"Self-consumption","supervised_self_consumption_pilot"],
@@ -219,8 +233,9 @@ class SajTOUDynamicCard extends HTMLElement {
     if (e.outside_schedule?.attributes.raw_fallback_code!==1) blockers.push("fallback is not Self-consumption");
     if (!Number.isFinite(ageSeconds) || ageSeconds<0 || ageSeconds>180) blockers.push("readback older than 3 minutes");
     if (draft.changed) blockers.push("local draft modified");
-    if (e.charge_count?.attributes.slot_enable_mask!==1 ||
-        e.discharge_count?.attributes.slot_enable_mask!==1) blockers.push("schedule masks not [1,1]");
+    if (!Number.isInteger(e.charge_count?.attributes.slot_enable_mask) ||
+        !Number.isInteger(e.discharge_count?.attributes.slot_enable_mask))
+      blockers.push("schedule enable masks unavailable");
     const refresh=el("button",null,this._refreshBusy?"Refreshing…":"Refresh inverter state");
     refresh.type="button";refresh.disabled=this._refreshBusy||this._modeBusy;
     refresh.addEventListener("click",()=>this._refreshMode(group));
@@ -245,14 +260,33 @@ class SajTOUDynamicCard extends HTMLElement {
     const footer=el("div","row");
     const reset=el("button",null,"Reload draft from inverter");
     reset.addEventListener("click",()=>{this._drafts.set(group.id,cloneDraft(group));this.render();});
-    const apply=el("button",null,"Apply to inverter · disabled");
-    apply.disabled=true;
-    add(footer,reset,apply);add(card,footer);
+    const full=el("button",null,this._previewBusy?"Validating…":"Validate all changes");
+    full.disabled=!draft.changed||this._scheduleWriteBusy||this._previewBusy;
+    full.addEventListener("click",()=>this._planSchedules(group));
+    const payload=this._fullDraftPayload(group);
+    const key=JSON.stringify(payload);
+    const ready=this._schedulePlan && this._schedulePlanKey===key &&
+      this._schedulePlan.status==="SCHEDULE_PLAN_ONLY" &&
+      this._schedulePlan.register_writes_required>0 &&
+      e.operating_mode?.attributes.raw_mode_code===0;
+    const apply=el("button",null,this._scheduleWriteBusy?
+      "Applying & verifying…":"Apply validated schedules to inverter (LIVE)");
+    apply.disabled=!ready||this._scheduleWriteBusy||this._modeBusy;
+    apply.addEventListener("click",()=>this._applySchedules(group));
+    add(footer,reset,full,apply);add(card,footer);
+    if(this._schedulePlan && this._schedulePlanKey===key)
+      add(card,el("div","liveResult okay",
+        this._schedulePlan.register_writes_required+
+        " register changes planned across up to 7 charging and 7 discharging slots. "+
+        "No writes sent by validation."));
+    if(this._scheduleWriteFeedback)
+      add(card,el("div","liveResult "+(this._scheduleWriteError?"bad":"okay"),
+        this._scheduleWriteFeedback));
     const change=e.sync_status?.attributes.last_changes;
     if (Array.isArray(change)&&change.length) {
       add(card,el("p","muted","Last detected change: "+change.join("; ")));
     }
-    add(card,el("div","warn","Local draft only: sliders, times and weekday selectors DO NOT save to SAJ or eLEKeeper. Monday through Friday weekday bits are confirmed, including Tuesday+Thursday together. Charge power at raw 50 = 4950 W and raw 70 = 6930 W is app-confirmed; other raw levels are modeled at 99 W per unit. Other weekday bits still require testing. Device settings follow HA readback unless you have an edited draft. Click Reload draft to accept external changes."));
+    add(card,el("div","warn","Schedule edits require Self-consumption operating mode, then Validate all changes and explicit Apply. Monday–Friday edits are available; weekend and overnight schedule writes are blocked pending individual hardware validation. Multiple register writes are not atomic: interruptions can leave partial settings. Fallback remains preview-only. Power display is based on 99 W per raw percent, not guaranteed actual delivery."));
   }
   async _refreshMode(group) {
     if(this._refreshBusy||this._modeBusy)return;
@@ -382,65 +416,6 @@ class SajTOUDynamicCard extends HTMLElement {
         "Draft validation blocked: "+(err?.message||String(err))+" · NO WRITE"});
     }finally{this._previewBusy=false;this.render();}
   }
-  async _applyChargePilot(group) {
-    if(this._scheduleWriteBusy||this._modeBusy)return;
-    const draft=this._drafts.get(group.id);
-    const row=draft?.charge?.find(r=>r.slotNumber===1);
-    const key=group.id+":charge:1";
-    if(!row || row.savedStart!=="22:00" || row.savedEnd!=="22:40" ||
-       row.savedDayMask!==16 || row.savedPercent!==70 ||
-       row.start!=="21:30" || row.end!=="22:00" ||
-       row.percent!==70 || row.days.length!==1 || row.days[0]!=="Fri" ||
-       group.entities.operating_mode?.attributes.raw_mode_code!==0 ||
-       !this._schedulePreview.get(key) || this._schedulePreview.get(key).error) {
-      this._scheduleWriteFeedback="Pilot blocked: invalid or unverified draft.";
-      this._scheduleWriteError=true;this.render();return;
-    }
-    if(!window.confirm(
-      "LIVE SCHEDULE WRITE: change Friday charging slot 1 from "+
-      "22:00–22:40 to 21:30–22:00?\n\n"+
-      "Power stays at 6930 W and Wednesday discharge remains unchanged.\n"+
-      "An interruption may leave a PARTIAL change. Keep eLEKeeper open."))return;
-    const phrase="I AUTHORIZE FRIDAY CHARGE TIME TEST";
-    const typed=window.prompt("Type this EXACT confirmation phrase:\n\n"+phrase,"");
-    if(typed!==phrase){
-      this._scheduleWriteFeedback="Cancelled: confirmation did not match.";
-      this._scheduleWriteError=true;this.render();return;
-    }
-    this._scheduleWriteBusy=true;
-    this._scheduleWriteFeedback="Sending and verifying individual time writes…";
-    this._scheduleWriteError=false;this.render();
-    try{
-      const data={
-        confirmation:phrase,device_model:"H2-10K-S3-A",
-        control_firmware:"v2.018"
-      };
-      if(group.id&&!group.id.startsWith("sensor."))data.entry_id=group.id;
-      const answer=await this._hass.callWS({
-        type:"call_service",domain:"saj_h2_control_enhanced",
-        service:"supervised_friday_charge_time_pilot",
-        service_data:data,return_response:true
-      });
-      const report=answer?.response||answer;
-      if(report?.status!=="SCHEDULE_VERIFIED_BY_MODBUS" ||
-         report?.write_sent!==true || report?.discharge_unchanged!==true)
-        throw new Error("No verified schedule response; manual inspection required");
-      this._scheduleWriteFeedback=
-        "Verified by Modbus: Friday charging 21:30–22:00 at 6930 W. "+
-        "Discharge unchanged. Confirm in eLEKeeper.";
-      this._scheduleWriteError=false;
-      this._schedulePreview.delete(key);
-      this._drafts.delete(group.id);
-    }catch(err){
-      this._scheduleWriteFeedback="UNCONFIRMED/POSSIBLY PARTIAL: "+
-        (err?.message||String(err))+
-        ". Do not repeat the action. Check charge start AND end in eLEKeeper.";
-      this._scheduleWriteError=true;
-    }finally{
-      this._scheduleWriteBusy=false;
-      this.render();
-    }
-  }
   choice(options,current,onChange) {
     const select=el("select");
     options.forEach(v=>{const o=el("option",null,v);o.value=v;o.selected=v===current;select.append(o);});
@@ -461,7 +436,7 @@ class SajTOUDynamicCard extends HTMLElement {
     rows.forEach((row,index)=>{
       const container=el("div","slot");
       const bar=el("header");
-      const remove=el("button",null,"Remove draft");
+      const remove=el("button",null,"Remove schedule");
       remove.addEventListener("click",()=>{rows.splice(index,1);draft.changed=true;this.render()});
       add(bar,el("strong",null,title+" "+(index+1)),remove);
       add(container,bar);
@@ -511,29 +486,6 @@ class SajTOUDynamicCard extends HTMLElement {
       const previewKey=group.id+":"+direction+":"+row.slotNumber;
       const preview=this._schedulePreview.get(previewKey);
       if(preview) add(container,el("div","liveResult "+(preview.error?"bad":"okay"),preview.message));
-      // The only enabled schedule write is the hard-coded pilot already
-      // checked against eLEKeeper. This is NOT a general Apply function.
-      if(direction==="charge"&&row.slotNumber===1){
-        const pilotValuesMatch=
-          row.savedStart==="22:00"&&row.savedEnd==="22:40"&&
-          row.savedDayMask===16&&row.savedPercent===70&&
-          row.start==="21:30"&&row.end==="22:00"&&
-          row.dayMask===16&&row.percent===70&&
-          row.days.length===1&&row.days[0]==="Fri";
-        const currentMode=group.entities.operating_mode?.attributes.raw_mode_code;
-        const pilot=el("button",null,this._scheduleWriteBusy?
-          "Applying charging time…":"Apply Friday charging-time pilot (LIVE)");
-        pilot.type="button";
-        pilot.disabled=!pilotValuesMatch||!preview||preview.error||
-          currentMode!==0||this._scheduleWriteBusy||this._modeBusy;
-        pilot.title="Only Friday charge 21:30–22:00, preserving 6930 W, is authorised";
-        pilot.addEventListener("click",()=>this._applyChargePilot(group));
-        add(container,pilot);
-        if(this._scheduleWriteFeedback)
-          add(container,el("div","liveResult "+(this._scheduleWriteError?"bad":"okay"),
-            this._scheduleWriteFeedback));
-      }
-
       const power=el("div","row");
       const label=el("span","muted","Draft power");
       const slider=el("input");slider.type="range";slider.min="0";slider.max="100";slider.step="1";slider.value=String(row.percent);
