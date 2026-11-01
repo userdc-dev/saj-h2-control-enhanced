@@ -190,3 +190,17 @@ This confirms app input of 5000 W produces **raw 50**, but we have **NOT yet obs
 Observed raw pairs: app originally displayed 9900 W → 100; app reopened 9702 W → 98; user input 5000 W → 50. Device-side mode 1 and fallback 1 coexist; there was no enabled Sunday schedule in the earlier configuration. This tests configuration readback only, **not** whether scheduled battery discharge starts/stops correctly or safe direct Modbus writes.
 
 Do NOT assert live time-of-use control integration is implemented; there are still no hardware control writes from Home Assistant. Keep the owner informed of remaining uncertainties and avoid unapproved mode changes.
+
+## Confirmed third paired point: saved 4950 W at Modbus raw 50 (2026-11-01)
+
+Owner reopened eLEKeeper **without modifying settings** after entering 5000 W and observing raw 50. App displayed **4950 W** as predicted. Therefore these **three canonical stored discharge readbacks** now agree:
+
+| SAJ eLEKeeper SAVED value | Packed day/power register | Raw power byte | Interpretation |
+|---|---:|---:|---|
+| 9900 W | 1124 | 100 | 100 × 99 W |
+| 9702 W | 1122 | 98 | 98 × 99 W |
+| 4950 W | 1074 | 50 | 50 × 99 W |
+
+Thus, for this inverter's **discharge schedule readback/display**, `watts = raw * 99` is validated by three independent paired app/Modbus observations. The user-entered value 5000 W was *normalized* to 4950 W on Save. The exact app **watts→raw quantization rule** is not yet established and is NOT a hardware-write specification; charger/charge-side mapping is also unverified. Do not assume the programmed power is the actual measured battery output.
+
+Added `discharge_display_watts()` to the offline read-only `control_core/tou_readback.py` and tests for all three paired points. This has NOT been installed in Home Assistant; no Modbus writes are implemented.
