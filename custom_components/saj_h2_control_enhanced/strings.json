@@ -2,20 +2,29 @@
   "config": {
     "step": {
       "user": {
-        "title": "SAJ H2 Time-of-Use Read-only Settings",
-        "description": "This integration ONLY reads the saved TOU settings. It cannot change the inverter.",
+        "title": "Connect existing SAJ H2 monitor",
+        "description": "Automatically use an already configured SAJ H2 Safe Monitor. This reads TOU settings only and never controls the inverter.",
         "data": {
-          "host": "Inverter IPv4 address",
+          "source": "Choose existing SAJ monitor",
+          "scan_interval": "Settings refresh (seconds)"
+        }
+      },
+      "manual": {
+        "title": "Manual inverter address",
+        "description": "Use this only if a SAJ Safe Monitor has not been configured.",
+        "data": {
+          "host": "Inverter IP address",
           "port": "Modbus TCP port",
-          "scan_interval": "Update interval (seconds)"
+          "scan_interval": "Refresh interval (seconds)"
         }
       }
     },
     "error": {
-      "invalid_host": "Enter a valid IP address"
+      "invalid_host": "Enter a valid IP address",
+      "source_missing": "The selected safe monitor is no longer configured"
     },
     "abort": {
-      "already_configured": "This device is already configured"
+      "already_configured": "This inverter is already configured"
     }
   }
 }
