@@ -141,6 +141,30 @@ const CSS = [
   ".warn{font-size:12px;line-height:1.55;border-radius:0 9px 9px 0}",
   "@media(max-width:780px){.controlColumns{grid-template-columns:1fr}.controlCell+.controlCell{border-left:0;border-top:1px solid var(--divider-color,#45484c)}.controlCell{padding:15px}.controlPanelHead{padding:12px 15px}.energyOverview{padding:13px}.flowTable .flowNumbers td{font-size:15px}}",
 
+  /* Screenshot-aligned control panel: toolbar action above, inline device
+     labels, two matched columns, clear selected mode, compact help text. */
+  ".controlPanel{border-radius:15px;background:var(--ha-card-background,var(--card-background-color,#202124))}",
+  ".controlPanelHead{padding:14px 20px;min-height:40px;gap:14px;background:rgba(125,125,125,.035)}",
+  ".controlPanelHead h3{font-size:17px;font-weight:700;letter-spacing:.1px}",
+  ".controlPanelHead .controlRefresh{font-size:13px;padding:9px 13px;border-radius:9px;white-space:nowrap;background:var(--card-background-color,#26282c);border:1px solid var(--divider-color,#505359);transition:border-color .15s ease,background .15s ease}",
+  ".controlPanelHead .controlRefresh:hover:not(:disabled){border-color:var(--control-accent);background:rgba(24,173,179,.09)}",
+  ".controlCell{padding:22px 20px;display:flex;flex-direction:column;justify-content:flex-start;min-height:145px}",
+  ".controlCell+.controlCell{border-left:1px solid var(--divider-color,#45484c)}",
+  ".controlSubhead{display:flex;align-items:baseline;column-gap:16px;row-gap:5px;flex-wrap:wrap;margin:0 0 16px}",
+  ".controlSubhead h4{font-size:14px;font-weight:700;margin:0;line-height:1.4}",
+  ".deviceState{font-size:12px;color:var(--secondary-text-color,#aaa);line-height:1.4}",
+  ".controlCell .liveModeButtons{margin:0 0 12px;gap:9px}",
+  ".controlCell .liveModeButtons button{min-height:43px;font-size:13px;font-weight:600;border-radius:10px;background:rgba(130,130,130,.035);transition:background .15s ease,border-color .15s ease}",
+  ".controlCell .liveModeButtons button:not(:disabled):hover{background:rgba(22,179,190,.075)}",
+  ".controlCell .liveModeButtons button[aria-pressed=true]{background:rgba(17,175,185,.12);border:1.5px solid var(--control-accent);box-shadow:inset 0 0 0 1px rgba(20,166,178,.08);opacity:1!important}",
+  ".controlCell select{width:min(100%,285px);min-width:0;min-height:43px;border-radius:10px;background:rgba(130,130,130,.035);font-size:13px}",
+  ".controlCell p.controlHint{margin:0;color:var(--secondary-text-color,#aaa);font-size:12px;line-height:1.6}",
+  ".controlCell p.muted:not(.controlHint){margin-top:12px;color:var(--secondary-text-color,#aaa);font-size:12px;line-height:1.65}",
+  ".controlPanel button:focus-visible,.controlPanel select:focus-visible{outline:2px solid var(--control-accent);outline-offset:3px}",
+  "@media(max-width:780px){.controlCell{padding:16px;min-height:0}.controlPanelHead{padding:12px 15px}.controlSubhead{margin-bottom:13px}}",
+  "@media(max-width:440px){.controlPanelHead{flex-wrap:wrap}.controlPanelHead .controlRefresh{width:100%}.controlCell .liveModeButtons{gap:6px}.controlCell .liveModeButtons button{font-size:12px;padding:10px 6px}}",
+
+
   "@media(max-width:650px){.flowGraph{grid-template-columns:repeat(2,minmax(0,1fr))}.flowTable th,.flowTable td{font-size:11px;padding:6px 4px}}",
 
 ].join("");
@@ -426,13 +450,21 @@ class SajTOUDynamicCard extends HTMLElement {
     const draft=this._drafts.get(group.id);
     const meta=el("section","controlPanel");
     const metaHead=el("div","controlPanelHead");
-    add(metaHead,el("h3",null,"Inverter controls"),
-      el("span","pill","Mode · Outside TOU"));
+    const refresh=el("button","controlRefresh",
+      this._refreshBusy?"Refreshing…":"↻ Refresh inverter state");
+    refresh.type="button";
+    refresh.disabled=this._refreshBusy||this._modeBusy||
+      this._fallbackBusy||this._scheduleWriteBusy;
+    refresh.setAttribute("aria-label","Refresh live inverter settings");
+    refresh.addEventListener("click",()=>this._refreshMode(group));
+    add(metaHead,el("h3",null,"Inverter controls"),refresh);
     add(meta,metaHead);
     const controlColumns=el("div","controlColumns");
     const modepane=el("div","controlCell");
-    add(modepane,el("h4",null,"Operating mode"),
-      el("div","saved","Device: "+(e.operating_mode?.state||"unknown")));
+    const modeHeading=el("div","controlSubhead");
+    add(modeHeading,el("h4",null,"Operating mode"),
+      el("span","deviceState","Device: "+(e.operating_mode?.state||"unknown")));
+    add(modepane,modeHeading);
     const modeValue=e.operating_mode?.attributes.raw_mode_code;
     const freshTime=e.operating_mode?.attributes.last_verified_read;
     const ageSeconds=freshTime?(Date.now()-new Date(freshTime).getTime())/1000:Infinity;
@@ -470,20 +502,20 @@ class SajTOUDynamicCard extends HTMLElement {
     if (!Number.isInteger(e.charge_count?.attributes.slot_enable_mask) ||
         !Number.isInteger(e.discharge_count?.attributes.slot_enable_mask))
       blockers.push("schedule enable masks unavailable");
-    const refresh=el("button",null,this._refreshBusy?"Refreshing…":"Refresh inverter state");
-    refresh.type="button";refresh.disabled=this._refreshBusy||this._modeBusy||this._fallbackBusy;
-    refresh.addEventListener("click",()=>this._refreshMode(group));
-    add(modepane,controls,refresh,
-      el("p","muted",
+    add(modepane,controls,
+      el("p","muted controlHint",
         this._modeBusy?"Applying and verifying mode; do not click again.":
-        blockers.length?"Live switch blocked: "+blockers.join("; ")+". Refresh to recheck.":
-        "Live mode control uses a confirmed one-shot Modbus action. elekeeper overview can lag."));
+        blockers.length?"Live switch blocked: "+blockers.join("; ")+
+          ". Use Refresh inverter state above.":
+        "Mode changes are verified by direct Modbus readback. elekeeper may lag."));
     if (this._modeFeedback) {
       add(modepane,el("div","liveResult "+(this._modeFeedbackError?"bad":"okay"),this._modeFeedback));
     }
     const fallbackPane=el("div","controlCell");
-    add(fallbackPane,el("h4",null,"Outside TOU windows"),
-      el("div","saved","Device: "+(e.outside_schedule?.state||"unknown")));
+    const fallbackHeading=el("div","controlSubhead");
+    add(fallbackHeading,el("h4",null,"Outside TOU windows"),
+      el("span","deviceState","Device: "+(e.outside_schedule?.state||"unknown")));
+    add(fallbackPane,fallbackHeading);
     const fallbackRaw=e.outside_schedule?.attributes.raw_fallback_code;
     const fallbackSelect=el("select");
     for(const [raw,label] of [[1,"Self-consumption"],[0,"Standby"]]){
