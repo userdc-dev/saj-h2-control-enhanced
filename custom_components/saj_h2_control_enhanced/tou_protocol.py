@@ -1,9 +1,10 @@
 """Decode read-only SAJ H2 Time-of-Use registers. No Modbus writes.
 
-Validated on owner's inverter: mode 0/1; 7+7 slot blocks; discharge
-discharge raw 100=9900W, 98=9702W, 50=4950W; charging raw 50=4950W.
-Wednesday weekday bit 4 and Friday bit 16 are verified. The remaining
-weekday bits and charge-side scaling beyond raw 50 are not yet verified.
+Validated on owner's inverter: mode 0/1, 7+7 slot blocks. Discharge
+raw 100=9900W, 98=9702W, 50=4950W; charging raw 50=4950W and
+raw 70=6930W. Wednesday weekday bit 4 and Friday bit 16 verified.
+Remaining weekday bits remain unverified; readback W=raw*99 is
+calibrated from paired observations, not proof of every individual step.
 """
 from dataclasses import dataclass
 
@@ -36,13 +37,17 @@ class Slot:
                                  20: "Wednesday, Friday"}.get(self.day_mask, "Unverified"),
             "power_percent_raw": self.power_percent,
         }
-        if discharge:
-            result["power_watts_saj_display"] = self.power_percent * 99
-            result["power_conversion_verified"] = True
-        else:
-            # Charge power has only one paired eLEKeeper/Modbus test so far.
-            result["power_watts_saj_display"] = 4950 if self.power_percent == 50 else None
-            result["power_conversion_verified"] = self.power_percent == 50
+        # Current owner's inverter: two charge and three discharge app/Modbus
+        # pairs all support 99 W per stored percentage unit for DISPLAY only.
+        # This is not a specification for writes or achieved electrical power.
+        result["power_watts_saj_display"] = self.power_percent * 99
+        result["power_conversion_verified"] = (
+            self.power_percent in ((50, 98, 100) if discharge else (50, 70))
+        )
+        result["power_conversion_basis"] = (
+            "direct paired app readback" if result["power_conversion_verified"]
+            else "interpolated from paired readbacks (not individually verified)"
+        )
         return result
 
 
