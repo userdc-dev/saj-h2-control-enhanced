@@ -150,7 +150,7 @@ class SajTOUDynamicCard extends HTMLElement {
     })].join(":")).join(";");
     if (sig!==this._lastSignature) {
       this._lastSignature=sig;
-      // Follow external eLEKeeper changes unless the user is editing a draft.
+      // Follow external elekeeper changes unless the user is editing a draft.
       devices.forEach(g=>{
         const existing=this._drafts.get(g.id);
         if (existing && !existing.changed) this._drafts.set(g.id,cloneDraft(g));
@@ -241,7 +241,7 @@ class SajTOUDynamicCard extends HTMLElement {
       el("p","muted",
         this._modeBusy?"Applying and verifying mode; do not click again.":
         blockers.length?"Live switch blocked: "+blockers.join("; ")+". Refresh to recheck.":
-        "Live mode control uses a confirmed one-shot Modbus action. eLEKeeper overview can lag."));
+        "Live mode control uses a confirmed one-shot Modbus action. elekeeper overview can lag."));
     if (this._modeFeedback) {
       add(modepane,el("div","liveResult "+(this._modeFeedbackError?"bad":"okay"),this._modeFeedback));
     }
@@ -286,7 +286,7 @@ class SajTOUDynamicCard extends HTMLElement {
     if (Array.isArray(change)&&change.length) {
       add(card,el("p","muted","Last detected change: "+change.join("; ")));
     }
-    add(card,el("div","warn","Edit times, weekdays (Mon–Sun) and power, then Save; the app validates first and asks once. For an overnight interval, use Split overnight into two slots. Weekend individual bit positions are inferred from paired Sat+Sun readback. Multiple writes are not atomic: after any error check eLEKeeper before retrying. Power labels are estimates based on stored raw values."));
+    add(card,el("div","warn","Edit times, weekdays (Mon–Sun) and power, then Save; the app validates first and asks once. For an overnight interval, use Split overnight into two slots. Weekend individual bit positions are inferred from paired Sat+Sun readback. Multiple writes are not atomic: after any error check elekeeper before retrying. Power labels are estimates based on stored raw values."));
   }
   async _refreshMode(group) {
     if(this._refreshBusy||this._modeBusy)return;
@@ -335,7 +335,7 @@ class SajTOUDynamicCard extends HTMLElement {
     if (!window.confirm("LIVE INVERTER CONTROL: switch from "+
       (current===0?"Self-consumption":"Time-of-Use")+" to "+label+
       "?\n\nThis may change battery charging/discharging and grid exports."+
-      "\nSaved schedules will not be edited. Have eLEKeeper available.")) return;
+      "\nSaved schedules will not be edited. Have elekeeper available.")) return;
     this._modeBusy=true;
     this._modeBusyEntry=group.id;
     this._modeFeedback="Sending one confirmed command and checking inverter readback…";
@@ -357,16 +357,16 @@ class SajTOUDynamicCard extends HTMLElement {
       const report=answer?.response||answer;
       if (report?.status!=="VERIFIED_BY_MODBUS" ||
           report?.after_mode_raw!==target || report?.write_sent!==true) {
-        throw new Error("No verified device response. Do NOT retry automatically. Check eLEKeeper and Modbus.");
+        throw new Error("No verified device response. Do NOT retry automatically. Check elekeeper and Modbus.");
       }
       this._modeFeedback="Verified by Modbus: inverter now reports "+label+
-        ". Schedules and fallback unchanged. eLEKeeper display may lag.";
+        ". Schedules and fallback unchanged. elekeeper display may lag.";
       this._modeFeedbackError=false;
     } catch(error) {
       this._modeFeedbackError=true;
       this._modeFeedback="Unable to confirm mode change: "+
         (error?.message||String(error))+
-        ". A write may already have been sent. Do NOT repeat the action. Check eLEKeeper.";
+        ". A write may already have been sent. Do NOT repeat the action. Check elekeeper.";
     } finally {
       this._modeBusy=false;this._modeBusyEntry="";
       this.render();
@@ -506,7 +506,7 @@ class SajTOUDynamicCard extends HTMLElement {
        "across charging/discharging periods?\n\n"+
        "If currently in Time-of-Use, the inverter will temporarily pause to Self-consumption and restore only after verification. "+
        "An interruption may leave PARTIAL settings.\n"+
-       "Keep eLEKeeper open for inspection/recovery. No auto rollback or retries."))return;
+       "Keep elekeeper open for inspection/recovery. No auto rollback or retries."))return;
     const phrase="I AUTHORIZE TOU SCHEDULE CHANGES";
     this._scheduleWriteBusy=true;
     this._scheduleWriteFeedback="Writing changed registers individually and double-reading after each…";
@@ -526,7 +526,7 @@ class SajTOUDynamicCard extends HTMLElement {
         throw new Error("Device response not fully verified");
       this._scheduleWriteFeedback=
         "Verified: "+result.registers_written+" registers saved; both schedule "+
-        "blocks matched direct Modbus readback. Reopen eLEKeeper to confirm.";
+        "blocks matched direct Modbus readback. Reopen elekeeper to confirm.";
       this._scheduleWriteError=false;
       this._schedulePlan=null;this._schedulePlanKey="";
       this._drafts.delete(group.id);
@@ -534,7 +534,7 @@ class SajTOUDynamicCard extends HTMLElement {
     } catch(err) {
       this._scheduleWriteFeedback="POSSIBLE PARTIAL WRITE: "+
         (err?.message||String(err))+
-        ". DO NOT retry. Check all saved schedule times, days, and power in eLEKeeper.";
+        ". DO NOT retry. Check all saved schedule times, days, and power in elekeeper.";
       this._scheduleWriteError=true;
       this._schedulePlan=null;this._schedulePlanKey="";
     } finally {
@@ -601,6 +601,36 @@ class SajTOUDynamicCard extends HTMLElement {
         add(wrapper,field);add(times,wrapper);
       }
       add(container,times);
+      if (is24Hour(row.start) && is24Hour(row.end) && row.start>row.end) {
+        const split=el("button",null,"Split overnight into two schedules");
+        split.type="button";
+        split.disabled=rows.length>=7 || row.start>="23:59" ||
+          row.end<="00:00" || !row.days.length;
+        split.title=rows.length>=7?"All seven schedules are already used":
+          "Creates a late-night schedule ending 23:59 and next-day schedule starting 00:00";
+        split.addEventListener("click",()=>{
+          if(rows.length>=7 || row.start>="23:59" ||
+             row.end<="00:00" || !row.days.length)return;
+          const used=new Set(rows.map(r=>r.slotNumber));
+          let nextSlot=1;
+          while(used.has(nextSlot)&&nextSlot<=7)nextSlot++;
+          if(nextSlot>7)return;
+          const following=row.days.map(day=>DAYS[(DAYS.indexOf(day)+1)%7]);
+          const second={
+            slotNumber:nextSlot,start:"00:00",end:row.end,
+            percent:row.percent,dayMask:0,days:[...new Set(following)],
+            original:false
+          };
+          row.end="23:59";
+          rows.push(second);
+          rows.sort((a,b)=>a.slotNumber-b.slotNumber);
+          draft.changed=true;
+          this._schedulePreview.clear();
+          this.render();
+        });
+        add(container,split,el("div","muted",
+          "Overnight periods use two slots: today until 23:59, next day from 00:00."));
+      }
       const actualSlots=(state?.attributes.schedules||[]);
       const saved=actualSlots.find(item => Number(item.slot) === row.slotNumber);
       if (saved) add(container,el("div","saved","Saved on inverter: "+saved.start+"–"+saved.end+" · "+saved.power_watts_saj_display+" W"+(saved.power_conversion_verified ? " (paired)" : " (estimated)")));
