@@ -39,7 +39,7 @@ class SAJTOUFlow(config_entries.ConfigFlow, domain=DOMAIN):
             await self.async_set_unique_id(host)
             self._abort_if_unique_id_configured()
             return self.async_create_entry(
-                title="SAJ H2 TOU Settings (read-only)",
+                title="SAJ H2 Control Enhanced",
                 data={CONF_HOST: host, CONF_PORT: port,
                       "source_monitor_entry_id": source_id,
                       "scan_interval": user_input["scan_interval"]},
@@ -69,7 +69,7 @@ class SAJTOUFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 await self.async_set_unique_id(host)
                 self._abort_if_unique_id_configured()
                 return self.async_create_entry(
-                    title="SAJ H2 TOU Settings (read-only)",
+                    title="SAJ H2 Control Enhanced",
                     data={**user_input, CONF_HOST: host},
                 )
         return self.async_show_form(step_id="manual", errors=errors,
