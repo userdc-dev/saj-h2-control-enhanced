@@ -1,6 +1,6 @@
 # Developer handover — SAJ H2 Control Enhanced
 
-**Canonical current guide; updated 2026-11-02, Australia/Adelaide.** Read this before changing any code, dashboard, or Modbus control. **Current version at the time of this handover: 0.5.5.** The project was previously design-only, but now has a deployed Home Assistant control integration with working mode controls, schedule editing code, new fallback control, and read-only energy graphics/table within the TOU dashboard. **Not every writable feature has been proven on the owner's actual inverter.**
+**Canonical current guide; updated 2026-11-02, Australia/Adelaide.** Read this before changing any code, dashboard, or Modbus control. **Current version at the time of this handover: 0.5.6.** The project was previously design-only, but now has a deployed Home Assistant control integration with working mode controls, schedule editing code, new fallback control, and read-only energy graphics/table within the TOU dashboard. **Not every writable feature has been proven on the owner's actual inverter.**
 
 **Repository:** https://github.com/userdc-dev/saj-h2-control-enhanced  
 **Older full development diary:** [docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md](docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md) (57 KB historical archive; early claims of “planning-only” are OBSOLETE)  
@@ -41,7 +41,7 @@ User prefers concrete coding and short copy-paste setup commands over long reass
 | Connection | Config flow can reuse the independent `saj_h2_safe` monitor config entry or use manually supplied IP/port |
 | Dashboard | Independent **SAJ TOU Control** sidebar; path `/saj-tou-control/tou`, one custom `saj-tou-dynamic-card` |
 | Integration domain | `saj_h2_control_enhanced` |
-| Frontend URL (v0.5.5) | `/saj-h2-tou/v055/saj-tou-dynamic-card.js` |
+| Frontend URL (v0.5.5) | `/saj-h2-tou/v056/saj-tou-dynamic-card.js` |
 | Normal readback interval | Default **120 seconds** (configurable 60–3600 seconds) |
 | Python dependency | `pymodbus>=3.6.9,<4` |
 | Separate monitor | `saj_h2_safe` — never overwrite or remove |
@@ -344,5 +344,20 @@ Changes to `frontend/saj-tou-dynamic-card.js`:
 **Multi-device selection:** Dynamic card uses `findDevices(hass)` and exact `saj_tou_entry_id` per group, readable HA friendly names, duplicate disambiguation `Device 1/2/...` and a labelled native HTML select. Selecting a different device resets transient success/error messages and keeps per-device local draft records isolated; all backend calls continue passing the correct `entry_id`.
 
 **Tests:** `tests/test_dashboard_title.py` covers one-view title migration, idempotency, invalid configs, preservation of other fields, and refusal to overwrite customized layouts; added to CI. JS syntax checks also run. **Still to verify:** the user's currently installed dashboard must be restarted/reloaded once to see the migration and selection UI. Other older or customized dashboards may require the user to rename the view title manually using Home Assistant's dashboard editor. v0.5.5 introduces no new Modbus writes or hardware risks.
+
+## 16. v0.5.6 visual alignment and release numbering policy
+
+**Owner's specific version policy:** Keep all iterative releases **below v1.0.0**, advancing with small patch numbers (e.g. **0.5.6 → 0.5.7**) instead of jumping to v0.6 or v1 before the project is actually stable. **v1.0.0 is reserved for the final stable version** after on-device verification and sufficient polish. Do not call patch changes “final”.
+
+**Screenshot reference (2026-11-02):** The owner supplied a dark UI screenshot explicitly showing one “Inverter controls” header bar, **Refresh inverter state on the far right of that header**, and two side-by-side cells, Operating mode and Outside TOU windows. Their active device states are inline with each section heading; beneath them are the two mode buttons and fallback dropdown. Their prior v0.5.5 screenshot was less aligned and displayed Refresh underneath mode buttons.
+
+**Implemented in the custom card v0.5.6:**
+- Moved the same existing **Refresh inverter state** action into the shared header. The callback still uses the read-only refresh service. Disabled while concurrent inverter commands or another refresh are in progress.
+- Made each cell's heading and current device value a single compact horizontal row, which wraps on smaller screens. Both panels remain inside one rounded card with a subtle divider; narrow screens stack.
+- Refined section rhythm, muted descriptions, selected-mode contrast, dropdown/button heights, hover/focus-visible treatment, and device state typography. Preserved accent colors through HA CSS variables and small conservative fallbacks.
+- Kept existing Standby confirmation, mode and schedule service calls, masks, readback freshness requirements and source-of-truth behaviour unchanged; **this is a UI-only patch**.
+- Frontend resource cache-bust version **`/saj-h2-tou/v056/saj-tou-dynamic-card.js`**. Backend manifest v0.5.6.
+
+**Testing/limits:** GitHub CI validates JavaScript syntax and Python tests. The appearance must still be viewed in the owner's actual Home Assistant browser. No simulated test represents a live inverter command. Do not change the user-specified layout in future releases without referring to the screenshot and this requirement.
 
 **Historical appendix:** The full earlier handover is retained unabridged at [docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md](docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md); it contains original 2026-11-01 experiments, paired screenshots, previous mode-control iterations, firmware discovery, dashboard cache fixes, and repeated user feedback. Its early “planning-only” language was true at the time but is no longer a current feature status.
