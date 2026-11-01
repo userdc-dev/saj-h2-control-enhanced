@@ -64,3 +64,37 @@ supervised_tou_pilot:
       required: false
       selector:
         text:
+
+supervised_self_consumption_pilot:
+  name: Supervised one-time Self-consumption switch (LIVE WRITE)
+  description: >-
+    Sends exactly one Modbus function-06 operating-mode write (0x3647=0)
+    only if current mode is Time-of-Use (1) and the owner-verified charge
+    and discharge schedules have not changed. Requires explicit confirmation.
+    Never retries or automatically rolls back. eLEKeeper may take minutes
+    to update and a former VPP controller could override the mode later.
+  fields:
+    confirmation:
+      name: Exact confirmation phrase
+      description: Type I AUTHORIZE ONE SELF CONSUMPTION MODE WRITE
+      required: true
+      selector:
+        text:
+    device_model:
+      name: Verified inverter model
+      description: H2-10K-S3-A
+      required: true
+      selector:
+        text:
+    control_firmware:
+      name: Verified control-board firmware
+      description: v2.018
+      required: true
+      selector:
+        text:
+    entry_id:
+      name: Control integration entry ID
+      description: Optional unless multiple control integrations exist.
+      required: false
+      selector:
+        text:
