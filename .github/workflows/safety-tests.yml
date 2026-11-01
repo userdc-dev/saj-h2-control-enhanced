@@ -1,0 +1,23 @@
+name: Offline control safety checks
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Syntax compile
+        run: python -m compileall -q control_core tests
+      - name: Offline tests (never access inverter)
+        run: |
+          python -m unittest discover -s tests -p 'test_telemetry.py'
+          python tests/test_safety_policy.py
+      - name: Reject Modbus write implementations
+        run: |
+          if grep -R -nE '(write_registers?|write_coils?)\(' control_core --include='*.py'; then
+            echo 'Write path detected in planning-only project'; exit 1
+          fi
