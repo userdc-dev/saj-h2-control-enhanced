@@ -66,7 +66,7 @@ class SajTOUSensor(CoordinatorEntity, SensorEntity):
             "last_changes": list(data["last_changes"]),
             "external_changes_detected_since_start": data["change_count"],
             "read_only": True,
-            "write_controls_available": False,
+            "write_controls_available": True,
             "saj_tou_role": self.key,
             "saj_tou_entry_id": self.coordinator.entry.entry_id,
         }
