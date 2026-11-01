@@ -2,7 +2,7 @@
 
 Validated on owner's inverter: mode 0/1, 7+7 slot blocks. Discharge
 raw 100=9900W, 98=9702W, 50=4950W; charging raw 50=4950W and
-raw 70=6930W. Monday bit 1, Tuesday bit 2, Wednesday bit 4, Friday bit 16 verified.
+raw 70=6930W. Monday bit 1, Tuesday bit 2, Wednesday bit 4, Thursday bit 8,\nFriday bit 16 verified; combined Tuesday+Thursday mask10 also verified.
 Remaining weekday bits remain unverified; readback W=raw*99 is
 calibrated from paired observations, not proof of every individual step.
 """
@@ -33,13 +33,14 @@ class Slot:
             "start": self.start,
             "end": self.end,
             "weekday_mask_raw": self.day_mask,
-            "weekday_verified": {1: "Monday", 2: "Tuesday", 3: "Monday, Tuesday",
-                                 4: "Wednesday",
-                                 16: "Friday", 5: "Monday, Wednesday",
-                                 17: "Monday, Friday",
-                                 20: "Wednesday, Friday",
-                                 21: "Monday, Wednesday, Friday"}.get(
-                                     self.day_mask, "Unverified"),
+            "weekday_verified": (
+                ", ".join(name for bit, name in (
+                    (1, "Monday"), (2, "Tuesday"), (4, "Wednesday"),
+                    (8, "Thursday"), (16, "Friday")
+                ) if self.day_mask & bit)
+                if self.day_mask != 0 and self.day_mask & ~31 == 0
+                else "Unverified"
+            ),
             "power_percent_raw": self.power_percent,
         }
         # Current owner's inverter: two charge and three discharge app/Modbus
