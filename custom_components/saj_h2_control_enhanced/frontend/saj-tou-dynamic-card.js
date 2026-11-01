@@ -121,6 +121,9 @@ class SajTOUDynamicCard extends HTMLElement {
     this._modeFeedback = "";
     this._modeFeedbackError = false;
     this._modeBusyEntry = "";
+    this._refreshBusy = false;
+    this._schedulePreview = new Map();
+    this._previewBusy = false;
   }
   setConfig(config) {this._cfg=config||{};this.render();}
   set hass(hass) {
@@ -204,13 +207,22 @@ class SajTOUDynamicCard extends HTMLElement {
       button.addEventListener("click",()=>this._requestMode(group,target,service));
       controls.append(button);
     }
-    add(modepane,controls,
+    const blockers=[];
+    if (!good) blockers.push("one or more sensor readings unavailable");
+    if (!Number.isInteger(modeValue) || ![0,1].includes(modeValue)) blockers.push("unsupported mode reading");
+    if (e.outside_schedule?.attributes.raw_fallback_code!==1) blockers.push("fallback is not Self-consumption");
+    if (!Number.isFinite(ageSeconds) || ageSeconds<0 || ageSeconds>180) blockers.push("readback older than 3 minutes");
+    if (draft.changed) blockers.push("local draft modified");
+    if (e.charge_count?.attributes.slot_enable_mask!==1 ||
+        e.discharge_count?.attributes.slot_enable_mask!==1) blockers.push("schedule masks not [1,1]");
+    const refresh=el("button",null,this._refreshBusy?"Refreshing…":"Refresh inverter state");
+    refresh.type="button";refresh.disabled=this._refreshBusy||this._modeBusy;
+    refresh.addEventListener("click",()=>this._refreshMode(group));
+    add(modepane,controls,refresh,
       el("p","muted",
         this._modeBusy?"Applying and verifying mode; do not click again.":
-        !good?"Device readback unavailable; write blocked.":
-        draft.changed?"Reload local schedule draft before live mode control.":
-        !canOperate?"Live control unavailable: check fresh readback, schedule masks [1,1], fallback and enabled sensors.":
-        "Live mode control uses a separate confirmed one-shot Modbus action. eLEKeeper overview can lag."));
+        blockers.length?"Live switch blocked: "+blockers.join("; ")+". Refresh to recheck.":
+        "Live mode control uses a confirmed one-shot Modbus action. eLEKeeper overview can lag."));
     if (this._modeFeedback) {
       add(modepane,el("div","liveResult "+(this._modeFeedbackError?"bad":"okay"),this._modeFeedback));
     }
@@ -235,6 +247,29 @@ class SajTOUDynamicCard extends HTMLElement {
       add(card,el("p","muted","Last detected change: "+change.join("; ")));
     }
     add(card,el("div","warn","Local draft only: sliders, times and weekday selectors DO NOT save to SAJ or eLEKeeper. Monday through Friday weekday bits are confirmed, including Tuesday+Thursday together. Charge power at raw 50 = 4950 W and raw 70 = 6930 W is app-confirmed; other raw levels are modeled at 99 W per unit. Other weekday bits still require testing. Device settings follow HA readback unless you have an edited draft. Click Reload draft to accept external changes."));
+  }
+  async _refreshMode(group) {
+    if(this._refreshBusy||this._modeBusy)return;
+    this._refreshBusy=true;this._modeFeedback="Refreshing live Modbus readback…";
+    this._modeFeedbackError=false;this.render();
+    try{
+      const data={target_mode:"time_of_use"};
+      if(group.id && !group.id.startsWith("sensor."))data.entry_id=group.id;
+      const result=await this._hass.callWS({
+        type:"call_service",domain:"saj_h2_control_enhanced",
+        service:"preview_mode_change",service_data:data,return_response:true
+      });
+      const report=result?.response||result;
+      if(report?.status!=="DRY_RUN_ONLY"||report.write_sent!==false)
+        throw new Error("No safe Modbus confirmation returned");
+      this._modeFeedback="Fresh device read succeeded; no settings changed. Mode "+
+        (report.inverter_mode_raw===1?"Time-of-Use":"Self-consumption")+
+        ", schedule masks ["+report.charge_enable_mask+", "+report.discharge_enable_mask+"].";
+      this._modeFeedbackError=false;
+    }catch(err){
+      this._modeFeedbackError=true;
+      this._modeFeedback="Refresh failed: "+(err?.message||String(err));
+    }finally{this._refreshBusy=false;this.render();}
   }
   async _requestMode(group,target,service) {
     if (this._modeBusy) return;
@@ -302,6 +337,39 @@ class SajTOUDynamicCard extends HTMLElement {
       this.render();
     }
   }
+  async _validateSchedule(group,direction,row,saved) {
+    if(this._previewBusy)return;
+    // Do not accept a derived/unknown weekday mapping as a writable plan.
+    // The backend independently checks raw mask and latest full readback.
+    const data={
+      direction,slot:Number(row.slotNumber),
+      expected_start:saved.start,expected_end:saved.end,
+      expected_day_mask:Number(saved.weekday_mask_raw),
+      expected_power_percent:Number(saved.power_percent_raw),
+      start:row.start,end:row.end,
+      weekdays:[...row.days],power_percent:Number(row.percent)
+    };
+    if(group.id && !group.id.startsWith("sensor."))data.entry_id=group.id;
+    const key=group.id+":"+direction+":"+row.slotNumber;
+    this._previewBusy=true;this.render();
+    try {
+      const result=await this._hass.callWS({
+        type:"call_service",domain:"saj_h2_control_enhanced",
+        service:"preview_schedule_change",service_data:data,return_response:true
+      });
+      const report=result?.response||result;
+      if(report?.status!=="SCHEDULE_DRY_RUN_ONLY"||report?.write_sent!==false)
+        throw new Error("Invalid dry-run response; no changes authorised");
+      this._schedulePreview.set(key,{error:false,message:
+        "Valid draft · "+(report.change_needed?"Change proposed":"Already matches")+
+        " · Registers "+report.register_addresses.map(x=>"0x"+x.toString(16)).join(", ")+
+        " · Existing ["+report.existing_words.join(", ")+"] → proposed ["+
+        report.proposed_words.join(", ")+"] · NO WRITE"});
+    }catch(err){
+      this._schedulePreview.set(key,{error:true,message:
+        "Draft validation blocked: "+(err?.message||String(err))+" · NO WRITE"});
+    }finally{this._previewBusy=false;this.render();}
+  }
   choice(options,current,onChange) {
     const select=el("select");
     options.forEach(v=>{const o=el("option",null,v);o.value=v;o.selected=v===current;select.append(o);});
@@ -347,6 +415,15 @@ class SajTOUDynamicCard extends HTMLElement {
       const actualSlots=(state?.attributes.schedules||[]);
       const saved=actualSlots.find(item => Number(item.slot) === row.slotNumber);
       if (saved) add(container,el("div","saved","Saved on inverter: "+saved.start+"–"+saved.end+" · "+saved.power_watts_saj_display+" W"+(saved.power_conversion_verified ? " (paired)" : " (estimated)")));
+      const previewButton=el("button",null,this._previewBusy?"Validating…":"Validate draft (no write)");
+      previewButton.type="button";
+      previewButton.disabled=!saved||this._previewBusy||!row.original||!isValid(state);
+      previewButton.addEventListener("click",()=>this._validateSchedule(group,direction,row,saved));
+      add(container,previewButton);
+      const previewKey=group.id+":"+direction+":"+row.slotNumber;
+      const preview=this._schedulePreview.get(previewKey);
+      if(preview) add(container,el("div","liveResult "+(preview.error?"bad":"okay"),preview.message));
+
       const power=el("div","row");
       const label=el("span","muted","Draft power");
       const slider=el("input");slider.type="range";slider.min="0";slider.max="100";slider.step="1";slider.value=String(row.percent);
