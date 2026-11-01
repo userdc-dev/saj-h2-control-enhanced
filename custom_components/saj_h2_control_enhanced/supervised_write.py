@@ -48,7 +48,7 @@ async def _snapshot(client):
         mode = (await get(MODE_ADDR, 1))[0]
         fallback = (await get(FALLBACK_ADDR, 1))[0]
         result = decode_config(ch, dis, mode, fallback)
-        if result.mode not in (0, 1) or result.fallback != 1:
+        if result.mode not in (0, 1) or result.fallback not in (0, 1):
             raise SupervisedWriteError("Unsupported mode/fallback: no write")
         if not 0 <= result.charge_mask <= 127 or not 0 <= result.discharge_mask <= 127:
             raise SupervisedWriteError("Unsupported active slot masks")
