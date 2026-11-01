@@ -26,6 +26,13 @@ const CSS = [
   ".pane{border:1px solid var(--divider-color,#555);border-radius:12px;padding:12px;min-width:0}",
   ".row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:9px 0}",
   ".row label{font-size:12px} .row .spacer{flex:1}",
+  ".powerControl{display:flex;flex-direction:column;gap:8px;margin:10px 0 14px}",
+  ".powerValues{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}",
+  ".powerValues .muted:first-child{margin-right:auto}",
+  ".powerControl input[type=range]{width:100%;box-sizing:border-box}",
+  ".powerExact{display:flex;align-items:center;gap:8px;font-size:12px}",
+  ".powerExact .powerPercentInput{width:82px;min-width:0;box-sizing:border-box}",
+
   ".pill{font-size:11px;border:1px solid var(--divider-color,#555);border-radius:14px;padding:3px 8px}",
   ".slot{padding:10px 0;border-top:1px solid var(--divider-color,#555)}",
   ".slot header{display:flex;justify-content:space-between;align-items:center;gap:8px}",
@@ -719,28 +726,61 @@ class SajTOUDynamicCard extends HTMLElement {
       const actualSlots=(state?.attributes.schedules||[]);
       const saved=actualSlots.find(item => Number(item.slot) === row.slotNumber);
       if (saved) add(container,el("div","saved","Saved on inverter: "+saved.start+"–"+saved.end+" · "+saved.power_percent_raw+"% · "+Number(saved.power_watts_saj_display).toLocaleString()+" W"+(saved.power_conversion_verified ? " (paired)" : " (estimated)")));
-      const power=el("div","row");
+      const power=el("div","powerControl");
       const label=el("span","muted",direction==="charge"?"Charging power":"Discharging power");
       const slider=el("input");
       slider.type="range";slider.min="1";slider.max="100";slider.step="1";
       slider.value=String(Math.max(1,row.percent));
       slider.setAttribute("aria-label",(direction==="charge"?"Charging":"Discharging")+" schedule power percentage");
-      const percentDisplay=el("strong",null,row.percent+"%");
-      const wattDisplay=el("strong",null,(row.percent*99).toLocaleString()+" W");
+      const percentDisplay=el("strong",null,"");
+      const wattDisplay=el("strong",null,"");
+      const estimatedLabel=el("span","muted","");
+      const inputPercent=el("input","powerPercentInput");
+      inputPercent.type="number";inputPercent.min="1";inputPercent.max="100";inputPercent.step="1";
+      inputPercent.value=String(row.percent);
+      inputPercent.setAttribute("aria-label","Power percentage (1–100)");
       const updatePowerReadout=()=>{
-        percentDisplay.textContent=row.percent+"%";
-        wattDisplay.textContent=(row.percent*99).toLocaleString()+" W";
-        slider.setAttribute("aria-valuetext",row.percent+" percent, approximately "+(row.percent*99)+" watts");
+        const percent=row.percent;
+        const watts=percent*99;
+        percentDisplay.textContent=percent+"%";
+        wattDisplay.textContent=watts.toLocaleString()+" W";
+        estimatedLabel.textContent=(
+          (direction==="charge" ? [50,70] : [50,98,100]).includes(percent)
+            ? "elekeeper-paired" : "estimated wattage"
+        );
+        inputPercent.value=String(percent);
+        slider.setAttribute("aria-valuetext",percent+" percent, approximately "+watts+" watts");
+      };
+      const updatePercent=value=>{
+        if(!Number.isInteger(value)||value<1||value>100)return false;
+        if(value!==row.percent){
+          row.percent=value;
+          draft.changed=true;
+          this._schedulePreview.delete(group.id+":"+direction+":"+row.slotNumber);
+        }
+        slider.value=String(value);
+        updatePowerReadout();
+        return true;
       };
       updatePowerReadout();
-      slider.addEventListener("input",()=>{
-        row.percent=Number(slider.value);
-        draft.changed=true;
-        this._schedulePreview.delete(group.id+":"+direction+":"+row.slotNumber);
-        updatePowerReadout();
-      });
+      slider.addEventListener("input",()=>updatePercent(Number(slider.value)));
       slider.addEventListener("change",()=>this.render());
-      add(power,label,slider,percentDisplay,el("span","muted","·"),wattDisplay);
+      inputPercent.addEventListener("change",()=>{
+        if(!updatePercent(Number(inputPercent.value))){
+          inputPercent.value=String(row.percent);
+          inputPercent.setCustomValidity("Enter a whole percentage between 1 and 100");
+          inputPercent.reportValidity();
+          inputPercent.setCustomValidity("");
+          return;
+        }
+        this.render();
+      });
+      const values=el("div","powerValues");
+      add(values,label,percentDisplay,el("span","muted","·"),wattDisplay,estimatedLabel);
+      add(power,values,slider);
+      const exact=el("label","powerExact");
+      add(exact,el("span","muted","Set exact %"),inputPercent);
+      add(power,exact);
       add(container,power);
       const dayrow=el("div","days");
       DAYS.forEach(day=>{
