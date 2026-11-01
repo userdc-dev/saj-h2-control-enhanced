@@ -1,5 +1,11 @@
 # Changelog — SAJ H2 Control Enhanced
 
+## 0.5.8 — 2026-11-02 (Live energy header cleanup)
+
+- Removed the redundant **Read-only telemetry** badge from the Live energy header, as marked in the owner's screenshot.
+- No changes to sensor readouts, device controls or Modbus safety checks. Bumped frontend cache URL to `/saj-h2-tou/v058/saj-tou-dynamic-card.js`.
+
+
 ## 0.5.7 — 2026-11-02 (compact energy, dark fallback popup, refresh near Last verified)
 
 - Replaced the native Outside TOU dropdown, whose white Windows/Brave popup clashed with the dark theme, with a dark accessible in-card option menu. Preserved one confirmation for Standby and existing readback safeguards.
