@@ -342,6 +342,12 @@ class SajTOUDynamicCard extends HTMLElement {
   }
   async _validateSchedule(group,direction,row,saved) {
     if(this._previewBusy)return;
+    if (!is24Hour(row.start) || !is24Hour(row.end)) {
+      this._schedulePreview.set(group.id+":"+direction+":"+row.slotNumber,{
+        error:true,message:"Invalid time: use the native 24-hour selector (00:00–23:59). NO WRITE"
+      });
+      this.render();return;
+    }
     // Do not accept a derived/unknown weekday mapping as a writable plan.
     // The backend independently checks raw mask and latest full readback.
     const data={
@@ -401,16 +407,32 @@ class SajTOUDynamicCard extends HTMLElement {
       const times=el("div","inputs");
       for (const key of ["start","end"]) {
         const wrapper=el("label","muted",key==="start"?"Start · 24h":"End · 24h");
-        const field=el("input","time24");field.type="text";field.inputMode="numeric";field.maxLength=5;
-        field.placeholder="HH:MM";field.pattern="(?:[01][0-9]|2[0-3]):[0-5][0-9]";field.value=row[key];
-        field.setAttribute("aria-label",key+" 24-hour time HH:MM");
+        const field=el("input","time24");
+        // Native time input rejects free-form letters and special characters.
+        // en-GB requests a 24-hour hour/minute display in supporting browsers.
+        field.type="time";
+        field.lang="en-GB";
+        field.step="60";
+        field.min="00:00";
+        field.max="23:59";
+        field.required=true;
+        field.value=is24Hour(row[key])?row[key]:"00:00";
+        field.setAttribute("aria-label",key+" (24-hour HH:MM)");
         field.addEventListener("change",()=>{
-          const next=field.value.trim();
-          if(!is24Hour(next)){
-            field.value=row[key];field.title="Use 24-hour HH:MM, e.g. 22:40";
+          const next=field.value;
+          if(!field.validity.valid || !is24Hour(next)){
+            field.value=row[key];
+            field.setCustomValidity("Choose a valid time between 00:00 and 23:59");
+            field.reportValidity();
+            field.setCustomValidity("");
             return;
           }
-          row[key]=next;draft.changed=true;field.title="";
+          if (next!==row[key]) {
+            row[key]=next;
+            draft.changed=true;
+            this._schedulePreview.delete(group.id+":"+direction+":"+row.slotNumber);
+          }
+          field.setCustomValidity("");
         });
         add(wrapper,field);add(times,wrapper);
       }
@@ -433,7 +455,7 @@ class SajTOUDynamicCard extends HTMLElement {
       const slider=el("input");slider.type="range";slider.min="0";slider.max="100";slider.step="1";slider.value=String(row.percent);
       const previewText = () => (row.percent*99)+" W"+(direction==="charge" && ![50,70].includes(row.percent) ? " (estimated)" : "");
       const display=el("strong",null,previewText());
-      slider.addEventListener("input",()=>{row.percent=Number(slider.value);draft.changed=true;display.textContent=previewText()});
+      slider.addEventListener("input",()=>{row.percent=Number(slider.value);draft.changed=true;this._schedulePreview.delete(group.id+":"+direction+":"+row.slotNumber);display.textContent=previewText()});
       add(power,label,slider,display);add(container,power);
       const dayrow=el("div","days");
       DAYS.forEach(day=>{
@@ -442,6 +464,7 @@ class SajTOUDynamicCard extends HTMLElement {
         cb.addEventListener("change",()=>{
           row.days=cb.checked ? [...new Set([...row.days,day])] : row.days.filter(d=>d!==day);
           draft.changed=true;
+          this._schedulePreview.delete(group.id+":"+direction+":"+row.slotNumber);
         });
         add(label,cb,el("span",null,day));dayrow.append(label);
       });
