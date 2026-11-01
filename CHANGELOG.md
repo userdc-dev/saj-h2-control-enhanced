@@ -1,5 +1,19 @@
 # Changelog — SAJ H2 Control Enhanced
 
+
+## 0.5.10 — 2026-11-02 (compact schedule controls, actual live status summary, zero-YAML packaging)
+
+- The unified **Inverter controls** header now displays distinct live sensor states **Operating: [mode]** and **Outside TOU: [setting]**, not the static “Live mode · Outside TOU” label. Duplicate “Device: …” captions inside the two control columns were removed.
+- The **Charging & discharging** section is more compact: **n/7** count and Add action share each card header, empty states are shorter, redundant “n configured on inverter” badges are gone, and the primary Save button sits opposite a compact Reload control.
+- Removed the large always-visible technical warning; kept a short footnote on estimated W and manual recovery after an interrupted write. Critical multi-write risk disclosure remains in the save confirmation and errors.
+- Added root **`hacs.json`** and complete **`docs/INSTALLATION.md`** for UI installation and upgrades from GitHub without `configuration.yaml`, custom Lovelace YAML, or manual JS resources. Integration auto-registers its frontend and independent dashboard when configured in HA.
+- Added `scripts/install.sh` for Linux/Docker HA config directories. Safely backs up existing controller code outside `custom_components`; optional `--with-safe-monitor` installs the independent read-only Safe Monitor **only if missing**, never overwriting an existing one. Normal HA integration config flow is still required.
+- Corrected the title for **new** SAJ Control config entries so they are no longer incorrectly called “read-only”. No migration of existing entries/entity IDs.
+- Added packaging/UI regression tests (`tests/test_package_and_ui.py`), shell syntax validation, and replaced the obsolete planning-only “no Modbus write” CI grep. Existing simulated safety tests continue running.
+- Version and cache path: **0.5.10** / `/saj-h2-tou/v0510/saj-tou-dynamic-card.js`. No new inverter write registers or authorization changes.
+- Hardware certification remains limited to recorded tests; v1.0.0 is reserved for final release after comprehensive field verification.
+
+
 ## 0.5.9 — 2026-11-02 (visible live energy update frequency)
 
 - Added a subtle **↻ Updates ~10 sec (default)** label beside the Live energy heading. Tooltip explains the Safe Monitor interval is configurable and forecasts refresh separately.
