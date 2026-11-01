@@ -219,3 +219,16 @@ Paste or say:
 > Continue `userdc-dev/saj-h2-control-enhanced`. First read `DEVELOPER_HANDOFF.md` in that repo, `docs/SAFETY_AND_ROADMAP.md`, and the read-only repo's `PROJECT_HANDOFF.md`. Keep `saj-h2-safe-enhanced` read-only; never send modes 2/3. Resume from the current milestone and make GitHub updates directly. One step at a time for SSH.
 
 **Security note:** This repository is public. Do not commit street addresses, exact coordinates, passwords, tokens, signing keys, private VPN endpoints, or personal details.
+
+## 14. New progress — control-core telemetry groundwork (2026-11-01)
+
+The user emphasized that existing read-only SAJ entities must be the **operational source of truth**, not just decorative dashboard entities. As requested, development has begun in **this separate control repository**, not the safe monitor:
+
+- Added `control_core/telemetry.py`: names the known read-only HA entity IDs; validates numeric units and bounds, operating mode and battery activity, and rejects missing/unavailable states. It models a synchronized observation and requires an independently **verified successful Modbus poll heartbeat**.
+- Added `control_core/planner.py`: reviews a proposed direction (charge/discharge), duration (design-only 1–120 min) and requested power, but **ALWAYS rejects execution**. “Max” is intentionally unresolved until exact inverter/BMS capability verification.
+- Added `tests/test_telemetry.py` and GitHub Actions `.github/workflows/safety-tests.yml` for offline validation and a guard against Modbus writes.
+- Added `docs/TELEMETRY_CONTRACT.md` describing exact source entities, their real measurement semantics, and missing safety-critical signals.
+- **Not implemented:** HA control integration, actual entity subscriptions, verified poll heartbeat, power capability discovery, command registers, hardware writes, stop/recovery, schedule runner and working UI controls. No hardware control is authorized.
+- **Critical insight:** HA `last_changed` / `last_updated` alone are not reliable source freshness; stable sensor values may not change even while polling, and stale values may linger after failure. The control integration must get a **verified source successful-poll timestamp** (and confirmed control ownership) before it can authorize requests. Do not bypass this for convenience.
+- Next milestone: review/test the pure telemetry adapter against actual HA available entities and add a test-only finite-state timed-action/schedule simulator; plan independent source heartbeat without introducing dangerous writes or damaging the safe integration.
+
