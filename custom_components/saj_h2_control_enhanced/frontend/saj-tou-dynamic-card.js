@@ -518,14 +518,22 @@ class SajTOUDynamicCard extends HTMLElement {
     const draft=this._drafts.get(group.id);
     const meta=el("section","controlPanel");
     const metaHead=el("div","controlPanelHead");
-    add(metaHead,el("h3",null,"Inverter controls"),
-      el("span","pill","Live mode · Outside TOU"));
+    const liveMode=e.operating_mode?.state||"Unavailable";
+    const outsideMode=e.outside_schedule?.state||"Unavailable";
+    const states=el("div","controlSummary");
+    const modeStatus=el("span","summaryState");
+    add(modeStatus,el("span","summaryLabel","Operating"),
+      el("strong",null,liveMode));
+    const fallbackStatus=el("span","summaryState");
+    add(fallbackStatus,el("span","summaryLabel","Outside TOU"),
+      el("strong",null,outsideMode));
+    add(states,modeStatus,fallbackStatus);
+    add(metaHead,el("h3",null,"Inverter controls"),states);
     add(meta,metaHead);
     const controlColumns=el("div","controlColumns");
     const modepane=el("div","controlCell");
     const modeHeading=el("div","controlSubhead");
-    add(modeHeading,el("h4",null,"Operating mode"),
-      el("span","deviceState","Device: "+(e.operating_mode?.state||"unknown")));
+    add(modeHeading,el("h4",null,"Operating mode"));
     add(modepane,modeHeading);
     const modeValue=e.operating_mode?.attributes.raw_mode_code;
     const freshTime=e.operating_mode?.attributes.last_verified_read;
@@ -575,8 +583,7 @@ class SajTOUDynamicCard extends HTMLElement {
     }
     const fallbackPane=el("div","controlCell");
     const fallbackHeading=el("div","controlSubhead");
-    add(fallbackHeading,el("h4",null,"Outside TOU windows"),
-      el("span","deviceState","Device: "+(e.outside_schedule?.state||"unknown")));
+    add(fallbackHeading,el("h4",null,"Outside TOU windows"));
     add(fallbackPane,fallbackHeading);
     const fallbackRaw=e.outside_schedule?.attributes.raw_fallback_code;
     // Native Windows/Brave <select> popups sometimes ignore dark styling.
@@ -648,15 +655,17 @@ class SajTOUDynamicCard extends HTMLElement {
     add(controlColumns,modepane,fallbackPane);
     add(meta,controlColumns);add(card,meta);
     const sectionHead=el("div","scheduleTitle");
-    add(sectionHead,el("h3",null,"Charging & discharging schedules"),
-      el("span","muted","Up to 7 periods each"));
+    add(sectionHead,el("h3",null,"Charging & discharging"),
+      draft.changed?el("span","unsavedPill","● Unsaved changes"):
+      el("span","muted","7 slots available per direction"));
     add(card,sectionHead);
     const columns=el("div","grid scheduleGrid");
     add(columns,this.scheduleSection(group,"charge",draft),this.scheduleSection(group,"discharge",draft));
     add(card,columns);
-    if (draft.changed) add(card,el("div","warn","Unsaved changes — use Save schedule changes to inverter. Reload discards these edits; the saved device schedule remains unchanged until a confirmed save succeeds."));
+    if (draft.changed) add(card,el("div","draftNotice",
+      "Draft only — nothing changes on the inverter until Save is confirmed."));
     const footer=el("div","row scheduleActions");
-    const reset=el("button","secondaryAction","Discard edits / reload inverter");
+    const reset=el("button","secondaryAction","↶ Reload from inverter");
     reset.addEventListener("click",()=>{
       if(draft.changed && !window.confirm("Discard unsaved schedule changes and reload inverter settings?"))return;
       this._drafts.set(group.id,cloneDraft(group));
@@ -686,7 +695,13 @@ class SajTOUDynamicCard extends HTMLElement {
     if (Array.isArray(change)&&change.length) {
       add(card,el("p","muted","Last detected change: "+change.join("; ")));
     }
-    add(card,el("div","warn","Edit times, weekdays (Mon–Sun) and power, then Save; the app validates first and asks once. For an overnight interval, use Split overnight into two slots. Weekend individual bit positions are inferred from paired Sat+Sun readback. Multiple writes are not atomic: after any error check elekeeper before retrying. Power labels are estimates based on stored raw values."));
+    const helper=el("p","scheduleFootnote",
+      "Power (W) is estimated. Saves are confirmed and verified. "+
+      "Interrupted writes may leave partial settings; check elekeeper before retrying.");
+    helper.title="Schedule changes are written one register at a time, not atomically. "+
+      "Overnight periods use the Split overnight option. Weekend day bits "+
+      "are inferred from combined Saturday+Sunday readings.";
+    add(card,helper);
   }
   async _changeOutsideTOU(group,target){
     if(this._fallbackBusy || this._modeBusy || this._scheduleWriteBusy)return;
@@ -1041,11 +1056,26 @@ class SajTOUDynamicCard extends HTMLElement {
     const state=group.entities[direction+"_schedules"];
     const pane=el("section","pane");
     const header=el("div","top");
-    add(header,el("h3",null,title+" · "+rows.length+"/7"),
-      el("span","pill",(state?.state||"unavailable")+" on inverter"));
-    add(pane,header);
+    add(header,el("h3",null,title+" · "+rows.length+"/7"));
+    const addButton=el("button","addSchedule","+ Add "+direction);
+    addButton.type="button";
+    addButton.disabled=rows.length>=7 || !isValid(state);
+    addButton.title="Create a new "+direction+" period (maximum seven)";
+    addButton.addEventListener("click",()=>{
+      if(rows.length>=7)return;
+      const used=new Set(rows.map(r=>r.slotNumber));
+      let slotNumber=1;
+      while(used.has(slotNumber)&&slotNumber<=7)slotNumber++;
+      if(slotNumber>7)return;
+      rows.push({slotNumber,start:"08:00",end:"08:30",
+        percent:50,dayMask:1,days:["Mon"],original:false});
+      rows.sort((a,b)=>a.slotNumber-b.slotNumber);
+      draft.changed=true;this.render();
+    });
+    add(header,addButton);add(pane,header);
     if (!isValid(state)) add(pane,el("p","bad","Device schedule data unavailable."));
-    if (!rows.length) add(pane,el("p","muted","No "+direction+" periods configured."));
+    if (!rows.length) add(pane,el("p","muted emptySchedule",
+      "No "+direction+" periods set"));
     rows.forEach((row,index)=>{
       const container=el("div","slot");
       const bar=el("header");
@@ -1193,20 +1223,6 @@ class SajTOUDynamicCard extends HTMLElement {
       add(container,dayrow);
       add(pane,container);
     });
-    const addButton=el("button",null,"+ Add "+direction+" schedule");
-    addButton.disabled=rows.length>=7;
-    addButton.addEventListener("click",()=>{
-      if(rows.length>=7)return;
-      const used=new Set(rows.map(r=>r.slotNumber));
-      let slotNumber=1;
-      while(used.has(slotNumber)&&slotNumber<=7)slotNumber++;
-      if(slotNumber>7)return;
-      rows.push({slotNumber,start:"08:00",end:"08:30",
-        percent:50,dayMask:1,days:["Mon"],original:false});
-      rows.sort((a,b)=>a.slotNumber-b.slotNumber);
-      draft.changed=true;this.render();
-    });
-    add(pane,addButton);
     return pane;
   }
 }
