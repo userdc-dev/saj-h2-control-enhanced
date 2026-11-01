@@ -200,15 +200,21 @@ async def async_setup(hass: HomeAssistant, config):
         vol.Required("proposed_discharge"): list,
         vol.Optional("entry_id"): str,
     }
+    async def plan_schedules(call):
+        return await schedule_transaction_action(call, perform_write=False)
+
+    async def apply_schedules(call):
+        return await schedule_transaction_action(call, perform_write=True)
+
     hass.services.async_register(
         DOMAIN, "plan_schedules",
-        lambda call: schedule_transaction_action(call,perform_write=False),
+        plan_schedules,
         schema=vol.Schema(_schedule_data_fields),
         supports_response=SupportsResponse.ONLY,
     )
     hass.services.async_register(
         DOMAIN, "apply_schedules",
-        lambda call: schedule_transaction_action(call,perform_write=True),
+        apply_schedules,
         schema=vol.Schema({
             **_schedule_data_fields,
             vol.Required("confirmation"): vol.In(
