@@ -218,3 +218,89 @@ supervised_friday_charge_time_pilot:
       required: false
       selector:
         text:
+
+plan_schedules:
+  name: Validate entire TOU schedule draft (NO WRITE)
+  description: >-
+    Check all enabled charge and discharge slots against a fresh complete
+    device double-read; return exact register changes. No Modbus writes.
+  fields:
+    expected_charge:
+      name: Original enabled charging slots
+      required: true
+      selector:
+        object:
+    expected_discharge:
+      name: Original enabled discharging slots
+      required: true
+      selector:
+        object:
+    proposed_charge:
+      name: Proposed charging slots (up to 7)
+      required: true
+      selector:
+        object:
+    proposed_discharge:
+      name: Proposed discharging slots (up to 7)
+      required: true
+      selector:
+        object:
+    entry_id:
+      name: Optional control integration entry
+      required: false
+      selector:
+        text:
+
+apply_schedules:
+  name: Apply complete TOU schedules (LIVE WRITE)
+  description: >-
+    Real inverter control. Only while in Self-consumption mode. Requires
+    exact confirmation, complete two-block preflight, then writes only
+    differing register words individually with a complete double-read after
+    each write. Editing, adding and disabling up to seven slots per direction
+    supported for Monday-Friday, non-overnight periods. Weekends and overnight
+    writes remain blocked until verified on this inverter. Multiple writes
+    are not atomic: on error, partial schedules may remain. No auto retry
+    or rollback. Recheck in eLEKeeper.
+  fields:
+    confirmation:
+      name: Exact authorization
+      description: I AUTHORIZE TOU SCHEDULE CHANGES
+      required: true
+      selector:
+        text:
+    device_model:
+      name: Verified inverter
+      required: true
+      selector:
+        text:
+    control_firmware:
+      name: Verified control firmware
+      required: true
+      selector:
+        text:
+    expected_charge:
+      name: Original enabled charge slots
+      required: true
+      selector:
+        object:
+    expected_discharge:
+      name: Original enabled discharge slots
+      required: true
+      selector:
+        object:
+    proposed_charge:
+      name: Proposed charging slots
+      required: true
+      selector:
+        object:
+    proposed_discharge:
+      name: Proposed discharging slots
+      required: true
+      selector:
+        object:
+    entry_id:
+      name: Optional control integration entry
+      required: false
+      selector:
+        text:
