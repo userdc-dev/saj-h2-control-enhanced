@@ -83,7 +83,7 @@ class SajTOUSensor(CoordinatorEntity, SensorEntity):
             base["slot_enable_mask"] = config.discharge_mask
         elif self.key == "charge_schedules":
             base["schedules"] = config.summary("charge")
-            base["power_scale_status"] = "Charge raw 50 = 4950 W confirmed; other values still need testing"
+            base["power_scale_status"] = "Charging display W = raw × 99, paired app values confirmed at raw 50 and 70; other values modeled"
         elif self.key == "discharge_schedules":
             base["schedules"] = config.summary("discharge")
             base["power_scale_status"] = "Discharge display W = raw × 99 verified for this installation"
