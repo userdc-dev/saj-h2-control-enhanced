@@ -184,3 +184,37 @@ preview_schedule_change:
       required: false
       selector:
         text:
+
+supervised_friday_charge_time_pilot:
+  name: Supervised Friday charging-time test (LIVE WRITE)
+  description: >-
+    ONE-TIME LIVE TEST ONLY, not general schedule editing.
+    Requires current Self-consumption mode (0), fallback 1, charging
+    Friday 22:00-22:40 at raw70 (6930 W), discharging Wednesday
+    22:00-22:40 at raw50 (4950 W), and masks [1,1].
+    Sends two individually verified Modbus single-register writes to
+    0x3606=21:30 and 0x3607=22:00; weekdays/power/discharge untouched.
+    Interrupted operation may leave a partially changed window. No automatic
+    retry/rollback. Keep eLEKeeper open for manual recovery.
+  fields:
+    confirmation:
+      name: Exact confirmation phrase
+      description: Type I AUTHORIZE FRIDAY CHARGE TIME TEST
+      required: true
+      selector:
+        text:
+    device_model:
+      name: Verified inverter model
+      required: true
+      selector:
+        text:
+    control_firmware:
+      name: Verified control firmware
+      required: true
+      selector:
+        text:
+    entry_id:
+      name: Optional SAJ TOU integration entry ID
+      required: false
+      selector:
+        text:
