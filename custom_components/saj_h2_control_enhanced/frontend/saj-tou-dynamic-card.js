@@ -90,6 +90,9 @@ function cloneDraft(group) {
     const active = (state && state.attributes.schedules) || [];
     return active.slice(0,7).map(v=>({
       slotNumber:Number(v.slot),
+      savedStart:cleanTime(v.start), savedEnd:cleanTime(v.end),
+      savedDayMask:Number(v.weekday_mask_raw)||0,
+      savedPercent:Number(v.power_percent_raw)||0,
       start:cleanTime(v.start),end:cleanTime(v.end),
       percent:Math.max(0,Math.min(100,Number(v.power_percent_raw)||0)),
       dayMask:Number(v.weekday_mask_raw)||0,
@@ -343,9 +346,9 @@ class SajTOUDynamicCard extends HTMLElement {
     // The backend independently checks raw mask and latest full readback.
     const data={
       direction,slot:Number(row.slotNumber),
-      expected_start:saved.start,expected_end:saved.end,
-      expected_day_mask:Number(saved.weekday_mask_raw),
-      expected_power_percent:Number(saved.power_percent_raw),
+      expected_start:row.savedStart,expected_end:row.savedEnd,
+      expected_day_mask:row.savedDayMask,
+      expected_power_percent:row.savedPercent,
       start:row.start,end:row.end,
       weekdays:[...row.days],power_percent:Number(row.percent)
     };
@@ -415,9 +418,10 @@ class SajTOUDynamicCard extends HTMLElement {
       const actualSlots=(state?.attributes.schedules||[]);
       const saved=actualSlots.find(item => Number(item.slot) === row.slotNumber);
       if (saved) add(container,el("div","saved","Saved on inverter: "+saved.start+"–"+saved.end+" · "+saved.power_watts_saj_display+" W"+(saved.power_conversion_verified ? " (paired)" : " (estimated)")));
-      const previewButton=el("button",null,this._previewBusy?"Validating…":"Validate draft (no write)");
+      const previewButton=el("button",null,this._previewBusy?"Validating…":"Validate schedule draft (no write)");
       previewButton.type="button";
-      previewButton.disabled=!saved||this._previewBusy||!row.original||!isValid(state);
+      previewButton.disabled=!saved||this._previewBusy||!row.original||!isValid(state) ||
+        (row.savedStart===undefined);
       previewButton.addEventListener("click",()=>this._validateSchedule(group,direction,row,saved));
       add(container,previewButton);
       const previewKey=group.id+":"+direction+":"+row.slotNumber;
@@ -460,7 +464,7 @@ window.customCards=window.customCards||[];
 if(!window.customCards.some(c=>c.type==="saj-tou-dynamic-card")) window.customCards.push({
   type:"saj-tou-dynamic-card",
   name:"SAJ H2 TOU Dynamic",
-  description:"Confirmed live mode buttons; schedules and other inputs are preview-only.",
+  description:"Confirmed live mode buttons, fresh readback refresh and safe schedule draft validation.",
   preview:true
 });
 })();
