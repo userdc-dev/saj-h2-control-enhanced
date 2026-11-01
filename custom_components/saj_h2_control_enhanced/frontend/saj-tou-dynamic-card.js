@@ -86,7 +86,9 @@ function cloneDraft(group) {
       start:cleanTime(v.start),end:cleanTime(v.end),
       percent:Math.max(0,Math.min(100,Number(v.power_percent_raw)||0)),
       dayMask:Number(v.weekday_mask_raw)||0,
-      days: v.weekday_mask_raw === 4 ? ["Wed"] : [],
+      days: ((Number(v.weekday_mask_raw)||0) & ~20) === 0 ?
+        [...((Number(v.weekday_mask_raw)||0)&4 ? ["Wed"] : []),
+         ...((Number(v.weekday_mask_raw)||0)&16 ? ["Fri"] : [])] : [],
       original:true
     }));
   }
@@ -138,7 +140,7 @@ class SajTOUDynamicCard extends HTMLElement {
     const card=el("ha-card");
     root.append(card);
     const top=el("div","top");
-    add(top,el("h2",null,"Battery time-of-use"),el("span","pill","Device readback · Preview v0.2.2"));
+    add(top,el("h2",null,"Battery time-of-use"),el("span","pill","Device readback · Preview v0.2.3"));
     add(card,top);
     if (!group) {
       add(card,el("p","empty","No SAJ H2 TOU devices found. Install the read-only TOU integration and check its schedule entities."));
@@ -186,7 +188,7 @@ class SajTOUDynamicCard extends HTMLElement {
     if (Array.isArray(change)&&change.length) {
       add(card,el("p","muted","Last detected change: "+change.join("; ")));
     }
-    add(card,el("div","warn","Local draft only: sliders, times and weekday selectors DO NOT save to the SAJ inverter or eLEKeeper. Charge watts and most weekday-bit mappings are not yet verified. Never assume that an entered power is safe or actually delivered. Device settings update automatically from HA readback; an edited draft is deliberately not overwritten. Click “Reload draft” to accept external changes."));
+    add(card,el("div","warn","Local draft only: sliders, times and weekday selectors DO NOT save to SAJ or eLEKeeper. Friday and Wednesday weekday bits are confirmed. Charge power 50% = 4950 W was confirmed; remaining charge powers and other weekday bits still require testing. Device settings follow HA readback unless you have an edited draft. Click Reload draft to accept external changes."));
   }
   choice(options,current,onChange) {
     const select=el("select");
@@ -212,7 +214,7 @@ class SajTOUDynamicCard extends HTMLElement {
       remove.addEventListener("click",()=>{rows.splice(index,1);draft.changed=true;this.render()});
       add(bar,el("strong",null,title+" "+(index+1)),remove);
       add(container,bar);
-      if (row.original && row.dayMask!==4) add(container,el("div","saved","Device weekday mask: "+row.dayMask+" (mapping unverified)"));
+      if (row.original && (row.dayMask & ~20)) add(container,el("div","saved","Device weekday mask: "+row.dayMask+" (unverified weekday bits present; preview cannot safely show every day)"));
       const times=el("div","inputs");
       for (const key of ["start","end"]) {
         const wrapper=el("label","muted",key==="start"?"Start · 24h":"End · 24h");
@@ -231,13 +233,14 @@ class SajTOUDynamicCard extends HTMLElement {
       }
       add(container,times);
       const actualSlots=(state?.attributes.schedules||[]);
-      const saved=actualSlots[index];
-      if (saved) add(container,el("div","saved","Saved on inverter: "+saved.start+"–"+saved.end+" · "+(direction==="discharge" ? (saved.power_watts_saj_display+" W") : (saved.power_percent_raw+"% raw"))));
+      const saved=actualSlots.find(item => Number(item.slot) === index+1);
+      if (saved) add(container,el("div","saved","Saved on inverter: "+saved.start+"–"+saved.end+" · "+(saved.power_conversion_verified ? saved.power_watts_saj_display+" W" : saved.power_percent_raw+"% raw (W unverified)")));
       const power=el("div","row");
       const label=el("span","muted","Draft power");
       const slider=el("input");slider.type="range";slider.min="0";slider.max="100";slider.step="1";slider.value=String(row.percent);
-      const display=el("strong",null,direction==="discharge"?(row.percent*99)+" W":row.percent+"% (W unverified)");
-      slider.addEventListener("input",()=>{row.percent=Number(slider.value);draft.changed=true;display.textContent=direction==="discharge"?(row.percent*99)+" W":row.percent+"% (W unverified)"});
+      const previewText = () => direction==="discharge" ? (row.percent*99)+" W" : row.percent===50 ? "4950 W (verified)" : row.percent+"% (W unverified)";
+      const display=el("strong",null,previewText());
+      slider.addEventListener("input",()=>{row.percent=Number(slider.value);draft.changed=true;display.textContent=previewText()});
       add(power,label,slider,display);add(container,power);
       const dayrow=el("div","days");
       DAYS.forEach(day=>{
