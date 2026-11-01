@@ -113,3 +113,14 @@ Keep global mode Self-consumption; do not enable Time-of-use or schedule executi
 ## Additional eLEKeeper confirmation (2026-11-01, 17:13 screenshot)
 
 User supplied a fresh screenshot showing Discharge Time 1 = **22:00–22:40, 9900 W, Wednesday**. This matches the previous Modbus-decoded time and weekday and confirms the application-reported watt value. In the last Modbus baseline, corresponding power low byte was **100**, so watt conversion remains **unverified**; do not assume 100 raw means 10,000 W. The screenshot's **Current mode dropdown reads Time-of-use Mode**, whereas the *earlier* Modbus mode was 0 (Self-consumption). The screenshot does not prove the selection was saved/effective, and the earlier mode reading may be stale. **Next step is re-read actual mode and enable masks before modifying schedule values or performing any time-of-use test.** No Modbus writes.
+
+## New power-step observations and hypothesis (2026-11-01)
+
+Owner confirmed the eLEKeeper discharge power selector:
+- Top value **9900 W**, which matches upstream **raw low-byte 100** in the observed Wednesday discharge slot.
+- Next available lower value **9800 W**; **9801–9899 W cannot be selected**.
+- Starting at zero, the first nonzero selectable value appears to be **99 W** (owner's observation), which may correspond to **raw 1**.
+- The app therefore appears to expose **approximately 1%-step values on a 9900 W full-scale**, with UI rounding or a nonuniform conversion. Mapping **100→9900** is supported by observed app + raw reading; **99→9800**, **1→99**, **0→0** are plausible but require direct paired app/Modbus tests.
+- Do not assume a blanket 100 W step or naïve `raw * 100 W`. For example, 99% of 9900 is 9801 W, not 9800 W, indicating UI rounding or quantization may occur.
+- **Do not implement writable watts→raw conversion until multiple points (0%, 1%, 50%, 99%, 100%) are observed** on the owner's inverter with read-only Modbus before/after app changes. On a real inverter also validate charge-side scaling separately.
+
