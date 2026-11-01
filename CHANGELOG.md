@@ -1,5 +1,12 @@
 # Changelog — SAJ H2 Control Enhanced
 
+## 0.5.9 — 2026-11-02 (visible live energy update frequency)
+
+- Added a subtle **↻ Updates ~10 sec (default)** label beside the Live energy heading. Tooltip explains the Safe Monitor interval is configurable and forecasts refresh separately.
+- Preserved the uncluttered header by not restoring the removed telemetry badge. No changes to polling, Modbus controls, refresh actions or data sources.
+- Updated frontend cache-busting path to `/saj-h2-tou/v059/saj-tou-dynamic-card.js`.
+
+
 ## 0.5.8 — 2026-11-02 (Live energy header cleanup)
 
 - Removed the redundant **Read-only telemetry** badge from the Live energy header, as marked in the owner's screenshot.
