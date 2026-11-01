@@ -442,22 +442,27 @@ class SajTOUDynamicCard extends HTMLElement {
     const status=el("div","readbackBar");
     const statusIndicator=el("span",good?"readbackOk":"readbackBad",
       good?"● Connected to inverter":"● Readback unavailable");
-    add(status,statusIndicator,
-      el("span","muted","Last verified: "+formatLocalTime(e.sync_status?.attributes.last_verified_read)));
+    const right=el("div","readbackRight");
+    add(right,el("span","muted",
+      "Last verified: "+formatLocalTime(e.sync_status?.attributes.last_verified_read)));
+    const reload=el("button","readbackRefresh",
+      this._refreshBusy?"⟳ Refreshing…":"⟳ Refresh / reload data");
+    reload.type="button";
+    reload.title="Request fresh inverter settings and SAJ Safe Monitor data";
+    reload.setAttribute("aria-label","Refresh inverter and live energy readings");
+    reload.disabled=this._refreshBusy||this._modeBusy||this._fallbackBusy||
+      this._scheduleWriteBusy||this._previewBusy;
+    reload.addEventListener("click",()=>this._refreshMode(group));
+    add(right,reload);
+    add(status,statusIndicator,right);
     add(card,status);
     add(card,this._energyOverview());
     if (!this._drafts.has(group.id)) this._drafts.set(group.id,cloneDraft(group));
     const draft=this._drafts.get(group.id);
     const meta=el("section","controlPanel");
     const metaHead=el("div","controlPanelHead");
-    const refresh=el("button","controlRefresh",
-      this._refreshBusy?"Refreshing…":"↻ Refresh inverter state");
-    refresh.type="button";
-    refresh.disabled=this._refreshBusy||this._modeBusy||
-      this._fallbackBusy||this._scheduleWriteBusy;
-    refresh.setAttribute("aria-label","Refresh live inverter settings");
-    refresh.addEventListener("click",()=>this._refreshMode(group));
-    add(metaHead,el("h3",null,"Inverter controls"),refresh);
+    add(metaHead,el("h3",null,"Inverter controls"),
+      el("span","pill","Live mode · Outside TOU"));
     add(meta,metaHead);
     const controlColumns=el("div","controlColumns");
     const modepane=el("div","controlCell");
@@ -506,7 +511,7 @@ class SajTOUDynamicCard extends HTMLElement {
       el("p","muted controlHint",
         this._modeBusy?"Applying and verifying mode; do not click again.":
         blockers.length?"Live switch blocked: "+blockers.join("; ")+
-          ". Use Refresh inverter state above.":
+          ". Use Refresh / reload data above.":
         "Mode changes are verified by direct Modbus readback. elekeeper may lag."));
     if (this._modeFeedback) {
       add(modepane,el("div","liveResult "+(this._modeFeedbackError?"bad":"okay"),this._modeFeedback));
@@ -644,27 +649,51 @@ class SajTOUDynamicCard extends HTMLElement {
     }
   }
   async _refreshMode(group) {
-    if(this._refreshBusy||this._modeBusy||this._fallbackBusy)return;
-    this._refreshBusy=true;this._modeFeedback="Refreshing live Modbus readback…";
+    if(this._refreshBusy||this._modeBusy||this._fallbackBusy||
+       this._scheduleWriteBusy||this._previewBusy)return;
+    this._refreshBusy=true;
+    this._modeFeedback="Refreshing inverter settings and live energy readings…";
     this._modeFeedbackError=false;this.render();
+    const failures=[];
     try{
+      // Explicitly request new data from BOTH read-only sources. The TOU
+      // preview refreshes the TOU coordinator without sending any write.
       const data={target_mode:"time_of_use"};
       if(group.id && !group.id.startsWith("sensor."))data.entry_id=group.id;
-      const result=await this._hass.callWS({
-        type:"call_service",domain:"saj_h2_control_enhanced",
-        service:"preview_mode_change",service_data:data,return_response:true
-      });
-      const report=result?.response||result;
-      if(report?.status!=="DRY_RUN_ONLY"||report.write_sent!==false)
-        throw new Error("No safe Modbus confirmation returned");
-      this._modeFeedback="Fresh device read succeeded; no settings changed. Mode "+
-        (report.inverter_mode_raw===1?"Time-of-Use":"Self-consumption")+
-        ", schedule masks ["+report.charge_enable_mask+", "+report.discharge_enable_mask+"].";
-      this._modeFeedbackError=false;
-    }catch(err){
-      this._modeFeedbackError=true;
-      this._modeFeedback="Refresh failed: "+(err?.message||String(err));
-    }finally{this._refreshBusy=false;this.render();}
+      try {
+        const result=await this._hass.callWS({
+          type:"call_service",domain:"saj_h2_control_enhanced",
+          service:"preview_mode_change",service_data:data,return_response:true
+        });
+        const report=result?.response||result;
+        if(report?.status!=="DRY_RUN_ONLY"||report.write_sent!==false)
+          throw new Error("No safe inverter refresh acknowledgement");
+      } catch(err) {
+        failures.push("Inverter: "+(err?.message||String(err)));
+      }
+      const entityIds=Object.values(SAFE_ENERGY_IDS)
+        .filter(id=>Boolean(this._hass.states?.[id]));
+      if(entityIds.length){
+        try {
+          await this._hass.callService("homeassistant","update_entity",{
+            entity_id:entityIds
+          });
+        } catch(err) {
+          failures.push("Energy monitor: "+(err?.message||String(err)));
+        }
+      } else {
+        failures.push("SAJ Safe Monitor entities not found");
+      }
+      this._modeFeedback=failures.length?
+        "Refresh partly completed: "+failures.join("; ")+
+        ". Check readings before relying on them.":
+        "Refresh requested for inverter and energy monitor. Values update "+
+        "from the sensors as their new readings arrive; no settings changed.";
+      this._modeFeedbackError=failures.length>0;
+    } finally {
+      this._refreshBusy=false;
+      this.render();
+    }
   }
   async _requestMode(group,target,service) {
     if (this._modeBusy||this._fallbackBusy) return;
