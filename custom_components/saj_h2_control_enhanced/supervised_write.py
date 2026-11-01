@@ -1,10 +1,10 @@
 """Explicitly supervised, one-shot SAJ H2 mode experiment.
 
-Only targets raw 1 (Time-of-Use) when current raw mode is 0. The user
+Supports 0 -> 1 and 1 -> 0 only, with separate exact confirmations. The user
 must manually invoke the HA action with an exact confirmation phrase.
 This module is NOT imported by any polling path or dashboard.
 
-Only write: Modbus function 06, 0x3647=1. Never write schedules/fallback.
+Only write: Modbus function 06 to 0x3647, value 0 or 1. Never write schedules/fallback.
 No automatic retry or rollback because a VPP/eLEKeeper may act concurrently.
 """
 import asyncio
@@ -20,7 +20,10 @@ from .tou_protocol import (
 )
 
 _LOGGER = logging.getLogger(__name__)
-CONFIRM_PHRASE = "I AUTHORIZE ONE TOU MODE WRITE"
+CONFIRM_PHRASES = {
+    1: "I AUTHORIZE ONE TOU MODE WRITE",
+    0: "I AUTHORIZE ONE SELF CONSUMPTION MODE WRITE",
+}
 _HARDWARE_MODEL = "H2-10K-S3-A"
 _CONTROL_FIRMWARE = "v2.018"
 
@@ -75,7 +78,7 @@ async def _snapshot(client):
 
 async def run_supervised_tou_test(
     *, host, port, confirmed_phrase, expected_mode,
-    device_model, control_firmware,
+    device_model, control_firmware, target_mode=1,
     sleep=asyncio.sleep, client_factory=AsyncModbusTcpClient,
 ):
     """One write at most, preceded by two complete schedule snapshots.
@@ -83,10 +86,12 @@ async def run_supervised_tou_test(
     Returns a response compatible with HA service action response.
     Only an actual HA user action with the exact phrase can invoke this.
     """
-    if confirmed_phrase != CONFIRM_PHRASE:
-        raise SupervisedWriteError("Exact confirmation phrase required")
-    if expected_mode != 0:
-        raise SupervisedWriteError("This pilot only switches 0 -> 1")
+    if type(target_mode) is not int or target_mode not in (0, 1):
+        raise SupervisedWriteError("Only Self-consumption and Time-of-Use allowed")
+    if confirmed_phrase != CONFIRM_PHRASES[target_mode]:
+        raise SupervisedWriteError("Exact target-specific confirmation phrase required")
+    if type(expected_mode) is not int or expected_mode != 1 - target_mode:
+        raise SupervisedWriteError("Expected current mode must be opposite of target")
     if device_model != _HARDWARE_MODEL or control_firmware != _CONTROL_FIRMWARE:
         raise SupervisedWriteError("Unverified device profile")
     if not host or not 1 <= int(port) <= 65535:
@@ -99,9 +104,9 @@ async def run_supervised_tou_test(
         if not await client.connect():
             raise SupervisedWriteError("Unable to connect to inverter")
         before = await _snapshot(client)
-        if before.mode != 0:
+        if before.mode != expected_mode:
             raise SupervisedWriteError(
-                f"Current mode is {before.mode}, expected 0: refusing write")
+                f"Current mode is {before.mode}, expected {expected_mode}: refusing write")
 
         # Complete double-read immediately before write; reject app/VPP edits
         # detected between our own preflight snapshots.
@@ -113,7 +118,7 @@ async def run_supervised_tou_test(
         key = "device_id" if "device_id" in inspect.signature(writer).parameters else "slave"
         # Exactly one write; never retry even when acknowledgement times out.
         sent = True
-        response = await writer(address=MODE_ADDR, value=1, **{key: UNIT_ID})
+        response = await writer(address=MODE_ADDR, value=target_mode, **{key: UNIT_ID})
         if response is None or response.isError():
             raise SupervisedWriteError(
                 "Mode write not acknowledged; result uncertain. Inspect live "
@@ -130,21 +135,21 @@ async def run_supervised_tou_test(
                 raise SupervisedWriteError(
                     "Schedules or fallback changed after mode write; "
                     "inspect eLEKeeper immediately")
-            if after.mode == 1:
+            if after.mode == target_mode:
                 return {
                     "status": "VERIFIED_BY_MODBUS",
                     "write_sent": True,
-                    "before_mode_raw": 0,
-                    "after_mode_raw": 1,
+                    "before_mode_raw": expected_mode,
+                    "after_mode_raw": target_mode,
                     "schedule_masks_unchanged": True,
                     "fallback_unchanged": True,
                     "verification_checks": check + 1,
                     "message": (
-                        "Inverter reports Time-of-Use. eLEKeeper may lag. "
+                        f"Inverter reports {after.mode_text}. eLEKeeper may lag. "
                         "Check for external VPP/controller overrides."),
                 }
         raise SupervisedWriteError(
-            "Mode write sent but no confirmed mode 1 within 12 seconds; "
+            f"Mode write sent but no confirmed mode {target_mode} within 12 seconds; "
             "check eLEKeeper and direct readback. Do not repeat command")
     except Exception:
         if sent:
