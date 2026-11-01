@@ -320,12 +320,10 @@ supervised_outside_tou_fallback:
       name: New outside-TOU mode (0 Standby, 1 Self-consumption)
       required: true
       selector:
-        select:
-          options:
-            - label: Standby (0)
-              value: "0"
-            - label: Self-consumption (1)
-              value: "1"
+        number:
+          min: 0
+          max: 1
+          step: 1
     expected_fallback:
       name: Current outside-TOU mode (0 or 1)
       required: true
