@@ -1,5 +1,8 @@
 # Safety gates and delivery milestones
 
+> **Historical safety-plan document; NOT the current implementation status.** The current working Home Assistant integration has mode controls, schedule editing and fallback controls. The authoritative, complete current safety contract, hardware evidence, tests and open issues are in [DEVELOPER_HANDOFF.md](../DEVELOPER_HANDOFF.md). Statements below such as “planning only”, “no Modbus write code” and “next UI preview only” describe earlier milestones and **must not be used to deny the existence of actual control paths**. Do not confuse passing offline tests with full physical-inverter certification.
+
+
 ## Milestone 0 — repo and planning (CURRENT)
 - Separate project from `saj-h2-safe-enhanced`.
 - Requirements, read-only existing sensors, blocked mode codes and model assumptions captured.
