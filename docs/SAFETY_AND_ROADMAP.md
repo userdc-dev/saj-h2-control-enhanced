@@ -34,3 +34,7 @@
 - What are the battery reserve and upper/lower SOC thresholds for safe operations?
 
 **If any answer is unknown: no write.**
+
+## SAJ app evidence and sync acceptance gate (2026-11-01)
+
+See [SAJ_APP_TOU_OBSERVATIONS.md](SAJ_APP_TOU_OBSERVATIONS.md). Before adding any writable TOU feature, demonstrate **read-only** device-side synchronization for overall mode, 7 charge + 7 discharge slots, start/end, weekday mask, power and unscheduled fallback. Validate user-edited SAJ app changes arrive in HA, expose pending vs verified status, account for observed 5-minute propagation, and reject conflict/unknown registers. Default unscheduled TOU mode to Self-consumption, not Standby. Never touch Off-grid load backup or AC Coupling toggles. No write attempts during this stage.
