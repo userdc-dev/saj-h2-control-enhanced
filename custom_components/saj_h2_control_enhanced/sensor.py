@@ -54,7 +54,9 @@ class SajTOUSensor(CoordinatorEntity, SensorEntity):
     @property
     def extra_state_attributes(self):
         if not self.coordinator.data or not self.coordinator.last_update_success:
-            return None
+            return {"saj_tou_role": self.key,
+                    "saj_tou_entry_id": self.coordinator.entry.entry_id,
+                    "read_only": True, "write_controls_available": False}
         data = self.coordinator.data
         config = data["config"]
         base = {
