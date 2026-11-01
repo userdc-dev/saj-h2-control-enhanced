@@ -96,12 +96,10 @@ function cloneDraft(group) {
       start:cleanTime(v.start),end:cleanTime(v.end),
       percent:Math.max(0,Math.min(100,Number(v.power_percent_raw)||0)),
       dayMask:Number(v.weekday_mask_raw)||0,
-      days: ((Number(v.weekday_mask_raw)||0) & ~31) === 0 ?
-        [...((Number(v.weekday_mask_raw)||0)&1 ? ["Mon"] : []),
-         ...((Number(v.weekday_mask_raw)||0)&2 ? ["Tue"] : []),
-         ...((Number(v.weekday_mask_raw)||0)&4 ? ["Wed"] : []),
-         ...((Number(v.weekday_mask_raw)||0)&8 ? ["Thu"] : []),
-         ...((Number(v.weekday_mask_raw)||0)&16 ? ["Fri"] : [])] : [],
+      // Read all seven bits; Sat(32)/Sun(64) individual meanings are
+      // inferred from the observed paired weekend mask 96.
+      days: DAYS.filter((day,i)=>
+        Boolean((Number(v.weekday_mask_raw)||0) & (1<<i))),
       original:true
     }));
   }
@@ -270,18 +268,17 @@ class SajTOUDynamicCard extends HTMLElement {
       this._previewBusy?"Validating saved settings…":
       "Save schedule changes to inverter");
     const canSave=draft.changed &&
-      e.operating_mode?.attributes.raw_mode_code===0 &&
+      [0,1].includes(e.operating_mode?.attributes.raw_mode_code) &&
       !this._scheduleWriteBusy && !this._previewBusy && !this._modeBusy;
     save.disabled=!canSave;
     save.title=canSave?
       "Validate live device settings, confirm, and save changed schedule registers":
-      "Make a schedule edit while in Self-consumption mode to enable saving";
+      "Make a schedule edit to enable saving";
     save.addEventListener("click",()=>this._saveSchedules(group));
     add(footer,reset,save);add(card,footer);
-    if(draft.changed && e.operating_mode?.attributes.raw_mode_code!==0)
+    if(draft.changed && ![0,1].includes(e.operating_mode?.attributes.raw_mode_code))
       add(card,el("div","warn",
-        "To save schedule edits, first switch to Self-consumption mode. "+
-        "Your changes are not saved to the inverter."));
+        "Unsupported operating mode: saving schedule edits is blocked."));
     if(this._scheduleWriteFeedback)
       add(card,el("div","liveResult "+(this._scheduleWriteError?"bad":"okay"),
         this._scheduleWriteFeedback));
@@ -289,7 +286,7 @@ class SajTOUDynamicCard extends HTMLElement {
     if (Array.isArray(change)&&change.length) {
       add(card,el("p","muted","Last detected change: "+change.join("; ")));
     }
-    add(card,el("div","warn","Select times, weekdays and power, then click Save schedule changes to inverter. The app validates the complete live settings before asking for confirmation. No changes are sent without your approval. Monday–Friday edits only; weekend/overnight writes are blocked. Multiple writes are not atomic: if interrupted, check the inverter in eLEKeeper before trying again. Power labels are estimates based on stored raw values."));
+    add(card,el("div","warn","Edit times, weekdays (Mon–Sun) and power, then Save; the app validates first and asks once. For an overnight interval, use Split overnight into two slots. Weekend individual bit positions are inferred from paired Sat+Sun readback. Multiple writes are not atomic: after any error check eLEKeeper before retrying. Power labels are estimates based on stored raw values."));
   }
   async _refreshMode(group) {
     if(this._refreshBusy||this._modeBusy)return;
@@ -437,9 +434,9 @@ class SajTOUDynamicCard extends HTMLElement {
     const current=this._hass?findDevices(this._hass).find(g=>g.id===group.id):null;
     const draft=this._drafts.get(group.id);
     if(!current || !draft?.changed ||
-       current.entities.operating_mode?.attributes.raw_mode_code!==0) {
+       ![0,1].includes(current.entities.operating_mode?.attributes.raw_mode_code)) {
       this._scheduleWriteFeedback=
-        "Save blocked: use Self-consumption mode and make a schedule edit.";
+        "Save blocked: current mode unsupported or no unsaved edits.";
       this._scheduleWriteError=true;this.render();return;
     }
     await this._planSchedules(group);
@@ -500,14 +497,14 @@ class SajTOUDynamicCard extends HTMLElement {
     if(!data||key!==this._schedulePlanKey||
         this._schedulePlan?.status!=="SCHEDULE_PLAN_ONLY"||
         this._schedulePlan?.register_writes_required<=0 ||
-        group.entities.operating_mode?.attributes.raw_mode_code!==0){
-      this._scheduleWriteFeedback="Save blocked: draft changed, or inverter is not in Self-consumption mode. Try Save again after checking the inverter.";
+        ![0,1].includes(group.entities.operating_mode?.attributes.raw_mode_code)){
+      this._scheduleWriteFeedback="Save blocked: draft changed or inverter mode unsupported. Check inverter before retrying.";
       this._scheduleWriteError=true;this.render();return;
     }
     if(!window.confirm("LIVE SAJ SCHEDULE WRITES\n\n"+
        "Apply "+this._schedulePlan.register_writes_required+" individual register changes "+
        "across charging/discharging periods?\n\n"+
-       "The inverter MUST remain in Self-consumption mode. "+
+       "If currently in Time-of-Use, the inverter will temporarily pause to Self-consumption and restore only after verification. "+
        "An interruption may leave PARTIAL settings.\n"+
        "Keep eLEKeeper open for inspection/recovery. No auto rollback or retries."))return;
     const phrase="I AUTHORIZE TOU SCHEDULE CHANGES";
@@ -568,7 +565,8 @@ class SajTOUDynamicCard extends HTMLElement {
       remove.addEventListener("click",()=>{rows.splice(index,1);draft.changed=true;this.render()});
       add(bar,el("strong",null,title+" "+(index+1)),remove);
       add(container,bar);
-      if (row.original && (row.dayMask & ~31)) add(container,el("div","saved","Device weekday mask: "+row.dayMask+" (unverified weekday bits present; preview cannot safely show every day)"));
+      if (row.days.includes("Sat")||row.days.includes("Sun"))
+        add(container,el("div","muted","Weekend day-bit mapping is inferred from confirmed Sat+Sun readback."));
       const times=el("div","inputs");
       for (const key of ["start","end"]) {
         const wrapper=el("label","muted",key==="start"?"Start · 24h":"End · 24h");
