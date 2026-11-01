@@ -250,8 +250,8 @@ class SajTOUDynamicCard extends HTMLElement {
     const fallbackPane=el("section","pane");
     add(fallbackPane,el("h3",null,"Outside TOU windows"),
       el("div","saved","Device: "+(e.outside_schedule?.state||"unknown")));
-    add(fallbackPane,this.choice(["Self-consumption","Standby"],draft.fallback,v=>{draft.fallback=v;draft.changed=true;}),
-      el("p","muted","Self-consumption is the preferred default."));
+    add(fallbackPane,el("div","saved","Fallback remains device-controlled and is not editable here."),
+      el("p","muted","Self-consumption is the verified safe outside-window setting."));
     add(meta,modepane,fallbackPane);add(card,meta);
     const columns=el("div","grid");
     add(columns,this.scheduleSection(group,"charge",draft),this.scheduleSection(group,"discharge",draft));
@@ -259,7 +259,7 @@ class SajTOUDynamicCard extends HTMLElement {
     if (draft.changed) add(card,el("div","warn","Unsaved local draft. Device values above continue updating, but preview edits are preserved until you click Reload draft."));
     const footer=el("div","row");
     const reset=el("button",null,"Reload draft from inverter");
-    reset.addEventListener("click",()=>{this._drafts.set(group.id,cloneDraft(group));this.render();});
+    reset.addEventListener("click",()=>{this._drafts.set(group.id,cloneDraft(group));this._schedulePlan=null;this._schedulePlanKey="";this._schedulePreview.clear();this.render();});
     const full=el("button",null,this._previewBusy?"Validating…":"Validate all changes");
     full.disabled=!draft.changed||this._scheduleWriteBusy||this._previewBusy;
     full.addEventListener("click",()=>this._planSchedules(group));
@@ -623,7 +623,13 @@ class SajTOUDynamicCard extends HTMLElement {
     addButton.disabled=rows.length>=7;
     addButton.addEventListener("click",()=>{
       if(rows.length>=7)return;
-      rows.push({slotNumber:null,start:"00:00",end:"00:00",percent:0,dayMask:0,days:[],original:false});
+      const used=new Set(rows.map(r=>r.slotNumber));
+      let slotNumber=1;
+      while(used.has(slotNumber)&&slotNumber<=7)slotNumber++;
+      if(slotNumber>7)return;
+      rows.push({slotNumber,start:"08:00",end:"08:30",
+        percent:50,dayMask:1,days:["Mon"],original:false});
+      rows.sort((a,b)=>a.slotNumber-b.slotNumber);
       draft.changed=true;this.render();
     });
     add(pane,addButton);
@@ -635,7 +641,7 @@ window.customCards=window.customCards||[];
 if(!window.customCards.some(c=>c.type==="saj-tou-dynamic-card")) window.customCards.push({
   type:"saj-tou-dynamic-card",
   name:"SAJ H2 TOU Dynamic",
-  description:"Confirmed live mode buttons, fresh readback refresh and safe schedule draft validation.",
+  description:"Live mode controls and verified charge/discharge schedule plan/apply with explicit confirmation.",
   preview:true
 });
 })();
