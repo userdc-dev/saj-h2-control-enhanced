@@ -127,6 +127,9 @@ class SajTOUDynamicCard extends HTMLElement {
     this._selected = "";
     this._lastSignature = "";
     this._modeBusy = false;
+    this._fallbackBusy = false;
+    this._fallbackFeedback = "";
+    this._fallbackFeedbackError = false;
     this._modeFeedback = "";
     this._modeFeedbackError = false;
     this._modeBusyEntry = "";
@@ -202,9 +205,9 @@ class SajTOUDynamicCard extends HTMLElement {
     const ageSeconds=freshTime?(Date.now()-new Date(freshTime).getTime())/1000:Infinity;
     const canOperate=good && Number.isInteger(modeValue) &&
       (modeValue===0 || modeValue===1) &&
-      e.outside_schedule?.attributes.raw_fallback_code===1 &&
+      [0,1].includes(e.outside_schedule?.attributes.raw_fallback_code) &&
       Number.isFinite(ageSeconds) && ageSeconds>=0 && ageSeconds<=180 &&
-      !this._modeBusy && !draft.changed &&
+      !this._modeBusy && !this._fallbackBusy && !draft.changed &&
       Number.isInteger(e.charge_count?.attributes.slot_enable_mask) &&
       e.charge_count?.attributes.slot_enable_mask>=0 &&
       e.charge_count?.attributes.slot_enable_mask<=127 &&
@@ -228,14 +231,14 @@ class SajTOUDynamicCard extends HTMLElement {
     const blockers=[];
     if (!good) blockers.push("one or more sensor readings unavailable");
     if (!Number.isInteger(modeValue) || ![0,1].includes(modeValue)) blockers.push("unsupported mode reading");
-    if (e.outside_schedule?.attributes.raw_fallback_code!==1) blockers.push("fallback is not Self-consumption");
+    if (![0,1].includes(e.outside_schedule?.attributes.raw_fallback_code)) blockers.push("unsupported outside-TOU setting");
     if (!Number.isFinite(ageSeconds) || ageSeconds<0 || ageSeconds>180) blockers.push("readback older than 3 minutes");
     if (draft.changed) blockers.push("local draft modified");
     if (!Number.isInteger(e.charge_count?.attributes.slot_enable_mask) ||
         !Number.isInteger(e.discharge_count?.attributes.slot_enable_mask))
       blockers.push("schedule enable masks unavailable");
     const refresh=el("button",null,this._refreshBusy?"Refreshing…":"Refresh inverter state");
-    refresh.type="button";refresh.disabled=this._refreshBusy||this._modeBusy;
+    refresh.type="button";refresh.disabled=this._refreshBusy||this._modeBusy||this._fallbackBusy;
     refresh.addEventListener("click",()=>this._refreshMode(group));
     add(modepane,controls,refresh,
       el("p","muted",
@@ -248,8 +251,36 @@ class SajTOUDynamicCard extends HTMLElement {
     const fallbackPane=el("section","pane");
     add(fallbackPane,el("h3",null,"Outside TOU windows"),
       el("div","saved","Device: "+(e.outside_schedule?.state||"unknown")));
-    add(fallbackPane,el("div","saved","Fallback remains device-controlled and is not editable here."),
-      el("p","muted","Self-consumption is the verified safe outside-window setting."));
+    const fallbackRaw=e.outside_schedule?.attributes.raw_fallback_code;
+    const fallbackSelect=el("select");
+    for(const [raw,label] of [[1,"Self-consumption"],[0,"Standby"]]){
+      const option=el("option",null,label);
+      option.value=String(raw);
+      option.selected=raw===fallbackRaw;
+      fallbackSelect.append(option);
+    }
+    fallbackSelect.setAttribute("aria-label","Outside TOU windows setting");
+    const fallbackReadAt=e.outside_schedule?.attributes.last_verified_read;
+    const fallbackAge=fallbackReadAt?
+      (Date.now()-new Date(fallbackReadAt).getTime())/1000:Infinity;
+    fallbackSelect.disabled=![0,1].includes(fallbackRaw) || ![0,1].includes(modeValue) ||
+      !good || this._fallbackBusy || this._modeBusy || this._scheduleWriteBusy ||
+      !Number.isFinite(fallbackAge) || fallbackAge<0 || fallbackAge>180;
+    fallbackSelect.addEventListener("change",()=>{
+      const target=Number(fallbackSelect.value);
+      // Device is the source of truth; show the new state only on verified readback.
+      fallbackSelect.value=String(fallbackRaw);
+      this._changeOutsideTOU(group,target);
+    });
+    add(fallbackPane,fallbackSelect,
+      el("p","muted",
+        this._fallbackBusy?"Applying and verifying inverter setting…":
+        "Self-consumption uses the battery outside scheduled periods. "+
+        "Standby may stop battery charging/discharging outside TOU periods."));
+    if(this._fallbackFeedback){
+      add(fallbackPane,el("div","liveResult "+(this._fallbackFeedbackError?"bad":"okay"),
+        this._fallbackFeedback));
+    }
     add(meta,modepane,fallbackPane);add(card,meta);
     const columns=el("div","grid");
     add(columns,this.scheduleSection(group,"charge",draft),this.scheduleSection(group,"discharge",draft));
@@ -269,7 +300,7 @@ class SajTOUDynamicCard extends HTMLElement {
       "Save schedule changes to inverter");
     const canSave=draft.changed &&
       [0,1].includes(e.operating_mode?.attributes.raw_mode_code) &&
-      !this._scheduleWriteBusy && !this._previewBusy && !this._modeBusy;
+      !this._scheduleWriteBusy && !this._previewBusy && !this._modeBusy && !this._fallbackBusy;
     save.disabled=!canSave;
     save.title=canSave?
       "Validate live device settings, confirm, and save changed schedule registers":
@@ -288,8 +319,62 @@ class SajTOUDynamicCard extends HTMLElement {
     }
     add(card,el("div","warn","Edit times, weekdays (Mon–Sun) and power, then Save; the app validates first and asks once. For an overnight interval, use Split overnight into two slots. Weekend individual bit positions are inferred from paired Sat+Sun readback. Multiple writes are not atomic: after any error check elekeeper before retrying. Power labels are estimates based on stored raw values."));
   }
+  async _changeOutsideTOU(group,target){
+    if(this._fallbackBusy || this._modeBusy || this._scheduleWriteBusy)return;
+    const device=this._hass?findDevices(this._hass).find(g=>g.id===group.id):null;
+    const e=device?.entities;
+    const before=e?.outside_schedule?.attributes.raw_fallback_code;
+    const operating=e?.operating_mode?.attributes.raw_mode_code;
+    const readAt=e?.outside_schedule?.attributes.last_verified_read;
+    const age=readAt?(Date.now()-new Date(readAt).getTime())/1000:Infinity;
+    if(![0,1].includes(before)||![0,1].includes(operating)||
+       ![0,1].includes(target)||before===target||!Number.isFinite(age)||
+       age<0||age>180){
+      this._fallbackFeedback="Setting changed or reading is stale. Refresh inverter state first.";
+      this._fallbackFeedbackError=true;this.render();return;
+    }
+    if(target===0 && !window.confirm(
+      "Enable Standby outside Time-of-Use periods?\\n\\n"+
+      "The battery may stop charging or discharging when no TOU schedule is active. "+
+      "This can change grid imports and how solar energy is used.\\n\\n"+
+      "Your charging/discharging schedules and operating mode will be preserved. "+
+      "Continue?"))return;
+    this._fallbackBusy=true;
+    this._fallbackFeedback="Sending outside-TOU setting and verifying Modbus readback…";
+    this._fallbackFeedbackError=false;this.render();
+    try{
+      const data={
+        target_fallback:target,expected_fallback:before,expected_mode:operating,
+        device_model:"H2-10K-S3-A",control_firmware:"v2.018"
+      };
+      if(target===0)data.standby_confirmation="I CONFIRM STANDBY OUTSIDE TOU";
+      if(group.id&&!group.id.startsWith("sensor."))data.entry_id=group.id;
+      const result=await this._hass.callWS({
+        type:"call_service",domain:"saj_h2_control_enhanced",
+        service:"supervised_outside_tou_fallback",service_data:data,
+        return_response:true
+      });
+      const report=result?.response||result;
+      if(report?.status!=="FALLBACK_VERIFIED_BY_MODBUS"||
+         report?.after_fallback_raw!==target||report?.write_sent!==true||
+         report?.mode_unchanged!==true||
+         report?.charge_and_discharge_unchanged!==true)
+        throw new Error("No fully verified device response");
+      this._fallbackFeedback="Verified by Modbus: outside TOU periods now use "+
+        (target===0?"Standby":"Self-consumption")+
+        ". Operating mode and schedules remain unchanged. elekeeper may lag.";
+      this._fallbackFeedbackError=false;
+    }catch(err){
+      this._fallbackFeedback="Unable to verify the change: "+
+        (err?.message||String(err))+
+        ". Command may already have been sent. Inspect elekeeper before retrying.";
+      this._fallbackFeedbackError=true;
+    }finally{
+      this._fallbackBusy=false;this.render();
+    }
+  }
   async _refreshMode(group) {
-    if(this._refreshBusy||this._modeBusy)return;
+    if(this._refreshBusy||this._modeBusy||this._fallbackBusy)return;
     this._refreshBusy=true;this._modeFeedback="Refreshing live Modbus readback…";
     this._modeFeedbackError=false;this.render();
     try{
@@ -312,7 +397,7 @@ class SajTOUDynamicCard extends HTMLElement {
     }finally{this._refreshBusy=false;this.render();}
   }
   async _requestMode(group,target,service) {
-    if (this._modeBusy) return;
+    if (this._modeBusy||this._fallbackBusy) return;
     const current=group.entities.operating_mode?.attributes.raw_mode_code;
     const fallback=group.entities.outside_schedule?.attributes.raw_fallback_code;
     const charge=group.entities.charge_count?.attributes.slot_enable_mask;
@@ -320,7 +405,7 @@ class SajTOUDynamicCard extends HTMLElement {
     const source=group.entities.operating_mode?.attributes.last_verified_read;
     const age=source ? (Date.now()-new Date(source).getTime())/1000 : Infinity;
     const draft=this._drafts.get(group.id);
-    if (!Number.isInteger(current) || current!==1-target || fallback!==1 ||
+    if (!Number.isInteger(current) || current!==1-target || ![0,1].includes(fallback) ||
         !Number.isInteger(charge) || charge<0 || charge>127 ||
         !Number.isInteger(discharge) || discharge<0 || discharge>127 ||
         !Number.isFinite(age) || age<0 ||
@@ -430,7 +515,7 @@ class SajTOUDynamicCard extends HTMLElement {
   async _saveSchedules(group) {
     // Single user-facing Save action: dry-run against live inverter FIRST,
     // then a single explicit confirmation before all verified writes.
-    if(this._previewBusy||this._scheduleWriteBusy||this._modeBusy)return;
+    if(this._previewBusy||this._scheduleWriteBusy||this._modeBusy||this._fallbackBusy)return;
     const current=this._hass?findDevices(this._hass).find(g=>g.id===group.id):null;
     const draft=this._drafts.get(group.id);
     if(!current || !draft?.changed ||
@@ -491,7 +576,7 @@ class SajTOUDynamicCard extends HTMLElement {
     }
   }
   async _applySchedules(group) {
-    if(this._scheduleWriteBusy||this._modeBusy||this._previewBusy)return;
+    if(this._scheduleWriteBusy||this._modeBusy||this._previewBusy||this._fallbackBusy)return;
     const data=this._fullDraftPayload(group);
     const key=JSON.stringify(data);
     if(!data||key!==this._schedulePlanKey||
