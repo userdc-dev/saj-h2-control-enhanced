@@ -10,7 +10,7 @@ SAFETY:
 * Only differing slot words written; slot enable masks updated LAST.
 * Function 06 single-register writes, verification after each write.
 * On ambiguous ACK, mismatch, lost connection, or app/VPP conflict: STOP.
-  Partial states are possible; the user must inspect eLEKeeper before retry.
+  Partial states are possible; the user must inspect elekeeper before retry.
 * Sat and Sun individually are NOT yet verified on this inverter. The paired
   Sat+Sun mask 96 is supported for previews and may be enabled with a
   separate weekend-verified opt-in in the future, but not live yet.
@@ -186,10 +186,10 @@ def build_plan(snapshot, *, expected_charge, expected_discharge,
     charge0, discharge0, config=validate_snapshot(snapshot)
     if _expected_rows(expected_charge)!=active_rows(config,"charge"):
         raise ScheduleTransactionError(
-            "eLEKeeper/another controller changed charge schedules; reload draft")
+            "elekeeper/another controller changed charge schedules; reload draft")
     if _expected_rows(expected_discharge)!=active_rows(config,"discharge"):
         raise ScheduleTransactionError(
-            "eLEKeeper/another controller changed discharge schedules; reload draft")
+            "elekeeper/another controller changed discharge schedules; reload draft")
 
     charge=list(charge0);discharge=list(discharge0)
     specs=(
@@ -302,7 +302,7 @@ async def execute_plan(
             if ack is None or ack.isError():
                 raise ScheduleTransactionError(
                     "Missing acknowledgement at "+hex(address)+
-                    "; state uncertain, do not retry; inspect eLEKeeper")
+                    "; state uncertain, do not retry; inspect elekeeper")
 
         async def verify(charge_words,discharge_words,mode):
             current=await read_full(client)
@@ -356,7 +356,7 @@ async def execute_plan(
             "mode_restored":starting_mode==working_mode,
             "message":(
                 "Both schedule blocks and original mode verified by full "
-                "Modbus readback. Check eLEKeeper cloud display for lag."
+                "Modbus readback. Check elekeeper cloud display for lag."
             ),
         }
     except Exception:
@@ -364,7 +364,7 @@ async def execute_plan(
             _LOGGER.exception(
                 "TOU schedule operation interrupted, attempted writes %s. "
                 "Mode may be Self-consumption and schedules partly edited. "
-                "Manual eLEKeeper review required; no auto retry",attempted)
+                "Manual elekeeper review required; no auto retry",attempted)
         raise
     finally:
         client.close()
