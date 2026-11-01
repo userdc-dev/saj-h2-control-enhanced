@@ -2,7 +2,7 @@
 
 Safe-by-default: never modify an existing dashboard, never touch SAJ Energy.
 The card uses actual Home Assistant entity registry IDs and state attributes,
-not assumed sensor names. Schedule drafts support opt-in validated writes; mode changes require confirmation; fallback is read-only.
+not assumed sensor names. Schedule drafts support opt-in validated writes; mode changes require confirmation; fallback supports confirmed live control.
 """
 from pathlib import Path
 import logging
