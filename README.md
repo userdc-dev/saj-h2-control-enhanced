@@ -2,7 +2,7 @@
 
 > **For any future developer or AI assistant: [READ DEVELOPER_HANDOFF.md FIRST](DEVELOPER_HANDOFF.md).** This is the canonical record of project goals, decisions, previous chat history, safety restrictions, architecture, milestones and exact implementation status. Do not implement control writes based on the README alone.
 
-**Status:** separate read-only Home Assistant TOU preview **v0.1.0 installed and observed working**; improved **v0.1.1 code available on GitHub** but not yet installed on Kamrui. **No live inverter write controls.**
+**Status:** Home Assistant **v0.1.0 is installed and working**; **v0.2.0 is now committed in GitHub** with an auto-discovered dynamic TOU dashboard and preview editors, but is **not installed on Kamrui yet**. **NO live inverter write controls.**
 
 This is a separate project from [SAJ H2 Safe Enhanced](https://github.com/userdc-dev/saj-h2-safe-enhanced), the owner's functioning read-only Home Assistant integration. The existing read-only repository must remain untouched by writable control development.
 
@@ -51,3 +51,9 @@ For all prior confirmed read-only register mappings, commissioning and v0.3.x da
 - [Offline pending/readback reconciliation model](control_core/reconciliation.py): strict source timestamps and confirmation of device-stored settings before marking a future request successful; not wired into HA yet and no commands.
 
 **Do not delete/re-create either HA integration to update its files:** preserve the working entity IDs and the safe monitor.
+
+## NEW: Auto-discovered dynamic TOU dashboard v0.2.0
+
+[**Read the v0.2.0 upgrade and usage guide**](docs/DYNAMIC_DASHBOARD_V020.md). The custom card can select any loaded SAJ TOU device and automatically bind its actual entities—even if renamed in HA. It shows 0–7 charge and discharge schedules, live device readback, 24-hour time, weekdays, and adjustable **local-preview** power sliders. The integration attempts to create a separate **SAJ TOU Control** dashboard automatically, and the setup flow can use an already configured `saj_h2_safe` monitor rather than asking for another IP address.
+
+All inputs are **PREVIEW ONLY** until inverter write safety is proven. An Apply button is visibly disabled. No existing SAJ Energy dashboard or `saj_h2_safe` integration is modified by this GitHub release.
