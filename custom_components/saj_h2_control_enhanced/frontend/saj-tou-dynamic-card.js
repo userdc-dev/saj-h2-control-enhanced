@@ -1,8 +1,8 @@
 /* SAJ H2 TOU dynamic card v0.2 preview.
  * Displays inverter-saved schedules from actual HA entities, discovers all
  * installed SAJ TOU readback devices by entity attributes, no hardcoded IDs.
- * All sliders/time/day/mode controls are LOCAL DRAFTS ONLY: no service calls,
- * no network, no writes, and no permanent storage of drafts.
+ * Only two explicitly confirmed operating-mode buttons invoke a live HA action.
+ * All schedule, power, time, and fallback controls remain LOCAL DRAFTS ONLY.
  */
 (() => {
 "use strict";
@@ -42,6 +42,10 @@ const CSS = [
   ".bad{color:var(--error-color,#ff6c6c)}.okay{color:var(--success-color,#68c99b)}",
   ".empty{padding:16px 4px;color:var(--secondary-text-color,#aaa)}",
   ".toggles{display:flex;align-items:center;gap:8px;flex-wrap:wrap}",
+  ".liveModeButtons{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}",
+  ".liveModeButtons button{flex:1;min-width:135px}",
+  ".liveModeButtons button[aria-pressed=true]{border:2px solid var(--primary-color,#16b9b1)}",
+  ".liveResult{font-size:12px;line-height:1.6;overflow-wrap:anywhere;padding:8px;border:1px solid var(--divider-color,#555);border-radius:8px;margin-top:8px}",
 ].join("");
 const el = (tag, cls, text) => {
   const node = document.createElement(tag);
@@ -111,6 +115,10 @@ class SajTOUDynamicCard extends HTMLElement {
     this._drafts = new Map();
     this._selected = "";
     this._lastSignature = "";
+    this._modeBusy = false;
+    this._modeFeedback = "";
+    this._modeFeedbackError = false;
+    this._modeBusyEntry = "";
   }
   setConfig(config) {this._cfg=config||{};this.render();}
   set hass(hass) {
@@ -144,7 +152,7 @@ class SajTOUDynamicCard extends HTMLElement {
     const card=el("ha-card");
     root.append(card);
     const top=el("div","top");
-    add(top,el("h2",null,"Battery time-of-use"),el("span","pill","Device readback · Preview v0.2.5"));
+    add(top,el("h2",null,"Battery time-of-use"),el("span","pill","Live mode control · Schedules preview"));
     add(card,top);
     if (!group) {
       add(card,el("p","empty","No SAJ H2 TOU devices found. Install the read-only TOU integration and check its schedule entities."));
@@ -170,8 +178,40 @@ class SajTOUDynamicCard extends HTMLElement {
     const modepane=el("section","pane");
     add(modepane,el("h3",null,"Operating mode"),
       el("div","saved","Device: "+(e.operating_mode?.state||"unknown")));
-    const modeSel=this.choice(["Self-consumption","Time-of-use"],draft.mode,v=>{draft.mode=v;draft.changed=true;});
-    add(modepane,modeSel,el("p","muted","Mode selection is local preview only."));
+    const modeValue=e.operating_mode?.attributes.raw_mode_code;
+    const freshTime=e.operating_mode?.attributes.last_verified_read;
+    const ageSeconds=freshTime?(Date.now()-new Date(freshTime).getTime())/1000:Infinity;
+    const canOperate=good && Number.isInteger(modeValue) &&
+      (modeValue===0 || modeValue===1) &&
+      e.outside_schedule?.attributes.raw_fallback_code===1 &&
+      Number.isFinite(ageSeconds) && ageSeconds>=0 && ageSeconds<=180 &&
+      !this._modeBusy && !draft.changed &&
+      e.charge_schedules?.attributes.slot_enable_mask===1 &&
+      e.discharge_schedules?.attributes.slot_enable_mask===1;
+    const controls=el("div","liveModeButtons");
+    for (const [target,text,service] of [
+      [0,"Self-consumption","supervised_self_consumption_pilot"],
+      [1,"Time-of-Use","supervised_tou_pilot"],
+    ]) {
+      const button=el("button",null,text);
+      button.type="button";
+      button.disabled=!canOperate || modeValue===target;
+      button.setAttribute("aria-pressed",String(modeValue===target));
+      button.title=modeValue===target?"Already current mode":
+        "One confirmed live inverter operating-mode write";
+      button.addEventListener("click",()=>this._requestMode(group,target,service));
+      controls.append(button);
+    }
+    add(modepane,controls,
+      el("p","muted",
+        this._modeBusy?"Applying and verifying mode; do not click again.":
+        !good?"Device readback unavailable; write blocked.":
+        draft.changed?"Reload local schedule draft before live mode control.":
+        !canOperate?"Live controls need recent readback, verified masks [1,1] and fallback Self-consumption.":
+        "Live mode control uses a separate confirmed one-shot Modbus action. eLEKeeper overview can lag."));
+    if (this._modeFeedback) {
+      add(modepane,el("div","liveResult "+(this._modeFeedbackError?"bad":"okay"),this._modeFeedback));
+    }
     const fallbackPane=el("section","pane");
     add(fallbackPane,el("h3",null,"Outside TOU windows"),
       el("div","saved","Device: "+(e.outside_schedule?.state||"unknown")));
@@ -193,6 +233,70 @@ class SajTOUDynamicCard extends HTMLElement {
       add(card,el("p","muted","Last detected change: "+change.join("; ")));
     }
     add(card,el("div","warn","Local draft only: sliders, times and weekday selectors DO NOT save to SAJ or eLEKeeper. Monday through Friday weekday bits are confirmed, including Tuesday+Thursday together. Charge power at raw 50 = 4950 W and raw 70 = 6930 W is app-confirmed; other raw levels are modeled at 99 W per unit. Other weekday bits still require testing. Device settings follow HA readback unless you have an edited draft. Click Reload draft to accept external changes."));
+  }
+  async _requestMode(group,target,service) {
+    if (this._modeBusy) return;
+    const current=group.entities.operating_mode?.attributes.raw_mode_code;
+    const fallback=group.entities.outside_schedule?.attributes.raw_fallback_code;
+    const charge=group.entities.charge_schedules?.attributes.slot_enable_mask;
+    const discharge=group.entities.discharge_schedules?.attributes.slot_enable_mask;
+    const source=group.entities.operating_mode?.attributes.last_verified_read;
+    const age=source ? (Date.now()-new Date(source).getTime())/1000 : Infinity;
+    const draft=this._drafts.get(group.id);
+    if (!Number.isInteger(current) || current!==1-target || fallback!==1 ||
+        charge!==1 || discharge!==1 || !Number.isFinite(age) || age<0 ||
+        age>180 || (draft&&draft.changed)) {
+      this._modeFeedback="Blocked: device state changed or became stale. Reload and verify.";
+      this._modeFeedbackError=true;
+      this.render();return;
+    }
+    const label=target===1?"Time-of-Use":"Self-consumption";
+    const phrase=target===1?"I AUTHORIZE ONE TOU MODE WRITE":
+      "I AUTHORIZE ONE SELF CONSUMPTION MODE WRITE";
+    if (!window.confirm("LIVE INVERTER CONTROL: switch from "+
+      (current===0?"Self-consumption":"Time-of-Use")+" to "+label+
+      "?\\nThis may change battery charging/discharging and grid exports."+
+      "\\nThe saved schedules will not be edited. Have eLEKeeper available.")) return;
+    const typed=window.prompt("Type the following EXACT confirmation phrase:\\n"+phrase,"");
+    if (typed!==phrase) {
+      this._modeFeedback="Cancelled: confirmation phrase did not match.";
+      this._modeFeedbackError=true;this.render();return;
+    }
+    this._modeBusy=true;
+    this._modeBusyEntry=group.id;
+    this._modeFeedback="Sending one confirmed command and checking inverter readback…";
+    this._modeFeedbackError=false;
+    this.render();
+    try {
+      // HA WebSocket call_service supports return_response for services with
+      // SupportsResponse.ONLY. No direct Modbus access from the card.
+      const data={
+        confirmation:phrase,device_model:"H2-10K-S3-A",control_firmware:"v2.018"
+      };
+      if (target===1) data.expected_current_mode=0;
+      if (group.id && !group.id.startsWith("sensor.")) data.entry_id=group.id;
+      const payload={
+        type:"call_service",domain:"saj_h2_control_enhanced",
+        service,service_data:data,return_response:true
+      };
+      const answer=await this._hass.callWS(payload);
+      const report=answer?.response||answer;
+      if (report?.status!=="VERIFIED_BY_MODBUS" ||
+          report?.after_mode_raw!==target || report?.write_sent!==true) {
+        throw new Error("No verified device response. Do NOT retry automatically. Check eLEKeeper and Modbus.");
+      }
+      this._modeFeedback="Verified by Modbus: inverter now reports "+label+
+        ". Schedules and fallback unchanged. eLEKeeper display may lag.";
+      this._modeFeedbackError=false;
+    } catch(error) {
+      this._modeFeedbackError=true;
+      this._modeFeedback="Unable to confirm mode change: "+
+        (error?.message||String(error))+
+        ". A write may already have been sent. Do NOT repeat the action. Check eLEKeeper.";
+    } finally {
+      this._modeBusy=false;this._modeBusyEntry="";
+      this.render();
+    }
   }
   choice(options,current,onChange) {
     const select=el("select");
@@ -275,7 +379,7 @@ window.customCards=window.customCards||[];
 if(!window.customCards.some(c=>c.type==="saj-tou-dynamic-card")) window.customCards.push({
   type:"saj-tou-dynamic-card",
   name:"SAJ H2 TOU Dynamic",
-  description:"Auto-discover device-backed TOU schedules. Edit local drafts; no writes.",
+  description:"Confirmed live mode buttons; schedules and other inputs are preview-only.",
   preview:true
 });
 })();
