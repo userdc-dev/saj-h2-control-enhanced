@@ -29,5 +29,6 @@ jobs:
           python -m unittest discover -s tests -p 'test_supervised_fallback.py'
           python -m unittest discover -s tests -p 'test_dashboard_title.py'
           python -m unittest discover -s tests -p 'test_package_and_ui.py'
+          python -m unittest discover -s tests -p 'test_install_script.py'
       - name: Verify zero-YAML installer syntax
         run: bash -n scripts/install.sh
