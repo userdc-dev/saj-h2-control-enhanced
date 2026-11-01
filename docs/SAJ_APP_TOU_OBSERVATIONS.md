@@ -243,3 +243,7 @@ Owner changed the existing **Friday** 22:00–22:40 charging schedule at canonic
 ## Tuesday test confirmed — 2026-11-01 ~19:38 Adelaide
 
 Official eLEKeeper charging weekday changed Friday→Tuesday, with same 22:00–22:40, raw70/canonical 6930 W. Read-only Modbus initially still reported Friday packed 4166, then updated to charge `0x3604 count5 = [1, 1, 5632, 5672, 582]`. Packed word **582 = (2 << 8) + 70**. Thus **Tuesday weekday mask = 2** independently confirmed. Known weekday masks Monday1, Tuesday2, Wednesday4, Friday16. Next proposed test: Tuesday+Thursday masks predicted 2+8=10, packed value predicted 2630, **not yet observed**. Do not change physical device via Modbus. Restore safe Friday configuration after tests, verify readback.
+
+## 2026-11-01 19:43 — Tuesday + Thursday MULTI-DAY confirmed
+
+Owner selected **Tuesday and Thursday together** in official eLEKeeper charging slot 1. Two identical consecutive read-only Modbus results: **[1, 1, 5632, 5672, 2630]** at 0x3604 count5. Packed power/day word **2630 = (10 << 8) | 70**; Tuesday bit2 + Thursday bit8, at 22:00–22:40 and raw power70 = saved 6930 W. This **confirms Thursday weekday bit8 and bitwise combination of at least Tuesday+Thursday**. Verified weekdays Monday1, Tuesday2, Wednesday4, Thursday8, Friday16; Saturday32 and Sunday64 still hypothetical. No HA writes made. **Currently device is configured Tuesday+Thursday**, not Friday. Owner must restore Friday-only and verify 4166 when finished experimenting. Do not leave test schedules accidentally active.
