@@ -1,5 +1,21 @@
 # Changelog — SAJ H2 Control Enhanced
 
+## 0.2.0 — 2026-11-01 (dynamic TOU dashboard and discovered monitor setup)
+
+**Released in GitHub only; not installed on the owner's Kamrui yet. All editor controls are preview-only.**
+
+- Created `custom_components/saj_h2_control_enhanced/frontend/saj-tou-dynamic-card.js`: dark-theme-compatible card that **discovers configured TOU devices and their renamed entities** through explicit `saj_tou_entry_id` and `saj_tou_role` attributes rather than fixed entity IDs.
+- Shows current mode, non-scheduled fallback and live 0–7 charge/0–7 discharge schedules with 24-hour time inputs, seven weekday selections, percent/power sliders and dynamically added or removed draft slots.
+- **No writes:** there is no Apply action, no HA service call and no Modbus write transport. Preview edits exist only in the browser session and remain clearly separate from inverter-saved state.
+- Pristine drafts follow incoming official eLEKeeper/Modbus readback; edited drafts remain until the user explicitly reloads from the inverter.
+- `config_flow.py` selects an already configured SAJ H2 Safe Monitor automatically at setup time; manual IP entry remains only as fallback. Existing installs retain their original config and entity unique IDs; coordinator may follow the uniquely matching Safe Monitor host/port.
+- `frontend_setup.py` serves card JS from its bundled folder, adds a frontend resource and **attempts to create a separate SAJ TOU Control dashboard if absent**, without modifying any existing dashboard. Automatic dashboard creation is best effort; failures log and leave existing dashboards alone.
+- Integration version bumped to **0.2.0**; preserved existing sensor unique IDs and read-only Modbus function 03 polling.
+- Added JavaScript `node --check` to CI alongside the previous Python syntax, offline safety and no-Modbus-write tests.
+- See [Dynamic dashboard v0.2.0 guide](docs/DYNAMIC_DASHBOARD_V020.md).
+
+**Not yet verified:** Browser rendering/automatic dashboard creation against the owner's precise HA version. No physical inverter command testing; charge-side watt conversion and weekday bits except Wednesday remain unverified.
+
 ## 0.1.1 — 2026-11-01 (read-only TOU synchronization improvements)
 
 - Compare **both entire schedule register blocks twice** during a single poll, not just mode and enable masks. A schedule changed by eLEKeeper while being read will be discarded and retried at the next poll.
