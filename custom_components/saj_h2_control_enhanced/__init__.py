@@ -131,6 +131,53 @@ async def async_setup(hass: HomeAssistant, config):
         }),
         supports_response=SupportsResponse.ONLY,
     )
+    async def supervised_self_consumption_pilot(call):
+        """Reverse direction has distinct explicit confirmation and no dashboard shortcut."""
+        if pilot_lock.locked():
+            raise vol.Invalid("A supervised mode test is already running")
+        entries = [
+            e for e in hass.config_entries.async_entries(DOMAIN)
+            if getattr(e, "runtime_data", None) is not None
+        ]
+        requested_id = call.data.get("entry_id")
+        if requested_id:
+            entries = [e for e in entries if e.entry_id == requested_id]
+        if len(entries) != 1:
+            raise vol.Invalid("Exactly one matching SAJ control entry is required")
+        coordinator = entries[0].runtime_data
+        from .supervised_write import (
+            run_supervised_tou_test, SupervisedWriteError,
+        )
+        host, port = coordinator._connection_details()
+        async with pilot_lock:
+            try:
+                result = await run_supervised_tou_test(
+                    host=host, port=port,
+                    confirmed_phrase=call.data["confirmation"],
+                    expected_mode=1,
+                    target_mode=0,
+                    device_model=call.data["device_model"],
+                    control_firmware=call.data["control_firmware"],
+                )
+                await coordinator.async_request_refresh()
+                return result
+            except SupervisedWriteError as exc:
+                raise vol.Invalid(
+                    str(exc) + "; don't retry automatically"
+                ) from exc
+
+    hass.services.async_register(
+        DOMAIN, "supervised_self_consumption_pilot",
+        supervised_self_consumption_pilot,
+        schema=vol.Schema({
+            vol.Required("confirmation"): vol.In(
+                ("I AUTHORIZE ONE SELF CONSUMPTION MODE WRITE",)),
+            vol.Required("device_model"): vol.In(("H2-10K-S3-A",)),
+            vol.Required("control_firmware"): vol.In(("v2.018",)),
+            vol.Optional("entry_id"): str,
+        }),
+        supports_response=SupportsResponse.ONLY,
+    )
     return True
 
 
