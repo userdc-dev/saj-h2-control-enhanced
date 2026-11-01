@@ -324,7 +324,9 @@ class SajTOUDynamicCard extends HTMLElement {
     const age=source ? (Date.now()-new Date(source).getTime())/1000 : Infinity;
     const draft=this._drafts.get(group.id);
     if (!Number.isInteger(current) || current!==1-target || fallback!==1 ||
-        charge!==1 || discharge!==1 || !Number.isFinite(age) || age<0 ||
+        !Number.isInteger(charge) || charge<0 || charge>127 ||
+        !Number.isInteger(discharge) || discharge<0 || discharge>127 ||
+        !Number.isFinite(age) || age<0 ||
         age>180 || (draft&&draft.changed)) {
       this._modeFeedback="Blocked: device state changed or became stale. Reload and verify.";
       this._modeFeedbackError=true;
