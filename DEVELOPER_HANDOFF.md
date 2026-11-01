@@ -6,7 +6,7 @@
 **Older full development diary:** [docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md](docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md) (57 KB historical archive; early claims of “planning-only” are OBSOLETE)  
 **Paired app evidence:** [docs/SAJ_APP_TOU_OBSERVATIONS.md](docs/SAJ_APP_TOU_OBSERVATIONS.md)  
 **Separate read-only integration (DO NOT MODIFY):** https://github.com/userdc-dev/saj-h2-safe-enhanced  
-**Baseline CI evidence:** https://github.com/userdc-dev/saj-h2-control-enhanced/actions/runs/41319913554 (v0.5.2 success, *offline* only). For v0.5.4 use the newest workflow on GitHub Actions.
+**Current v0.5.10 CI evidence:** https://github.com/userdc-dev/saj-h2-control-enhanced/actions/runs/41364682084 — passed full Python/JS syntax, simulated Modbus safety, packaging, installer syntax and fake-archive install/update tests. This is **offline evidence, not live hardware certification**.
 
 > The owner wants this file to be detailed enough that a human developer or future assistant with **only this repo and these notes** understands the purpose, chronology, code, register mapping, tests, successful live observations, unresolved issues, installation, safety constraints, and next actions. Do not delete or hollow out this handover. Keep it current whenever changing actual features.
 >
