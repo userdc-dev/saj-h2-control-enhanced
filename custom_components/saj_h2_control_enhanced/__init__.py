@@ -7,11 +7,13 @@ from datetime import datetime, timedelta, timezone
 import inspect
 import logging
 
-from homeassistant.core import HomeAssistant
+import voluptuous as vol
+
+from homeassistant.core import HomeAssistant, SupportsResponse
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from pymodbus.client import AsyncModbusTcpClient
 
-from .const import DEFAULT_SCAN_INTERVAL, UNIT_ID
+from .const import DEFAULT_SCAN_INTERVAL, UNIT_ID, DOMAIN
 from .tou_protocol import (
     CHARGE_START, CHARGE_COUNT, DISCHARGE_START, DISCHARGE_COUNT,
     MODE_ADDR, FALLBACK_ADDR, decode_config, InvalidTOUData,
@@ -26,6 +28,59 @@ async def async_setup(hass: HomeAssistant, config):
     """Register dynamic frontend resource, once per HA process."""
     from .frontend_setup import async_register_frontend
     await async_register_frontend(hass)
+
+    async def preview_mode_change(call):
+        """Force a fresh readback and return a dry-run, never an inverter write."""
+        target = call.data["target_mode"]
+        entries = [
+            entry for entry in hass.config_entries.async_entries(DOMAIN)
+            if getattr(entry, "runtime_data", None) is not None
+        ]
+        requested_id = call.data.get("entry_id")
+        if requested_id:
+            entries = [entry for entry in entries if entry.entry_id == requested_id]
+        if len(entries) != 1:
+            raise vol.Invalid(
+                "Specify entry_id if multiple SAJ control entries are configured "
+                "(or finish integration setup if none)")
+        coordinator = entries[0].runtime_data
+        await coordinator.async_request_refresh()
+        if not coordinator.last_update_success or not coordinator.data:
+            raise vol.Invalid("Live Modbus readback failed; preview refused")
+        config = coordinator.data["config"]
+        if config.mode not in (0, 1):
+            raise vol.Invalid("Inverter is in an unsupported operating mode")
+        if config.fallback != 1:
+            raise vol.Invalid("TOU fallback is not Self-consumption")
+        if not 0 <= config.charge_mask <= 127 or not 0 <= config.discharge_mask <= 127:
+            raise vol.Invalid("Unrecognized schedule enable bits")
+        if sum(s.enabled for s in config.charge_slots) != config.charge_mask.bit_count():
+            raise vol.Invalid("Charge slot mask inconsistent")
+        if sum(s.enabled for s in config.discharge_slots) != config.discharge_mask.bit_count():
+            raise vol.Invalid("Discharge slot mask inconsistent")
+        return {
+            "status": "DRY_RUN_ONLY",
+            "write_sent": False,
+            "inverter_mode_raw": config.mode,
+            "requested_mode_raw": {"self_consumption": 0, "time_of_use": 1}[target],
+            "change_needed": config.mode != {
+                "self_consumption": 0, "time_of_use": 1}[target],
+            "fallback_raw": config.fallback,
+            "charge_enable_mask": config.charge_mask,
+            "discharge_enable_mask": config.discharge_mask,
+            "device_read_at": coordinator.data["timestamp"].isoformat(),
+            "message": "Preview checked live inverter state. No settings changed.",
+        }
+
+    hass.services.async_register(
+        DOMAIN, "preview_mode_change", preview_mode_change,
+        schema=vol.Schema({
+            vol.Required("target_mode"): vol.In(
+                ("self_consumption", "time_of_use")),
+            vol.Optional("entry_id"): str,
+        }),
+        supports_response=SupportsResponse.ONLY,
+    )
     return True
 
 
