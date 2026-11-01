@@ -66,7 +66,7 @@ def preview_existing_slot(
     end_word = _time_word(new_end)
     if start_word == end_word:
         raise SchedulePreviewError("Start and end cannot be identical")
-    # Overnight periods are not yet validated against eLEKeeper behaviour.
+    # Overnight periods are not yet validated against elekeeper behaviour.
     if new_start > new_end:
         raise SchedulePreviewError("Overnight periods not yet verified")
     mask = _day_mask(days)
