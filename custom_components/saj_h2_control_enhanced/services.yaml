@@ -98,3 +98,89 @@ supervised_self_consumption_pilot:
       required: false
       selector:
         text:
+
+preview_schedule_change:
+  name: Validate schedule draft (NO WRITE)
+  description: >-
+    Compare one existing charge or discharge slot with a fresh double-read
+    from inverter, validate 24-hour times, Monday-Friday day masks and raw
+    power percent, and return proposed Modbus words. NEVER writes to inverter.
+    New slots, deleted slots, weekends and overnight periods are not yet supported.
+  fields:
+    direction:
+      name: Direction
+      required: true
+      selector:
+        select:
+          options:
+            - charge
+            - discharge
+    slot:
+      name: Slot number (1–7)
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 7
+          step: 1
+    expected_start:
+      name: Previously read start HH:MM
+      required: true
+      selector:
+        text:
+    expected_end:
+      name: Previously read end HH:MM
+      required: true
+      selector:
+        text:
+    expected_day_mask:
+      name: Previously read weekday mask
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 127
+          step: 1
+    expected_power_percent:
+      name: Previously read raw power percent
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 1
+    start:
+      name: Proposed start HH:MM
+      required: true
+      selector:
+        text:
+    end:
+      name: Proposed end HH:MM
+      required: true
+      selector:
+        text:
+    weekdays:
+      name: Proposed weekdays
+      required: true
+      selector:
+        select:
+          multiple: true
+          options:
+            - Mon
+            - Tue
+            - Wed
+            - Thu
+            - Fri
+    power_percent:
+      name: Proposed raw power percent
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 100
+          step: 1
+    entry_id:
+      name: Optional SAJ TOU control entry
+      required: false
+      selector:
+        text:
