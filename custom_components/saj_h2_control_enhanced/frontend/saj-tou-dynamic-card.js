@@ -173,6 +173,8 @@ const CSS = [
   ".readbackRefresh{font-size:12px;font-weight:650;min-height:32px;padding:6px 12px;white-space:nowrap;color:var(--primary-text-color,#fff);border:1px solid var(--divider-color,#45484c);background:var(--card-background-color,#25282b);border-radius:8px}",
   ".readbackRefresh:hover:not(:disabled){border-color:var(--control-accent);background:rgba(20,172,184,.09)}",
   ".readbackRefresh:focus-visible{outline:2px solid var(--control-accent);outline-offset:2px}",
+  ".readbackNotice{font-size:11px;line-height:1.5;padding:0 0 7px;min-height:12px}",
+
   /* Native select popups are OS-owned; render the outside-TOU popup inside
      the shadow DOM to guarantee matching dark colors in Brave/Windows. */
   ".controlPanel{overflow:visible}",
@@ -299,6 +301,8 @@ class SajTOUDynamicCard extends HTMLElement {
     this._modeFeedbackError = false;
     this._modeBusyEntry = "";
     this._refreshBusy = false;
+    this._refreshNotice = "";
+    this._refreshNoticeError = false;
     this._schedulePreview = new Map();
     this._previewBusy = false;
     this._scheduleWriteBusy = false;
@@ -498,6 +502,12 @@ class SajTOUDynamicCard extends HTMLElement {
     add(right,reload);
     add(status,statusIndicator,right);
     add(card,status);
+    if(this._refreshNotice){
+      const notice=el("div","readbackNotice "+
+        (this._refreshNoticeError?"bad":"okay"),this._refreshNotice);
+      notice.setAttribute("role","status");
+      add(card,notice);
+    }
     add(card,this._energyOverview());
     if (!this._drafts.has(group.id)) this._drafts.set(group.id,cloneDraft(group));
     const draft=this._drafts.get(group.id);
@@ -731,8 +741,8 @@ class SajTOUDynamicCard extends HTMLElement {
     if(this._refreshBusy||this._modeBusy||this._fallbackBusy||
        this._scheduleWriteBusy||this._previewBusy)return;
     this._refreshBusy=true;
-    this._modeFeedback="Refreshing inverter settings and live energy readings…";
-    this._modeFeedbackError=false;this.render();
+    this._refreshNotice="Refreshing inverter and energy data…";
+    this._refreshNoticeError=false;this.render();
     const failures=[];
     try{
       // Explicitly request new data from BOTH read-only sources. The TOU
@@ -771,12 +781,11 @@ class SajTOUDynamicCard extends HTMLElement {
       } else {
         failures.push("SAJ Safe Monitor entities not found");
       }
-      this._modeFeedback=failures.length?
+      this._refreshNotice=failures.length?
         "Refresh partly completed: "+failures.join("; ")+
         ". Check readings before relying on them.":
-        "Refresh requested for inverter and energy monitor. Values update "+
-        "from the sensors as their new readings arrive; no settings changed.";
-      this._modeFeedbackError=failures.length>0;
+        "Refresh requested. Readings will update as sensors respond; no settings changed.";
+      this._refreshNoticeError=failures.length>0;
     } finally {
       this._refreshBusy=false;
       this.render();
