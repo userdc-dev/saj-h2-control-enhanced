@@ -1,5 +1,13 @@
 # Changelog — SAJ H2 Control Enhanced
 
+## 0.5.4 — 2026-11-02 (unified inverter control and visual polish)
+
+- Followed owner's annotated dashboard screenshot: removed duplicate Battery time-of-use heading, hid single-device dropdown, and **joined Operating mode and Outside TOU windows into one full-width two-column panel** with a single outer border.
+- Responsive control column stacking on small screens, clearer selected-mode button, improved table typography, restrained card styling, better schedule section and Save button prominence.
+- No changes to backend Modbus writes, safety checks, confirmation popups or independent read-only SAJ Energy dashboard.
+- Frontend cache-busted to `/saj-h2-tou/v054/saj-tou-dynamic-card.js`. GitHub CI checks code; visual layout requires owner browser review.
+
+
 ## 0.5.3 — 2026-11-02 (combined energy visualization + TOU controls)
 
 - Recreated the owner's earlier **SAJ Energy → Live energy flow** five-column table inside the **independent SAJ TOU Control** dashboard: Solar, House, Battery, Grid and Forecast, using existing read-only Safe Monitor entities.
