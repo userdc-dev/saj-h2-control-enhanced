@@ -594,6 +594,7 @@ class SajTOUDynamicCard extends HTMLElement {
             row[key]=next;
             draft.changed=true;
             this._schedulePreview.delete(group.id+":"+direction+":"+row.slotNumber);
+            this.render();
           }
           field.setCustomValidity("");
         });
@@ -609,6 +610,7 @@ class SajTOUDynamicCard extends HTMLElement {
       const previewText = () => (row.percent*99)+" W"+(direction==="charge" && ![50,70].includes(row.percent) ? " (estimated)" : "");
       const display=el("strong",null,previewText());
       slider.addEventListener("input",()=>{row.percent=Number(slider.value);draft.changed=true;this._schedulePreview.delete(group.id+":"+direction+":"+row.slotNumber);display.textContent=previewText()});
+      slider.addEventListener("change",()=>this.render());
       add(power,label,slider,display);add(container,power);
       const dayrow=el("div","days");
       DAYS.forEach(day=>{
@@ -618,6 +620,7 @@ class SajTOUDynamicCard extends HTMLElement {
           row.days=cb.checked ? [...new Set([...row.days,day])] : row.days.filter(d=>d!==day);
           draft.changed=true;
           this._schedulePreview.delete(group.id+":"+direction+":"+row.slotNumber);
+          this.render();
         });
         add(label,cb,el("span",null,day));dayrow.append(label);
       });
