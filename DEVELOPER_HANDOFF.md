@@ -1,6 +1,6 @@
 # Developer handover — SAJ H2 Control Enhanced
 
-**Canonical current guide; updated 2026-11-02, Australia/Adelaide.** Read this before changing any code, dashboard, or Modbus control. **Current version at the time of this handover: 0.5.6.** The project was previously design-only, but now has a deployed Home Assistant control integration with working mode controls, schedule editing code, new fallback control, and read-only energy graphics/table within the TOU dashboard. **Not every writable feature has been proven on the owner's actual inverter.**
+**Canonical current guide; updated 2026-11-02, Australia/Adelaide.** Read this before changing any code, dashboard, or Modbus control. **Current version at the time of this handover: 0.5.7.** The project was previously design-only, but now has a deployed Home Assistant control integration with working mode controls, schedule editing code, new fallback control, and read-only energy graphics/table within the TOU dashboard. **Not every writable feature has been proven on the owner's actual inverter.**
 
 **Repository:** https://github.com/userdc-dev/saj-h2-control-enhanced  
 **Older full development diary:** [docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md](docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md) (57 KB historical archive; early claims of “planning-only” are OBSOLETE)  
@@ -41,7 +41,7 @@ User prefers concrete coding and short copy-paste setup commands over long reass
 | Connection | Config flow can reuse the independent `saj_h2_safe` monitor config entry or use manually supplied IP/port |
 | Dashboard | Independent **SAJ TOU Control** sidebar; path `/saj-tou-control/tou`, one custom `saj-tou-dynamic-card` |
 | Integration domain | `saj_h2_control_enhanced` |
-| Frontend URL (v0.5.5) | `/saj-h2-tou/v056/saj-tou-dynamic-card.js` |
+| Frontend URL (v0.5.7) | `/saj-h2-tou/v056/saj-tou-dynamic-card.js` |
 | Normal readback interval | Default **120 seconds** (configurable 60–3600 seconds) |
 | Python dependency | `pymodbus>=3.6.9,<4` |
 | Separate monitor | `saj_h2_safe` — never overwrite or remove |
@@ -359,5 +359,22 @@ Changes to `frontend/saj-tou-dynamic-card.js`:
 - Frontend resource cache-bust version **`/saj-h2-tou/v056/saj-tou-dynamic-card.js`**. Backend manifest v0.5.6.
 
 **Testing/limits:** GitHub CI validates JavaScript syntax and Python tests. The appearance must still be viewed in the owner's actual Home Assistant browser. No simulated test represents a live inverter command. Do not change the user-specified layout in future releases without referring to the screenshot and this requirement.
+
+## 17. v0.5.7 energy UI, dark fallback dropdown, and top data refresh
+
+**Owner screenshots / requests (2026-11-02):** Windows/Brave rendered the native Outside TOU HTML select popup with a white background and poorly contrasted text. The combined Live energy table was too tall and not visually dense enough. User supplied compact reference with battery SOC first, four power bars and the five-column energy table below. Additionally, they explicitly asked for a **REFRESH/RELOAD DATA** icon/button beside the top "Last verified" timestamp.
+
+**Implemented UI:**
+
+- Native fallback `<select>` replaced by an **accessible dark in-card menu**, styled within this card's shadow DOM. The trigger has `aria-haspopup=listbox` and `aria-expanded`; the options have `role=option` and `aria-selected`, plus keyboard Escape and ArrowDown/ArrowUp/focus handling. Selected option and popup theme remain dark regardless of OS-level native dropdown rendering. The same backend `supervised_outside_tou_fallback` is called; selecting Standby continues to show **one** warning popup. Real device state is authoritative; the menu doesn't pretend a write succeeded.
+- Live energy reordered to **battery SOC with mode label**, then four **instantaneous power bars** (Solar, Home, Battery magnitude, Grid magnitude), then the five-column **Solar / House / Battery / Grid / Forecast** table. Reduced spacing, simplified read-only forecast disclaimer and removed a repeated grid/mode summary line. Grid table now shows either provisional import or export status instead of always labelling zero watts “Import”; grid power value uses whichever absolute direction is available.
+- A compact `⟳ Refresh / reload data` button appears **beside Last verified** at the very top. Existing redundant control-panel refresh button was replaced by a plain panel subtitle to avoid two actions for the same task. The button is disabled while busy or during a write/validation.
+- User-triggered refresh is **read-only**. It invokes `saj_h2_control_enhanced.preview_mode_change` for a fresh TOU coordinator read, then calls Home Assistant's built-in `homeassistant.update_entity` on **at most one** representative Safe Monitor live sensor (solar/home/battery/SOC) and **one** forecast sensor. The Safe Monitor uses separate coordinator instances for live Modbus and forecasts. This prevents redundant update requests for every individual monitor sensor and preserves its read-only implementation. No command to change solar, battery or TOU settings is sent by refresh.
+- The top status line displays a concise refresh-in-progress/success/partial-failure message, without falsifying the Last verified timestamp. Original readback remains authoritative and changes as updated HA states arrive. Unsaved schedule drafts are not discarded by refreshing.
+- CSS remains dark, uses HA theme variables and responsive wrapping. Live data **keeps polling independently**; manual refresh is an extra request, not a replacement for normal updates.
+
+**Safety/test status:** No backend Modbus write semantics, confirmation phrases, writable registers, hardware protections or separate `saj_h2_safe` code changed in this release. GitHub CI checks JS syntax and existing simulated backend tests. **The in-browser popup appearance and actual HA update_entity refresh must be visually/live checked by the owner; CI is not a browser test or a real inverter test.** If update_entity fails, the card reports a partial refresh; do not show a false success.
+
+**Version policy:** Continue only patch increments `0.5.7 → 0.5.8` and reserve `1.0.0` until stable and hardware-verified.
 
 **Historical appendix:** The full earlier handover is retained unabridged at [docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md](docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md); it contains original 2026-11-01 experiments, paired screenshots, previous mode-control iterations, firmware discovery, dashboard cache fixes, and repeated user feedback. Its early “planning-only” language was true at the time but is no longer a current feature status.
