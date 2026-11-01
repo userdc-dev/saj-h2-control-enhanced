@@ -522,27 +522,64 @@ class SajTOUDynamicCard extends HTMLElement {
       el("span","deviceState","Device: "+(e.outside_schedule?.state||"unknown")));
     add(fallbackPane,fallbackHeading);
     const fallbackRaw=e.outside_schedule?.attributes.raw_fallback_code;
-    const fallbackSelect=el("select");
-    for(const [raw,label] of [[1,"Self-consumption"],[0,"Standby"]]){
-      const option=el("option",null,label);
-      option.value=String(raw);
-      option.selected=raw===fallbackRaw;
-      fallbackSelect.append(option);
-    }
-    fallbackSelect.setAttribute("aria-label","Outside TOU windows setting");
+    // Native Windows/Brave <select> popups sometimes ignore dark styling.
+    // An accessible in-card menu keeps BOTH the closed control and popup dark.
+    const fallbackMenu=el("div","fallbackMenu");
+    const fallbackTrigger=el("button","fallbackTrigger");
+    fallbackTrigger.type="button";
+    fallbackTrigger.setAttribute("aria-label","Outside TOU windows setting");
+    fallbackTrigger.setAttribute("aria-haspopup","listbox");
+    fallbackTrigger.setAttribute("aria-expanded","false");
+    add(fallbackTrigger,el("span",null,fallbackRaw===0?"Standby":"Self-consumption"),
+      el("span","fallbackChevron","⌄"));
+    const fallbackOptions=el("div","fallbackOptions");
+    fallbackOptions.setAttribute("role","listbox");
+    fallbackOptions.setAttribute("aria-label","Outside TOU windows choices");
+    fallbackOptions.hidden=true;
     const fallbackReadAt=e.outside_schedule?.attributes.last_verified_read;
     const fallbackAge=fallbackReadAt?
       (Date.now()-new Date(fallbackReadAt).getTime())/1000:Infinity;
-    fallbackSelect.disabled=![0,1].includes(fallbackRaw) || ![0,1].includes(modeValue) ||
+    fallbackTrigger.disabled=![0,1].includes(fallbackRaw) || ![0,1].includes(modeValue) ||
       !good || this._fallbackBusy || this._modeBusy || this._scheduleWriteBusy ||
       !Number.isFinite(fallbackAge) || fallbackAge<0 || fallbackAge>180;
-    fallbackSelect.addEventListener("change",()=>{
-      const target=Number(fallbackSelect.value);
-      // Device is the source of truth; show the new state only on verified readback.
-      fallbackSelect.value=String(fallbackRaw);
-      this._changeOutsideTOU(group,target);
+    const toggleMenu=open=>{
+      fallbackOptions.hidden=!open;
+      fallbackTrigger.setAttribute("aria-expanded",String(open));
+      fallbackMenu.classList.toggle("open",open);
+    };
+    for(const [raw,label] of [[1,"Self-consumption"],[0,"Standby"]]){
+      const option=el("button","fallbackOption",label);
+      option.type="button";
+      option.setAttribute("role","option");
+      option.setAttribute("aria-selected",String(raw===fallbackRaw));
+      option.disabled=raw===fallbackRaw;
+      option.addEventListener("click",()=>{
+        toggleMenu(false);
+        fallbackTrigger.focus();
+        if(raw!==fallbackRaw)this._changeOutsideTOU(group,raw);
+      });
+      fallbackOptions.append(option);
+    }
+    fallbackTrigger.addEventListener("click",()=>{
+      if(!fallbackTrigger.disabled)toggleMenu(fallbackOptions.hidden);
     });
-    add(fallbackPane,fallbackSelect,
+    fallbackMenu.addEventListener("keydown",ev=>{
+      if(ev.key==="Escape"){
+        toggleMenu(false);
+        fallbackTrigger.focus();
+        ev.preventDefault();
+      }else if((ev.key==="ArrowDown"||ev.key==="ArrowUp")&&
+               fallbackOptions.hidden){
+        toggleMenu(true);
+        ev.preventDefault();
+        fallbackOptions.querySelector("button:not(:disabled)")?.focus();
+      }
+    });
+    fallbackMenu.addEventListener("focusout",ev=>{
+      if(!fallbackMenu.contains(ev.relatedTarget))toggleMenu(false);
+    });
+    add(fallbackMenu,fallbackTrigger,fallbackOptions);
+    add(fallbackPane,fallbackMenu,
       el("p","muted",
         this._fallbackBusy?"Applying and verifying inverter setting…":
         "Self-consumption uses the battery outside scheduled periods. "+
