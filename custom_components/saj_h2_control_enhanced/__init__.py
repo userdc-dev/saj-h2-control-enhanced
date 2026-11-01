@@ -1,7 +1,8 @@
-"""SAJ H2 TOU coordinator and opt-in supervised operating-mode pilot.
+"""SAJ H2 control integration: read-only polling and explicit supervised writes.
 
-Ordinary monitoring and dashboard preview remain read-only. Manual pilot
-is a separate confirmation-gated Home Assistant service; no auto writes.
+The coordinator only reads device settings. Mode, fallback and schedule writes
+are separately registered Home Assistant actions, requiring user interaction,
+preflight checks, and post-write verification. No automatic inverter writes.
 """
 from datetime import datetime, timedelta, timezone
 import inspect
