@@ -11,7 +11,7 @@ Three Modbus holding-register read blocks:
 
 Each slot contains start and end words as HH<<8 | MM and one combined
 word high-byte=day mask, low-byte=power PERCENT (NOT watts).
-The precise weekday bit ordering and power scaling to W are UNVERIFIED.
+The weekday bit ordering and charge-side watts scaling remain UNVERIFIED.\nDischarge-side display watts = raw * 99 has been confirmed at raw 50, 98, 100\nby comparing actual stored eLEKeeper display with Modbus readback.\nThis is readback formatting only, NOT authorization for control writes.
 """
 from dataclasses import dataclass
 
@@ -34,7 +34,7 @@ class Slot:
     end: str
     day_mask_raw: int
     power_percent_raw: int
-    # Do not add watts/day name until reconciled against the official SAJ app.
+    # Keep raw values authoritative; charge-side scaling is still unverified.
 
 @dataclass(frozen=True)
 class DeviceTOU:
@@ -107,3 +107,14 @@ def diff_device_configs(before: DeviceTOU, after: DeviceTOU):
         if a != b:
             differences[field] = {"previous": a, "current": b}
     return differences
+
+
+def discharge_display_watts(raw_percent: int) -> int:
+    """Display saved discharge watts using verified 10kW SAJ app paired samples.
+
+    Device readback only. DO NOT use this conversion to infer a safe write or
+    operational limit. On other firmware/hardware profiles re-verify scaling.
+    """
+    if type(raw_percent) is not int or not 0 <= raw_percent <= 100:
+        raise UnverifiedMapping("Discharge raw power out of tested profile range")
+    return raw_percent * 99
