@@ -2,7 +2,7 @@
 
 > **For any future developer or AI assistant: [READ DEVELOPER_HANDOFF.md FIRST](DEVELOPER_HANDOFF.md).** This is the canonical record of project goals, decisions, previous chat history, safety restrictions, architecture, milestones and exact implementation status. Do not implement control writes based on the README alone.
 
-**Status:** first separate read-only Home Assistant TOU preview v0.1.0 committed, not yet field-tested. **No live inverter write controls.**
+**Status:** separate read-only Home Assistant TOU preview **v0.1.0 installed and observed working**; improved **v0.1.1 code available on GitHub** but not yet installed on Kamrui. **No live inverter write controls.**
 
 This is a separate project from [SAJ H2 Safe Enhanced](https://github.com/userdc-dev/saj-h2-safe-enhanced), the owner's functioning read-only Home Assistant integration. The existing read-only repository must remain untouched by writable control development.
 
@@ -42,4 +42,12 @@ For all prior confirmed read-only register mappings, commissioning and v0.3.x da
 
 ## Installable read-only TOU preview
 
-[Integration source](custom_components/saj_h2_control_enhanced) · [Install and verify](docs/READ_ONLY_HA_PREVIEW.md). Publishes actual inverter mode, unscheduled fallback, schedule counts and active 7+7 charge/discharge schedule details as read-only Home Assistant sensors; updates every 120 seconds by default. Existing `saj_h2_safe` is unchanged. Not installed or field-tested yet; no write functions.
+[Integration source](custom_components/saj_h2_control_enhanced) · [Install and verify](docs/READ_ONLY_HA_PREVIEW.md). Publishes actual inverter mode, unscheduled fallback, schedule counts and active 7+7 charge/discharge schedule details as read-only Home Assistant sensors; updates every 120 seconds by default. Existing `saj_h2_safe` is unchanged. The owner confirmed v0.1.0 running in HA with correct mode, fallback, and 0/1 schedule counts. v0.1.1 adds more robust full-block verification and change detection, but is not yet installed. No write functions.
+
+## Latest development work
+
+- [v0.1.1 changes](CHANGELOG.md): stronger complete-register snapshot consistency checks, precise changed-setting records, and clearer verified-vs-unverified weekday reporting.
+- [Compact read-only TOU dashboard card](examples/tou-compact-card.yaml): a single Manual card for the existing SAJ Energy dashboard; no controls.
+- [Offline pending/readback reconciliation model](control_core/reconciliation.py): strict source timestamps and confirmation of device-stored settings before marking a future request successful; not wired into HA yet and no commands.
+
+**Do not delete/re-create either HA integration to update its files:** preserve the working entity IDs and the safe monitor.
