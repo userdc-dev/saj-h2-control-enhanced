@@ -754,8 +754,16 @@ class SajTOUDynamicCard extends HTMLElement {
       } catch(err) {
         failures.push("Inverter: "+(err?.message||String(err)));
       }
-      const entityIds=Object.values(SAFE_ENERGY_IDS)
-        .filter(id=>Boolean(this._hass.states?.[id]));
+      // The safe monitor has one live-data coordinator and a separate
+      // forecast coordinator. Refresh ONE representative from each, not every
+      // sensor (which could issue redundant Modbus scans).
+      const liveId=["solar","home","battery","soc"]
+        .map(key=>SAFE_ENERGY_IDS[key])
+        .find(id=>Boolean(this._hass.states?.[id]));
+      const forecastId=["outlook","remaining","tomorrow"]
+        .map(key=>SAFE_ENERGY_IDS[key])
+        .find(id=>Boolean(this._hass.states?.[id]));
+      const entityIds=[...new Set([liveId,forecastId].filter(Boolean))];
       if(entityIds.length){
         try {
           await this._hass.callService("homeassistant","update_entity",{
