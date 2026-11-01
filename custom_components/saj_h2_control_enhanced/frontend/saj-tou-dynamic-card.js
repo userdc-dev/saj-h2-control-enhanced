@@ -110,6 +110,11 @@ class SajTOUDynamicCard extends HTMLElement {
     })].join(":")).join(";");
     if (sig!==this._lastSignature) {
       this._lastSignature=sig;
+      // Follow external eLEKeeper changes unless the user is editing a draft.
+      devices.forEach(g=>{
+        const existing=this._drafts.get(g.id);
+        if (existing && !existing.changed) this._drafts.set(g.id,cloneDraft(g));
+      });
       this.render();
     }
   }
@@ -163,6 +168,7 @@ class SajTOUDynamicCard extends HTMLElement {
     const columns=el("div","grid");
     add(columns,this.scheduleSection(group,"charge",draft),this.scheduleSection(group,"discharge",draft));
     add(card,columns);
+    if (draft.changed) add(card,el("div","warn","Unsaved local draft. Device values above continue updating, but preview edits are preserved until you click Reload draft."));
     const footer=el("div","row");
     const reset=el("button",null,"Reload draft from inverter");
     reset.addEventListener("click",()=>{this._drafts.set(group.id,cloneDraft(group));this.render();});
