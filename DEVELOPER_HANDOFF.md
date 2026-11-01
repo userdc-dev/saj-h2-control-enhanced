@@ -1,6 +1,6 @@
 # Developer handover — SAJ H2 Control Enhanced
 
-**Canonical current guide; updated 2026-11-02, Australia/Adelaide.** Read this before changing any code, dashboard, or Modbus control. **Current version at the time of this handover: 0.5.9.** The project was previously design-only, but now has a deployed Home Assistant control integration with working mode controls, schedule editing code, new fallback control, and read-only energy graphics/table within the TOU dashboard. **Not every writable feature has been proven on the owner's actual inverter.**
+**Canonical current guide; updated 2026-11-02, Australia/Adelaide.** Read this before changing any code, dashboard, or Modbus control. **Current version at the time of this handover: 0.5.10.** The project was previously design-only, but now has a deployed Home Assistant control integration with working mode controls, schedule editing code, new fallback control, and read-only energy graphics/table within the TOU dashboard. **Not every writable feature has been proven on the owner's actual inverter.**
 
 **Repository:** https://github.com/userdc-dev/saj-h2-control-enhanced  
 **Older full development diary:** [docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md](docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md) (57 KB historical archive; early claims of “planning-only” are OBSOLETE)  
@@ -41,7 +41,7 @@ User prefers concrete coding and short copy-paste setup commands over long reass
 | Connection | Config flow can reuse the independent `saj_h2_safe` monitor config entry or use manually supplied IP/port |
 | Dashboard | Independent **SAJ TOU Control** sidebar; path `/saj-tou-control/tou`, one custom `saj-tou-dynamic-card` |
 | Integration domain | `saj_h2_control_enhanced` |
-| Frontend URL (v0.5.7) | `/saj-h2-tou/v056/saj-tou-dynamic-card.js` |
+| Frontend URL (v0.5.10) | `/saj-h2-tou/v0510/saj-tou-dynamic-card.js` |
 | Normal readback interval | Default **120 seconds** (configurable 60–3600 seconds) |
 | Python dependency | `pymodbus>=3.6.9,<4` |
 | Separate monitor | `saj_h2_safe` — never overwrite or remove |
@@ -384,5 +384,48 @@ Owner explicitly requested removal of the redundant **“● Read-only telemetry
 ## 19. v0.5.9 Live energy update cadence caption
 
 Owner asked to show how frequently the live energy readings refresh after reviewing the clean v0.5.8 layout. The Live energy title row now contains a small **↻ Updates ~10 sec (default)** text label (not a separate badge). This reflects the separate safe monitor's `live_scan_interval` default of 10 seconds; the interval may be configured, and solar forecast updates are independent. The label has a tooltip explaining both limitations. This is **display-only**. No polling rates, sensor processing, dashboard refresh action, write controls, or other integrations were altered. Frontend cache URL is `/saj-h2-tou/v059/saj-tou-dynamic-card.js`; release v0.5.9. Browser visual verification remains needed.
+
+## 20. v0.5.10 final screenshot polish and GitHub-only no-YAML distribution
+
+### Owner's explicit requirements
+
+On 2026-11-02 the user supplied two annotated screenshots and requested:
+
+1. In the **Inverter controls** header, remove the meaningless static text **“Live mode · Outside TOU”** and **show actual live values instead**. Both section bodies repeated these same values as **“Device: Self-consumption”**; move them to the unified header for a clear at-a-glance summary.
+2. Condense the bottom **Charging & discharging schedules** layout. The two 0/7 cards repeated counts in header and badge, spread their empty state vertically, and showed a large always-on paragraph about validation, weekend bits, midnight, partial writes and approximate power. Shorten the cards, make controls discoverable, and make the warnings less intrusive without concealing risk.
+3. Make this a real repo-ready, updateable integration **from GitHub alone, without manual `configuration.yaml`, Lovelace YAML, or JS resources**, with complete install/update instructions and durable developer handover. The independent Safe Monitor and existing **SAJ Energy** dashboard must remain untouched.
+4. Preserve the version policy: **0.5.x patch releases until genuinely stable; 1.0.0 reserved for a fully field-verified final version**.
+
+### Completed in v0.5.10
+
+**Live Inverter controls summary.** The card now renders a right-aligned, compact two-value **Operating: [current HA operating mode]** and **Outside TOU: [current HA fallback state]** header, both sourced directly from the integration's latest Modbus-read sensors. The redundant static pill and two separate “Device: …” captions have been removed. The mode buttons and fallback selector remain beneath their respective clear headings in the existing two-column panel. Status values change only as readback states change, not as speculative optimistic writes.
+
+**Condensed schedule section.** Section heading **Charging & discharging** shows a compact “7 slots available per direction” descriptor or **● Unsaved changes** indicator; each charging/discharging panel has a **n/7** count and an **+ Add charging/discharging** button *in its top row*. Removed duplicate “configured on inverter” count badges and empty-state buttons below the text. For empty schedules, only a short **No charging/discharging periods set** line is shown. Saved slots retain all time/day/%/estimated W controls. The footer has **↶ Reload from inverter** on the left and the primary **Save schedule changes to inverter** on the right. A concise line below notes that power W is estimated, that saves verify, and that interrupted writes require manual elekeeper inspection. **Important risks still appear in the actual Save confirmation modal and error responses; no safety check was removed.**
+
+**UI-owned, no-YAML installation.** Repo root now has `hacs.json` (name **SAJ H2 Control Enhanced**), valid one-integration layout, and [`docs/INSTALLATION.md`](docs/INSTALLATION.md). For HA versions supporting HACS/Marketplace custom integration repositories, users add **this exact GitHub repository** and install, then use **Settings → Devices & services → Add integration**. The integration config flow takes an existing read-only monitor source or manually entered Modbus host/port; it automatically registers `saj-tou-dynamic-card.js` via Home Assistant's frontend and creates a standalone **SAJ TOU Control** dashboard with the native **SAJ H2 Control** view title. It does **not** need `configuration.yaml`, custom Lovelace YAML, or a manual frontend JS resource.
+
+**Included CLI installer.** `scripts/install.sh /path/to/homeassistant/config [--with-safe-monitor]` is an alternative for Linux/Docker users; it downloads the repository from GitHub, backs up existing controller code to `<HA_CONFIG>/.saj-h2-backups/` **outside `custom_components/`**, and copies the complete integration code into the expected folder. The `--with-safe-monitor` option additionally downloads the independent read-only `userdc-dev/saj-h2-safe-enhanced` code **only if missing**; never overwrite an existing monitor. User must restart HA using their environment and complete normal HA UI config flow. **Code installation alone cannot silently create a fully configured Modbus connection**. This separation is intentional: the read-only monitor is independent, not copied into this integration's `custom_components` folder, which must remain HACS-compatible. Without the monitor, the TOU readback and controls can still run, but the Live energy table shows unavailable/missing measurements. No YAML is necessary in either case.
+
+**Corrected new-entry title:** `config_flow.py` no longer creates new control config entries titled **“(read-only)”**; now **SAJ H2 Control Enhanced**. Existing config entry IDs and previously installed sensor unique IDs are not migrated or removed. `__init__.py` / `frontend_setup.py` comments now accurately describe current control behavior.
+
+**CI:** New `tests/test_package_and_ui.py` verifies `hacs.json`, one integration folder, config flow, bundled frontend, versioned URL matching manifest, automatic Lovelace creation, and screenshot-requested concise UI/status content. Workflow now checks this suite and `bash -n scripts/install.sh`. The obsolete “Reject Modbus write implementations” grep, written for an earlier planning-only project and incapable of describing the real supervised write paths, has been retired. The **existing simulated** readback, mode, schedule, fallback and title migration tests continue running. **No CI test connects to the owner's inverter or executes an end-to-end browser/HA session**.
+
+### Remaining limitations (do not call v1 stable yet)
+
+- New v0.5.10 layout still requires screenshot validation on the owner's browser; GitHub JS syntax and packaging tests are not equivalent to a browser visual regression test.
+- Tested model/profile is still SAJ **H2-10K-S3-A, control firmware v2.018**; writes are intentionally not universally enabled for arbitrary SAJ models or firmware.
+- The first full broad 7+7 schedule write, Standby fallback write and all Sat/Sun individual bit combinations lack complete owner-confirmed live-hardware evidence. Old user screenshots show the app's current saved schedule and some completed operations but are not comprehensive certification. **Never blindly repeat or rollback an ambiguous write.**
+- The standalone Live energy graphs require the separate Safe Monitor to expose its existing HA sensors. The new installation guide is self-contained and can bootstrap the monitor code, but **automatic entity/config creation is not promised** for a missing monitor; each integration is configured through HA's normal UI.
+- HACS/Marketplace behavior changes between HA releases; `hacs.json` and repo structure follow the current publisher format but cannot guarantee approval in the official catalog. Custom repository support varies by installation. The shell script is the documented fallback and **does not edit HA YAML**.
+- Future force-charge timers, OCPP, HVAC automations, 24-hour recorder charts, persistent cross-reboot write journal, and broad hardware compatibility are not yet shipped.
+
+### Next developer checklist
+
+1. Run the complete GitHub CI and verify the manifest tag **0.5.10** matches frontend cache asset **`/saj-h2-tou/v0510/saj-tou-dynamic-card.js`**.
+2. Follow **docs/INSTALLATION.md** on a fresh HA test instance using just this repository (and optionally the independent Safe Monitor). Confirm custom repository installation, Settings → Devices & services config flow and automatic dashboard/card creation **without any YAML edits**.
+3. Verify single-device and multi-device headers show the correct **Operating / Outside TOU** values from distinct readbacks. Ensure switching devices never sends a write.
+4. Verify empty schedule panels have the add button in their header; edited drafts show a marker; Save still uses one confirmation and does complete preflight/post-write checks.
+5. Record actual on-device confirmation for remaining unverified schedule/fallback write combinations and document device firmware and elekeeper evidence before considering v1.0.0.
+6. Keep the separate `saj_h2_safe` integration and old SAJ Energy dashboard **unchanged**.
 
 **Historical appendix:** The full earlier handover is retained unabridged at [docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md](docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md); it contains original 2026-11-01 experiments, paired screenshots, previous mode-control iterations, firmware discovery, dashboard cache fixes, and repeated user feedback. Its early “planning-only” language was true at the time but is no longer a current feature status.
