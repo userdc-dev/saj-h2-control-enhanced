@@ -232,3 +232,18 @@ The user emphasized that existing read-only SAJ entities must be the **operation
 - **Critical insight:** HA `last_changed` / `last_updated` alone are not reliable source freshness; stable sensor values may not change even while polling, and stale values may linger after failure. The control integration must get a **verified source successful-poll timestamp** (and confirmed control ownership) before it can authorize requests. Do not bypass this for convenience.
 - Next milestone: review/test the pure telemetry adapter against actual HA available entities and add a test-only finite-state timed-action/schedule simulator; plan independent source heartbeat without introducing dangerous writes or damaging the safe integration.
 
+
+## 15. SAJ mobile app TOU screenshots and synchronization requirement (2026-11-01)
+
+**Read [docs/SAJ_APP_TOU_OBSERVATIONS.md](docs/SAJ_APP_TOU_OBSERVATIONS.md) before implementing any mode/TOU UI or protocol.** The owner provided screenshots documenting:
+- Distinct **Current mode** Self-consumption vs Time-of-use, with Save.
+- TOU **Charge Settings +** and **Discharge settings +**, reported max **7 independent charge and 7 discharge entries**.
+- Each displayed discharge slot has start/end time, power in W, and Monday–Sunday **multi-select** (Select All available). Example **22:00–22:40**, **9900 W**, Wednesday; **[0–9900] W** displayed for *discharge* only, not validated device/BMS safe output.
+- Independent **Non-charge/discharge time period settings** in TOU permits **Self-consumption** or **Standby**. Owner wants **Self-consumption by default**. This is a TOU fallback setting, **not the same as overall inverter operating mode**.
+- Separate **Off-grid load backup enabled** toggle and **Off-grid AC Coupling** option are visible and must remain entirely untouched. Do not equate them with forbidden operating modes.
+- Owner observes mode/TOU settings may take **up to roughly 5 minutes** to fully activate, often at :00/:05/etc. Treat this as observation, not guaranteed timing.
+- **NON-NEGOTIABLE:** HA must read settings *from device*, including mode, charge/discharge time windows, power, days and TOU fallback, and reconcile when settings are changed via official SAJ app. Local drafts/pending writes must never be displayed as confirmed active until device-side readback and observed effective state. Never silently overwrite an external SAJ app change.
+- We **do not yet know** the register schema for TOU slots and fallback; do not fabricate it. Read-only register discovery and owner-visible cross-checks required before any write.
+- Mode 2/3 remain permanently excluded. Instant active settings and simple HA-only timers must not be misrepresented as equivalent to device-configured schedules.
+
+**Status remains non-writing:** screenshot findings and sync contract committed as docs; no TOU register synchronization is implemented yet.
