@@ -105,6 +105,24 @@ class TestHAMonitorProtocol(unittest.TestCase):
         self.assertEqual(slot["power_watts_saj_display"], 6930)
         self.assertTrue(slot["power_conversion_verified"])
 
+    def test_real_two_discharge_slots_weekend_combination(self):
+        # App Saturday + Sunday 08:00-08:10, entered 100 W.
+        # Actual readback mask3 and second slot word 24577 = (96<<8)|1.
+        charge = [1, 3] + [0] * 21
+        discharge = [5632, 5672, 1074, 2048, 2058, 24577] + [0] * 15
+        cfg = module.decode_config(charge, discharge, 1, 1)
+        self.assertEqual(len(cfg.summary("discharge")), 2)
+        first, second = cfg.summary("discharge")
+        self.assertEqual(first["slot"], 1)
+        self.assertEqual(first["weekday_verified"], "Wednesday")
+        self.assertEqual(second["slot"], 2)
+        self.assertEqual(second["weekday_mask_raw"], 96)
+        self.assertEqual(second["weekday_verified"], "Saturday, Sunday")
+        self.assertEqual(second["start"], "08:00")
+        self.assertEqual(second["end"], "08:10")
+        self.assertEqual(second["power_percent_raw"], 1)
+        self.assertEqual(second["power_watts_saj_display"], 99)
+
     def test_confirmed_weekday_only(self):
         cfg = module.decode_config([0, 1]+[0]*21,
             [0x1600, 0x1628, 0x0432]+[0]*18, 1, 1)
