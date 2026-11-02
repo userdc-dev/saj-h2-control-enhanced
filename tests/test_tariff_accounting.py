@@ -211,6 +211,24 @@ class AccountingTests(unittest.TestCase):
                 self.accounting.totals["month"]["tariff"]["supply_charged_dates"]),2)
         asyncio.run(run())
 
+    def test_legacy_flat_tariff_also_gets_full_daily_supply(self):
+        async def run():
+            self.entry.options={
+                "configured":True,"import_rate":.35,
+                "export_rate":.05,"daily_supply":1.49
+            }
+            Time.at=RealDateTime(2026,11,2,13,0,tzinfo=TZ).astimezone(timezone.utc)
+            await self.accounting.async_initialize()
+            today=self.accounting.data["costs"]["today"]
+            self.assertEqual(today["supply_cost"],1.49)
+            self.assertEqual(today["net_cost"],1.49)
+            self.accounting.on_monitor_update()
+            self.assertEqual(self.accounting.data["costs"]["today"]["supply_cost"],1.49)
+            Time.at=RealDateTime(2026,11,3,13,0,tzinfo=TZ).astimezone(timezone.utc)
+            self.accounting.on_monitor_update()
+            self.assertEqual(self.accounting.data["costs"]["month"]["supply_cost"],2.98)
+        asyncio.run(run())
+
     def test_upgrade_reconciles_current_day_prorated_fee(self):
         async def run():
             self.profile["daily_supply"]=1.5
