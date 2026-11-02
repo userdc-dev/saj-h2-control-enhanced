@@ -4,12 +4,15 @@
 
 > **New developer / AI assistant:** [READ THE COMPLETE DEVELOPER_HANDOFF.md FIRST](DEVELOPER_HANDOFF.md). The handover includes exact inverter registers, code architecture, real-vs-simulated testing evidence, safety gates, recovery steps, and outstanding requirements. The historical chronology is preserved in [the archive](docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md).
 >
-> **Version in this README:** v0.5.17. Inspect [manifest.json](custom_components/saj_h2_control_enhanced/manifest.json) and [GitHub Actions](https://github.com/userdc-dev/saj-h2-control-enhanced/actions) to confirm the current release.
+> **Version in this README:** v0.5.18. Inspect [manifest.json](custom_components/saj_h2_control_enhanced/manifest.json) and [GitHub Actions](https://github.com/userdc-dev/saj-h2-control-enhanced/actions) to confirm the current release.
 
 **Versioning rule:** Keep iterative improvements in the pre-1.0 patch series (`0.5.6`, `0.5.7`, etc.) until the complete feature set is stable and hardware-verified. Reserve **v1.0.0** for the final release; do not prematurely claim stability with a major version bump.
 
 ## What this integration does
 
+- **Clutter-free dashboard (v0.5.18):** streamlined Costs & savings overview with collapsible detailed cost breakdown and time-of-use tariff editor; a four-column-responsive, initially collapsed **Home Assistant Energy sensor guide** shows actual entity IDs and friendly names in selectable inputs with Copy buttons (grid, solar, battery charge/discharge, SOC and home).
+- **Every graph is inspectable:** the original Historic Data kW graph retains its hover/tap/keyboard crosshair. The forecast **Actual vs projected** kWh graph now offers the same inspection, plus separate daily/hourly forecast bars respond to hover/tap/focus. The actual forecast chart retrieves its **own local-day Recorder history**, flags missing observations, and visibly breaks lines across gaps. The 24-hour bar list and saved panel editor are collapsed by default to stay tidy.
+- **Regression coverage:** Node's offline mock Home Assistant/DOM smoke test exercises copyable IDs, compact sections and forecast hover event handlers, alongside existing Python/JS safety and accounting tests. This is not a live browser hardware test.
 - **Home Assistant Energy power management:** offers three clearly identified W/measurement sensor aliases: signed grid power for **Standard**, separate positive imported and exported power for **Two sensors**. Energy kWh sensor aliases remain separate and existing IDs are preserved. See [Energy integration guide](docs/ENERGY_AND_COSTS.md).
 - **Fixed supply charge correction:** uses the **full user-configured daily supply fee per tracked local calendar day**, independently of partial sensor coverage; prior current-day prorated charges are reconciled during upgrade. No double-charging on a same-day tariff edit.
 - Supplies **Home Assistant Energy-ready sensor aliases** for grid energy import/export estimates, lifetime solar production, battery charge/discharge, signed power, SOC and home consumption. Grid kWh estimates use monitored power data and require direction verification; don't mistake them for utility meters.
