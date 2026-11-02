@@ -47,7 +47,16 @@ class PackageAndUI(unittest.TestCase):
         self.assertIn('\"cards\": [{\"type\": \"custom:saj-tou-dynamic-card\"}]', frontend)
         self.assertIn("await async_ensure_dashboard(hass)", init)
         self.assertIn("async_step_user", (CUSTOM / "config_flow.py").read_text())
-        self.assertIn("NO configuration.yaml", script.read_text())
+        self.assertIn("No configuration.yaml", script.read_text())
+        bundled = ROOT / "bundled_components" / "saj_h2_safe"
+        self.assertTrue(bundled.is_dir())
+        for name in ("__init__.py", "config_flow.py", "const.py", "manifest.json",
+                     "sensor.py", "solar_forecast.py", "solar_model.py"):
+            self.assertTrue((bundled / name).is_file(), name)
+        source = script.read_text()
+        self.assertIn("bundled_components/saj_h2_safe", source)
+        self.assertIn("Existing SAJ H2 Safe Monitor detected", source)
+        self.assertNotIn("saj-h2-safe-enhanced/archive", source)
 
     def test_clean_visual_statuses_and_compact_schedule_actions(self):
         card = JS.read_text()
