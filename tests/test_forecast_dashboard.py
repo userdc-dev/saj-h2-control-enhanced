@@ -31,8 +31,11 @@ class ForecastDashboardTests(unittest.TestCase):
             self.assertIn(token, ui)
         self.assertIn('this._goPage("forecast")', ui)
         self.assertIn('"Save settings & recalculate"', ui)
-        self.assertIn('Solar",home:"House"', ui)
-        self.assertIn('battery:"Battery",grid:"Grid",forecast:"Forecast"', ui)
+        self.assertIn('solar:"Solar production",home:"House usage"', ui)
+        self.assertIn('battery:"Battery ±",grid:"Grid ±"', ui)
+        self.assertIn('"Historic Data"', ui)
+        self.assertIn('plot(series.gridExport,colors.grid,true)', ui)
+        self.assertNotIn('"Live energy · history"', ui)
 
     def test_forecast_service_is_separate_from_inverter_writes(self):
         source = (CONTROL / "__init__.py").read_text()
