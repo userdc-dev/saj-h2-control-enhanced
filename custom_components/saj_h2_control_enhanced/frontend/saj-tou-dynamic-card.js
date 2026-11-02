@@ -475,6 +475,8 @@ class SajTOUDynamicCard extends HTMLElement {
     if(!daily.length)add(days,el("p","muted","Forecast pending weather service response."));
     add(section,days);
     const hourly=Array.isArray(data.hourly_today)?data.hourly_today:[];
+    add(section,el("h3",null,"Actual vs projected · Today"));
+    add(section,this._actualProjectedChart(hourly));
     add(section,el("h3",null,"Today · hourly PV forecast"));
     if(hourly.length){
       const plot=el("div","forecastDays");
@@ -593,6 +595,77 @@ class SajTOUDynamicCard extends HTMLElement {
       this._forecastMessage="Forecast settings not saved: "+(err?.message||String(err));
     }finally{this._forecastSaving=false;this.render();}
   }
+  _actualProjectedChart(hourly){
+    const panel=el("section","forecastHistory");
+    if(!hourly.length){
+      add(panel,el("p","muted","Hourly forecast data not yet available."));
+      return panel;
+    }
+    const solarHistory=this._historyData?.solar||[];
+    if(!this._historyData&&!this._historyPending)this._loadHistory();
+    const now=new Date();
+    const midnight=new Date(now);
+    midnight.setHours(0,0,0,0);
+    const midnightMs=midnight.getTime();
+    const projection=[];
+    let accumulated=0;
+    const ordered=hourly.slice().sort((a,b)=>a.hour.localeCompare(b.hour));
+    projection.push({hour:0,kwh:0});
+    for(const record of ordered){
+      const h=Number(record.hour.slice(0,2)),minute=Number(record.hour.slice(3,5));
+      if(!Number.isFinite(h)||!Number.isFinite(minute))continue;
+      accumulated+=Math.max(0,Number(record.kwh)||0);
+      projection.push({hour:h+minute/60+1,kwh:accumulated});
+    }
+    const actual=[{hour:0,kwh:0}];
+    let total=0,prior=null;
+    for(const sample of solarHistory){
+      if(sample.t<midnightMs||sample.t>Date.now())continue;
+      if(prior&&sample.t-prior.t<=30*60000){
+        total+=Math.max(0,(Math.max(0,sample.y)+Math.max(0,prior.y))/2)*
+          (sample.t-prior.t)/3600000000;
+      }
+      actual.push({hour:(sample.t-midnightMs)/3600000,kwh:total});
+      prior=sample;
+    }
+    const peak=Math.max(1,...projection.map(p=>p.kwh),...actual.map(p=>p.kwh));
+    const ns="http://www.w3.org/2000/svg";
+    const svg=document.createElementNS(ns,"svg");
+    svg.setAttribute("viewBox","0 0 920 280");
+    svg.setAttribute("class","historySvg");
+    svg.setAttribute("role","img");
+    svg.setAttribute("aria-label","Cumulative actual solar production compared with projected PV output today");
+    const shape=(tag,attrs,content)=>{
+      const node=document.createElementNS(ns,tag);
+      for(const [k,v] of Object.entries(attrs))node.setAttribute(k,String(v));
+      if(content!==undefined)node.textContent=content;
+      svg.append(node);return node;
+    };
+    const x=h=>50+Math.max(0,Math.min(24,h))/24*820;
+    const y=kwh=>235-Math.max(0,Math.min(1,kwh/peak))*205;
+    for(let i=0;i<=4;i++){
+      const yy=30+(205*i/4);
+      shape("line",{x1:50,y1:yy,x2:870,y2:yy,stroke:"currentColor","stroke-opacity":".15"});
+      shape("text",{x:43,y:yy+4,fill:"currentColor","text-anchor":"end","font-size":11},
+        (peak*(4-i)/4).toFixed(0));
+    }
+    for(let h=0;h<=24;h+=6)shape("text",{
+      x:x(h),y:260,fill:"currentColor","font-size":12,"text-anchor":"middle"},h+":00");
+    for(const [points,color] of [[projection,"#dfb548"],[actual,"#529ce7"]]){
+      if(points.length<2)continue;
+      const d=points.map((p,i)=>(i?"L":"M")+x(p.hour).toFixed(1)+","+
+        y(p.kwh).toFixed(1)).join(" ");
+      shape("path",{d,stroke:color,"stroke-width":2.5,fill:"none",
+        "stroke-linecap":"round","stroke-linejoin":"round"});
+    }
+    add(panel,svg,el("div","historyFoot",
+      "● Projected PV production (yellow)  ● Recorded actual PV production (blue) · kWh accumulated today. "+
+      "Actual is integrated from Home Assistant history and can be incomplete if recordings have gaps; "+
+      "the model's AC limit is not applied to PV-side production."));
+    if(!solarHistory.length)add(panel,el("p","muted",
+      "Actual production graph will appear when Home Assistant recorded history becomes available."));
+    return panel;
+  }
   _historyChart(){
     const panel=el("section","forecastHistory");
     const top=el("div","historyHead");
@@ -682,7 +755,9 @@ class SajTOUDynamicCard extends HTMLElement {
       }
       if(segment.length)segments.push(segment);
       for(const seg of segments){
-        const d=seg.map((p,i)=>(i?"L":"M")+x(p.t).toFixed(1)+","+
+        const stride=Math.max(1,Math.ceil(seg.length/400));
+        const reduced=seg.filter((_,i)=>i%stride===0 || i===seg.length-1);
+        const d=reduced.map((p,i)=>(i?"L":"M")+x(p.t).toFixed(1)+","+
           (key==="forecast"?yF(p.y):yP(Math.abs(p.y))).toFixed(1)).join(" ");
         shape("path",{d,fill:"none",stroke:colors[key],"stroke-width":2.2,
           "stroke-linejoin":"round","stroke-linecap":"round"});
