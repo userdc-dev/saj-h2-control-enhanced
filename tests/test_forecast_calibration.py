@@ -96,7 +96,9 @@ class ForecastLearningTests(unittest.TestCase):
     def test_issued_forecast_scored_only_after_day_with_matching_hours(self):
         target=datetime(2026,10,20,tzinfo=TZ)
         records=[]
-        for hour in range(7,19):
+        for hour in range(6,18):
+            # HA UTC-aligned intervals start at xx:30 local and their
+            # physical midpoint is the next local whole hour (07..18).
             epoch=int(target.replace(hour=hour,minute=30).timestamp())
             records.append({"start":epoch,"mean":1000.0})
         predictions=[
@@ -137,6 +139,9 @@ class ForecastLearningTests(unittest.TestCase):
         ui=(COMP/"frontend"/"saj-tou-dynamic-card.js").read_text()
         self.assertIn("statistics_during_period",forecast)
         self.assertIn("ARCHIVE_URL",forecast)
+        self.assertIn("int(ts)-3600:(value,cloud)",forecast)
+        self.assertIn("start_epoch+1800",forecast)
+        self.assertIn("epoch+1800", (COMP/"forecast_calibration.py").read_text())
         self.assertIn("async_backfill_history",forecast)
         self.assertIn("seasonal_factors",forecast)
         self.assertIn("_save_issued_forecast",forecast)
