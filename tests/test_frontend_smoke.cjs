@@ -257,19 +257,19 @@ async function main(){
   const exportOnly=probeGrid([],[
     makeSample(6700,hoverTarget-20000),makeSample(6760)
   ]);
-  assert.match(exportOnly.text,/Grid ±: -6\\.76 kW · exporting/,
+  assert.match(exportOnly.text,/Grid ±: -6\.76 kW · exporting/,
     "grid tooltip must show negative export when import has no nearby sample");
   assert.ok(exportOnly.text.includes("grid:")&&
     !exportOnly.text.includes("Grid ±: — no nearby reading"),
     "export-only reading must include the actual sample time");
   const importOnly=probeGrid([makeSample(3250)],[]);
-  assert.match(importOnly.text,/Grid ±: 3\\.25 kW · importing/,
+  assert.match(importOnly.text,/Grid ±: 3\.25 kW · importing/,
     "grid tooltip must show positive import when export has no nearby sample");
   const combined=probeGrid([makeSample(1000)],[makeSample(2500)]);
-  assert.match(combined.text,/Grid ±: -1\\.50 kW · exporting/,
+  assert.match(combined.text,/Grid ±: -1\.50 kW · exporting/,
     "synchronous import and export readings should retain signed net flow");
   const idle=probeGrid([makeSample(0)],[]);
-  assert.match(idle.text,/Grid ±: 0\\.00 kW · no net exchange/,
+  assert.match(idle.text,/Grid ±: 0\.00 kW · no net exchange/,
     "a genuine zero must be distinguished from missing history");
   const absentGrid=probeGrid([],[]);
   assert.match(absentGrid.text,/Grid ±: — no nearby reading/,
