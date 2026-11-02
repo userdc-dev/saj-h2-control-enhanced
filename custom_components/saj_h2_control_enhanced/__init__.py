@@ -540,6 +540,8 @@ async def async_setup(hass: HomeAssistant, config):
         hass.config_entries.async_update_entry(selected,options=options)
         if accounting is not None:
             accounting.on_tariff_changed()
+            # Persist today's full fixed daily supply charge immediately.
+            await accounting.async_save()
         return {
             "status":"TOU_TARIFF_PROFILE_SAVED",
             "write_sent":False,
