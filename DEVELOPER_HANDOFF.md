@@ -5,16 +5,29 @@
 **Repository:** https://github.com/userdc-dev/saj-h2-control-enhanced  
 **Older full development diary:** [docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md](docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md) (57 KB historical archive; early claims of “planning-only” are OBSOLETE)  
 **Paired app evidence:** [docs/SAJ_APP_TOU_OBSERVATIONS.md](docs/SAJ_APP_TOU_OBSERVATIONS.md)  
-**Separate read-only integration (DO NOT MODIFY):** https://github.com/userdc-dev/saj-h2-safe-enhanced  
+**Bundled read-only monitor:** `bundled_components/saj_h2_safe` **inside this repository**. Preserve already installed `saj_h2_safe` and the owner's existing SAJ Energy dashboard; do not require another repository.  
 **Current v0.5.10 CI evidence:** https://github.com/userdc-dev/saj-h2-control-enhanced/actions/runs/41364682084 — passed full Python/JS syntax, simulated Modbus safety, packaging, installer syntax and fake-archive install/update tests. This is **offline evidence, not live hardware certification**.
 
 > The owner wants this file to be detailed enough that a human developer or future assistant with **only this repo and these notes** understands the purpose, chronology, code, register mapping, tests, successful live observations, unresolved issues, installation, safety constraints, and next actions. Do not delete or hollow out this handover. Keep it current whenever changing actual features.
 >
 > **Brand spelling preference:** call the SAJ mobile application **elekeeper** (lowercase) in all new messages and UI. Older archive entries may use the old capitalization.
 
+## 0. Single-repository packaging and installation (2026-11-02)
+
+**Owner requirement:** A complete installation must obtain all needed source exclusively from `userdc-dev/saj-h2-control-enhanced`, with a short copy/paste Docker command. The existing `scripts/install.sh` already downloads one repository archive and installs both `saj_h2_control_enhanced` and bundled `saj_h2_safe` (monitor only if missing) by default. The old text describing `--with-safe-monitor` and fetching a second repo was inaccurate and has been superseded.
+
+**Copy/paste example for the recorded host:**
+```bash
+curl -fL https://raw.githubusercontent.com/userdc-dev/saj-h2-control-enhanced/main/scripts/install.sh -o /tmp/install-saj-h2.sh &&
+bash /tmp/install-saj-h2.sh /home/kamrui/compose-files/homeassistant/config &&
+docker restart homeassistant
+```
+
+This command is host-specific, not portable to HA OS or arbitrary Docker container names. The monitor retains its own domain/config entry for compatibility. **HACS-only controller installation does not presently deploy `bundled_components/saj_h2_safe`**; never claim it does. Do not auto-write Modbus, change existing monitor entity IDs or overwrite an already installed monitor. Treat this packaging/docs fix as non-runtime: no inverter-control code was changed and no new hardware verification was performed. The single authoritative user guide is [docs/INSTALLATION.md](docs/INSTALLATION.md).
+
 ## 1. Goal, scope, and user requirements
 
-There is already a stable, independent **read-only** Home Assistant integration, domain `saj_h2_safe`, and an owner's dashboard **SAJ Energy** showing solar, house consumption, battery state and energy forecast. This repo is a **separate** writable control layer. It must NEVER overwrite, merge, rename or break the read-only monitor, and it must not modify the existing SAJ Energy dashboard without a specific request.
+There is already a stable, independent **read-only** Home Assistant integration, domain `saj_h2_safe`, and an owner's dashboard **SAJ Energy** showing solar, house consumption, battery state and energy forecast. This repo provides both the **separate-domain** writable control layer and a bundled copy of the read-only monitor for installations missing it. It must NEVER overwrite, merge, rename or break the read-only monitor, and it must not modify the existing SAJ Energy dashboard without a specific request.
 
 The end goal is a polished dark/grey Home Assistant experience providing:
 
@@ -404,11 +417,11 @@ On 2026-11-02 the user supplied two annotated screenshots and requested:
 
 **UI-owned, no-YAML installation.** Repo root now has `hacs.json` (name **SAJ H2 Control Enhanced**), valid one-integration layout, and [`docs/INSTALLATION.md`](docs/INSTALLATION.md). For HA versions supporting HACS/Marketplace custom integration repositories, users add **this exact GitHub repository** and install, then use **Settings → Devices & services → Add integration**. The integration config flow takes an existing read-only monitor source or manually entered Modbus host/port; it automatically registers `saj-tou-dynamic-card.js` via Home Assistant's frontend and creates a standalone **SAJ TOU Control** dashboard with the native **SAJ H2 Control** view title. It does **not** need `configuration.yaml`, custom Lovelace YAML, or a manual frontend JS resource.
 
-**Safe Monitor HACS caveat (checked against independent repo):** As of this handover, `userdc-dev/saj-h2-safe-enhanced` has a HA config flow but **does not have a root `hacs.json`**; do not promise HACS installation of that separate repository. For the **full Live energy panel**, use `scripts/install.sh ... --with-safe-monitor` (which only installs the monitor if missing), or install the standalone Safe Monitor files using your HA file-management method, then configure it through HA **Settings → Devices & services**. The controller alone is a complete HACS-compatible repository. This caveat is explicit in [docs/INSTALLATION.md](docs/INSTALLATION.md). No YAML changes are necessary for the combined TOU dashboard.
+**Bundled monitor / HACS constraint (2026-11-02):** All monitor source is included under `bundled_components/saj_h2_safe` in **this repository** and `scripts/install.sh /path/to/config` installs it by default if absent, preserving existing monitor files. Do **not** direct users to the independent monitor repository or mention obsolete `--with-safe-monitor` flag. HACS installs only `custom_components/saj_h2_control_enhanced`, so standard HACS alone does not deploy the bundled monitor on a new system. Recommend the one-command installer for a complete Linux/Docker deployment. Each HA integration domain still needs its own config entry; existing entries are preserved. See `docs/INSTALLATION.md`.
 
 **Further offline installer verification:** `tests/test_install_script.py` runs the actual shell installer against a fake GitHub archive and temporary HA configuration directory. It tests first installation of both components, reinstallation and backup of changed control code, **preservation of an existing Safe Monitor**, exact source folder placement and unchanged `configuration.yaml`. Included in the passed CI run linked above. This is still not a physical HA environment test or an actual inverter read/write test.
 
-**Included CLI installer.** `scripts/install.sh /path/to/homeassistant/config [--with-safe-monitor]` is an alternative for Linux/Docker users; it downloads the repository from GitHub, backs up existing controller code to `<HA_CONFIG>/.saj-h2-backups/` **outside `custom_components/`**, and copies the complete integration code into the expected folder. The `--with-safe-monitor` option additionally downloads the independent read-only `userdc-dev/saj-h2-safe-enhanced` code **only if missing**; never overwrite an existing monitor. User must restart HA using their environment and complete normal HA UI config flow. **Code installation alone cannot silently create a fully configured Modbus connection**. This separation is intentional: the read-only monitor is independent, not copied into this integration's `custom_components` folder, which must remain HACS-compatible. Without the monitor, the TOU readback and controls can still run, but the Live energy table shows unavailable/missing measurements. No YAML is necessary in either case.
+**Included one-repo CLI installer.** `scripts/install.sh /path/to/homeassistant/config [--control-only]` downloads **this repository only**, backs up existing controller code under `.saj-h2-backups/` (outside `custom_components/`), and updates control code. By default it also installs bundled `saj_h2_safe` if absent; if present, its code is left untouched. `--control-only` skips monitor installation. Users restart HA and configure Safe Monitor (if needed) and the controller via HA Settings → Devices & services. No YAML edits or second repository needed. Script does not silently create config entries or change inverter settings.
 
 **Corrected new-entry title:** `config_flow.py` no longer creates new control config entries titled **“(read-only)”**; now **SAJ H2 Control Enhanced**. Existing config entry IDs and previously installed sensor unique IDs are not migrated or removed. `__init__.py` / `frontend_setup.py` comments now accurately describe current control behavior.
 
@@ -426,7 +439,7 @@ On 2026-11-02 the user supplied two annotated screenshots and requested:
 ### Next developer checklist
 
 1. Run the complete GitHub CI and verify the manifest tag **0.5.10** matches frontend cache asset **`/saj-h2-tou/v0510/saj-tou-dynamic-card.js`**.
-2. Follow **docs/INSTALLATION.md** on a fresh HA test instance using just this repository (and optionally the independent Safe Monitor). Confirm custom repository installation, Settings → Devices & services config flow and automatic dashboard/card creation **without any YAML edits**.
+2. Follow **docs/INSTALLATION.md** on a fresh HA test instance using only this repository (with its bundled Safe Monitor). Confirm custom repository installation, Settings → Devices & services config flow and automatic dashboard/card creation **without any YAML edits**.
 3. Verify single-device and multi-device headers show the correct **Operating / Outside TOU** values from distinct readbacks. Ensure switching devices never sends a write.
 4. Verify empty schedule panels have the add button in their header; edited drafts show a marker; Save still uses one confirmation and does complete preflight/post-write checks.
 5. Record actual on-device confirmation for remaining unverified schedule/fallback write combinations and document device firmware and elekeeper evidence before considering v1.0.0.
