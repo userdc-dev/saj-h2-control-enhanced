@@ -93,7 +93,45 @@ class SajTOUSensor(CoordinatorEntity, SensorEntity):
         return base
 
 
+class SajEditableForecastSensor(CoordinatorEntity, SensorEntity):
+    """Read-only forecast state and metadata exposed to the dashboard."""
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_name = "Editable solar forecast"
+    _attr_icon = "mdi:weather-sunny"
+
+    def __init__(self, forecast):
+        super().__init__(forecast)
+        self._attr_unique_id = f"{forecast.entry.entry_id}_editable_forecast"
+        self._attr_device_info = {
+            "identifiers": {(DOMAIN, forecast.entry.entry_id)},
+            "name": "SAJ H2 TOU Readback",
+            "manufacturer": "SAJ",
+            "model": "H2 · separate read-only settings",
+        }
+
+    @property
+    def native_value(self):
+        return ("Ready" if self.coordinator.last_update_success
+                and self.coordinator.data else "Unavailable")
+
+    @property
+    def extra_state_attributes(self):
+        from .forecast import settings_for
+        data = self.coordinator.data or {}
+        return {
+            "saj_tou_role": "editable_forecast",
+            "saj_tou_entry_id": self.coordinator.entry.entry_id,
+            "read_only": True,
+            **data,
+            "settings": data.get("settings", settings_for(self.coordinator.entry)),
+        }
+
+
 async def async_setup_entry(hass, entry, async_add_entities):
-    async_add_entities([
-        SajTOUSensor(entry.runtime_data, key) for key in DETAILS
-    ])
+    entities = [SajTOUSensor(entry.runtime_data, key) for key in DETAILS]
+    forecast = getattr(entry.runtime_data, "editable_forecast", None)
+    if forecast is not None:
+        entities.append(SajEditableForecastSensor(forecast))
+    async_add_entities(entities)
