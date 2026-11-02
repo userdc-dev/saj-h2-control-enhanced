@@ -701,7 +701,8 @@ class SajTOUDynamicCard extends HTMLElement {
     const ids={
       solar:SAFE_ENERGY_IDS.solar,home:SAFE_ENERGY_IDS.home,
       battery:SAFE_ENERGY_IDS.battery,
-      grid:SAFE_ENERGY_IDS.gridImport,forecast:SAFE_ENERGY_IDS.outlook
+      grid:SAFE_ENERGY_IDS.gridImport,gridExport:SAFE_ENERGY_IDS.gridExport,
+      forecast:SAFE_ENERGY_IDS.outlook
     };
     const idList=Object.values(ids);
     const start=new Date(Date.now()-this._historyHours*3600000);
@@ -716,16 +717,24 @@ class SajTOUDynamicCard extends HTMLElement {
         "history/period/"+encodeURIComponent(start.toISOString())+query);
       const result={solar:[],home:[],battery:[],grid:[],forecast:[]};
       if(!Array.isArray(response))throw Error("Unexpected Home Assistant history format");
+      const exports=[];
       for(const series of response){
-        if(!Array.isArray(series))continue;
+        if(!Array.isArray(series)||!series.length)continue;
+        // HA minimal_response records the entity ID on the first sample only.
+        const seriesId=series.find(item=>item.entity_id)?.entity_id;
+        const key=Object.keys(ids).find(k=>ids[k]===seriesId);
+        if(!key)continue;
         for(const item of series){
-          const key=Object.keys(ids).find(k=>ids[k]===item.entity_id);
-          if(!key)continue;
           const t=Date.parse(item.last_changed||item.last_updated||"");
+          if(["unknown","unavailable",""].includes(String(item.state)))continue;
           const y=Number(item.state);
-          if(Number.isFinite(t)&&Number.isFinite(y))result[key].push({t,y});
+          if(!Number.isFinite(t)||!Number.isFinite(y))continue;
+          if(key==="gridExport")exports.push({t,y});
+          else result[key].push({t,y});
         }
       }
+      // Combine recorded import AND export magnitudes without assuming sign.
+      result.grid.push(...exports);
       for(const key of Object.keys(result))result[key].sort((a,b)=>a.t-b.t);
       this._historyData=result;this._historySignature=signature;
     }catch(err){
