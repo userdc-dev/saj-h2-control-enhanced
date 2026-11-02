@@ -32,6 +32,8 @@ EXAMPLE_PROFILE={
          "windows":[{"start":"10:00","end":"15:00","days":DAYS}]},
     ],
     "export_standard_rate":0.05,
+    "export_standard_windows":[],
+    "export_fallback_rate":0.05,
     "export_high_rate":0.25,
     "export_high_windows":[{"start":"17:00","end":"21:00","days":DAYS}],
     # When battery-only eligibility cannot be metered reliably, DO NOT apply
@@ -114,8 +116,8 @@ def validate_profile(profile):
             p[key]=profile[key]
     if p.get("version")!=1:
         raise ValueError("Unsupported tariff profile version")
-    for key in ("default_import_rate","export_standard_rate","export_high_rate",
-                "daily_supply"):
+    for key in ("default_import_rate","export_standard_rate",
+                "export_fallback_rate","export_high_rate","daily_supply"):
         p[key]=_number(p[key],key)
     for key in ("gst_percent","other_tax_percent"):
         p[key]=_number(p[key],key,0,100)
@@ -163,6 +165,8 @@ def validate_profile(profile):
                 f"Import times overlap: {previous[2]} and {current[2]}. "
                 "Use non-overlapping bands; fallback rate covers all gaps.")
     p["import_bands"]=bands
+    p["export_standard_windows"]=_windows(
+        p["export_standard_windows"],"Standard export FiT")
     p["export_high_windows"]=_windows(
         p["export_high_windows"],"High export FiT")
     # Multiple overlapping high FIT windows are redundant but not ambiguous.
@@ -190,10 +194,17 @@ def choose_rates(profile,when):
         imp={"id":"default","name":"Other / fallback","rate":profile["default_import_rate"]}
     high=any(_matches(w,when) for w in profile["export_high_windows"])
     eligible=high and profile["high_fit_eligibility"]=="all_exports"
+    explicit=profile.get("export_standard_windows",[])
+    standard=(not explicit or any(_matches(w,when) for w in explicit)
+              or (high and not eligible))
+    if eligible:
+        exp_id,exp_name,exp_rate="high","High FiT",profile["export_high_rate"]
+    elif standard:
+        exp_id,exp_name,exp_rate="standard","Standard FiT",profile["export_standard_rate"]
+    else:
+        exp_id,exp_name,exp_rate="fallback","Other export FiT",profile["export_fallback_rate"]
     exp={
-        "id":"high" if eligible else "standard",
-        "name":"High FiT" if eligible else "Standard FiT",
-        "rate":profile["export_high_rate"] if eligible else profile["export_standard_rate"],
+        "id":exp_id,"name":exp_name,"rate":exp_rate,
         "high_window":high,
         "potential_high_rate":profile["export_high_rate"],
     }
