@@ -216,7 +216,25 @@ async function main(){
   states["sensor.saj_h2_safe_monitor_battery_discharge_today"]={
     entity_id:"sensor.saj_h2_safe_monitor_battery_discharge_today",
     state:"0.42",attributes:{unit_of_measurement:"kWh"}};
-    const costs=card._costPage();
+    card._historyHours=1/6;
+  card._historyData={
+    solar:[{t:Date.now()-120000,y:3200},{t:Date.now()-60000,y:4200}],
+    home:[{t:Date.now()-120000,y:1500},{t:Date.now()-60000,y:1100}],
+    battery:[{t:Date.now()-120000,y:-800},{t:Date.now()-60000,y:-3000}],
+    gridImport:[],gridExport:[]
+  };
+  const shortChart=card._historyChart();
+  assert.ok(findAll(shortChart,"option").some(o=>o.textContent==="10 minutes"),
+    "Historic Data dropdown offers a 10-minute window");
+  assert.equal(findAll(shortChart,"option")[0].value,String(1/6),
+    "shortest window comes before six hours");
+  assert.ok(shortChart.textContent.includes("30-second steps"),
+    "10-minute chart uses a precise 30-second hover cursor");
+  assert.ok(find(shortChart,"historySvg").listeners.pointermove,
+    "10-minute graph is mouse-hoverable");
+  card._historyHours=24;
+  card._historyData=null;
+  const costs=card._costPage();
   assert.equal(find(costs,"costEditorShell").open,false,
     "already configured tariff editor should be folded away");
   assert.equal(find(costs,"costBreakdown").open,false,
