@@ -38,7 +38,6 @@ class ForecastDashboardTests(unittest.TestCase):
         self.assertIn('svg.addEventListener("pointermove"', ui)
         self.assertIn('svg.addEventListener("pointerdown"', ui)
         self.assertIn('svg.addEventListener("keydown"', ui)
-        self.assertIn('"HistoryTooltipNeverUsed"', ui) if False else None
         self.assertNotIn('"Live energy · history"', ui)
 
     def test_forecast_service_is_separate_from_inverter_writes(self):
