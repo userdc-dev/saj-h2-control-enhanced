@@ -6,15 +6,15 @@ The original monitor remains its own Home Assistant integration domain (`saj_h2_
 
 ## 1. Easiest installation: one copy/paste block (Linux / Docker)
 
-SSH into the machine running Home Assistant and paste:
+SSH into the machine running Home Assistant, **replace `/home/USER/compose-files/homeassistant/config` with your real Home Assistant configuration directory**, then run:
 
 ```bash
 curl -fL https://raw.githubusercontent.com/userdc-dev/saj-h2-control-enhanced/main/scripts/install.sh -o /tmp/install-saj-h2.sh &&
-bash /tmp/install-saj-h2.sh /home/kamrui/compose-files/homeassistant/config &&
+bash /tmp/install-saj-h2.sh /home/USER/compose-files/homeassistant/config &&
 docker restart homeassistant
 ```
 
-This is the **existing owner's installation path**. For another Linux/Docker installation, replace `/home/kamrui/compose-files/homeassistant/config` with its *actual* Home Assistant configuration directory, and `homeassistant` with its real Docker container name. If you are using Home Assistant OS, the Docker command above is **not applicable**.
+`USER` is a placeholder (not a literal or automatically discovered username). Docker configuration mounts differ: some installations do not use `compose-files/homeassistant/config` at all. Verify your config directory and change the full path if needed; also replace `homeassistant` with your actual Docker container name. For the original Kamrui host, the known working directory is `/home/kamrui/compose-files/homeassistant/config`. Home Assistant OS users should **not** run this Docker-specific command.
 
 The installer:
 
