@@ -59,12 +59,12 @@ class EnergyFinanceTests(unittest.TestCase):
         self.assertEqual(fn(None,3,4,.5,.1),None)
         self.assertEqual(fn(5,7,0,.5,.1),0)
 
-    def test_partial_period_cost_based_on_coverage_not_full_month(self):
+    def test_full_daily_supply_is_independent_of_monitor_coverage(self):
         tz=ZoneInfo("Australia/Adelaide")
         now=datetime.datetime(2026,11,2,8,0,tzinfo=tz)
         row={"import_kwh":4,"export_kwh":2,"home_kwh":8,
              "solar_kwh":5,"battery_discharge_kwh":1,
-             "coverage_seconds":7200,
+             "coverage_seconds":7200,"legacy_supply_cost":1.5,
              "home_coverage_seconds":7200,
              "battery_discharge_coverage_seconds":7200}
         totals={
@@ -73,9 +73,9 @@ class EnergyFinanceTests(unittest.TestCase):
         }
         pricing={"import_rate":.5,"export_rate":.1,"daily_supply":1.5}
         out=self.p["snapshot_costs"](totals,pricing,now,tz)
-        # Import $2 - export $0.20 + prorated 2h supply $0.125
-        self.assertEqual(out["today"]["net_cost"],1.93)
-        self.assertEqual(out["month"]["net_cost"],1.93)
+        # Import $2 - export $0.20 + full daily supply $1.50
+        self.assertEqual(out["today"]["net_cost"],3.30)
+        self.assertEqual(out["month"]["net_cost"],3.30)
         self.assertTrue(out["today"]["period_partial"])
         self.assertEqual(out["today"]["self_supply_estimated_benefit"],2.2)
 
