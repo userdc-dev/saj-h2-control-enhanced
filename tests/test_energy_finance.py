@@ -63,7 +63,9 @@ class EnergyFinanceTests(unittest.TestCase):
         now=datetime.datetime(2026,11,2,8,0,tzinfo=tz)
         row={"import_kwh":4,"export_kwh":2,"home_kwh":8,
              "solar_kwh":5,"battery_discharge_kwh":1,
-             "coverage_seconds":7200}
+             "coverage_seconds":7200,
+             "home_coverage_seconds":7200,
+             "battery_discharge_coverage_seconds":7200}
         totals={
             "today":dict(row,period="2026-11-02"),
             "month":dict(row,period="2026-11"),
