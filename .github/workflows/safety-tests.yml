@@ -34,6 +34,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_install_script.py'
           python -m unittest discover -s tests -p 'test_forecast_dashboard.py'
           python -m unittest discover -s tests -p 'test_forecast_calibration.py'
+          python -m unittest discover -s tests -p 'test_forecast_runtime.py'
           python -m unittest discover -s tests -p 'test_energy_finance.py'
           python -m unittest discover -s tests -p 'test_tariffs.py'
           python -m unittest discover -s tests -p 'test_tariff_accounting.py'
