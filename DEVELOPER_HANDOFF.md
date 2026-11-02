@@ -1,20 +1,37 @@
-## v0.5.14 — Historic Data inspection
-
-The Historic Data SVG chart supports pointer hover, touch tap and keyboard left/right stepping; a crosshair and per-series value panel report *nearest actual Home Assistant recorder sample*. Selection snaps at 5 minutes for 6–24 h, 10 minutes for 48 h and 30 minutes for 7 days; no interpolation or fabricated values are returned. If no sample lies within half a step, show a dash. Grid numbers combine import/export streams only when both nearby readings exist. The chart's original plotted paths, control services and underlying HA data storage remain unchanged. Real browser and device checks still needed.
-
 # Developer handover — SAJ H2 Control Enhanced
 
-**Canonical current guide; updated 2026-11-02, Australia/Adelaide.** Read this before changing any code, dashboard, or Modbus control. **Current version at the time of this handover: 0.5.11.** The project was previously design-only, but now has a deployed Home Assistant control integration with working mode controls, schedule editing code, new fallback control, and read-only energy graphics/table within the TOU dashboard. **Not every writable feature has been proven on the owner's actual inverter.**
+**Canonical current guide; updated 2026-11-02, Australia/Adelaide.** Read this before changing any code, dashboard, or Modbus control. **Current version at the time of this handover: 0.5.14.** The project was previously design-only, but now has a deployed Home Assistant control integration with working mode controls, schedule editing code, new fallback control, and read-only energy graphics/table within the TOU dashboard. **Not every writable feature has been proven on the owner's actual inverter.**
 
 **Repository:** https://github.com/userdc-dev/saj-h2-control-enhanced  
 **Older full development diary:** [docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md](docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md) (57 KB historical archive; early claims of “planning-only” are OBSOLETE)  
 **Paired app evidence:** [docs/SAJ_APP_TOU_OBSERVATIONS.md](docs/SAJ_APP_TOU_OBSERVATIONS.md)  
 **Bundled read-only monitor:** `bundled_components/saj_h2_safe` **inside this repository**. Preserve already installed `saj_h2_safe` and the owner's existing SAJ Energy dashboard; do not require another repository.  
-**Current v0.5.10 CI evidence:** https://github.com/userdc-dev/saj-h2-control-enhanced/actions/runs/41364682084 — passed full Python/JS syntax, simulated Modbus safety, packaging, installer syntax and fake-archive install/update tests. This is **offline evidence, not live hardware certification**.
+**Current v0.5.14 CI evidence:** https://github.com/userdc-dev/saj-h2-control-enhanced/actions/runs/41369651554 — passed full Python/JS syntax, simulated Modbus safety, packaging, installer syntax and fake-archive install/update tests. This is **offline evidence, not live hardware certification**.
 
 > The owner wants this file to be detailed enough that a human developer or future assistant with **only this repo and these notes** understands the purpose, chronology, code, register mapping, tests, successful live observations, unresolved issues, installation, safety constraints, and next actions. Do not delete or hollow out this handover. Keep it current whenever changing actual features.
 >
 > **Brand spelling preference:** call the SAJ mobile application **elekeeper** (lowercase) in all new messages and UI. Older archive entries may use the old capitalization.
+
+## v0.5.14 — Confirmed Historic Data semantics and owner UI review (2026-11-02)
+
+**Owner-visible browser evidence:** The owner installed the updated controller, supplied screenshots of the Historic Data graph, and confirmed that the improved display and hover inspection are substantially easier to read. The screenshot at **2 November 2026, approximately 10:30 AM Adelaide time** showed cursor readbacks of **solar production 10.48 kW**, **house usage 2.80 kW**, and **battery −7.67 kW**, with grid reporting **“no nearby reading.”** These are *observed UI values*, not an independent raw Modbus or calibrated-meter verification. Do not claim the grid was zero or that it had a verified direction. The owner said the graph was satisfactory and asked specifically to document the semantics rather than alter the implementation.
+
+### Important: instantaneous power versus cumulative energy
+
+- **Historic Data solar (yellow)** is `sensor.saj_h2_safe_monitor_total_solar_power`, based on the read-only Safe Monitor's instantaneous `total_pv_power` (combined PV strings, **W**, displayed as **kW**). It is **not** daily cumulative solar energy (kWh). A rising morning line can represent increasing irradiance and PV output, not accumulation. The caption **“Solar production”** is power, not a lifetime/daily energy counter.
+- **House usage (blue)** is instantaneous `sensor.saj_h2_safe_monitor_home_consumption` (**W**, displayed as **kW**).
+- **Battery ± (green)** is instantaneous signed battery power. Existing convention: **positive = discharging**, **negative = charging**. E.g. −7.67 kW indicates battery charging at roughly 7.67 kW at that sampled moment.
+- **Grid ± (purple)** uses separate read-only `grid_import` and `grid_export` entities. Historic Data draws import positive and export negative, using a *provisional/inferred* polarity mapping; do not label this as field-verified. The hover summary combines both only when each has a nearby recorded reading; otherwise show unavailable, not an assumed zero.
+- Forecast **kWh** is deliberately **excluded from Historic Data**, to avoid mixing cumulative/projected energy with measured instantaneous power. Forecast, actual-versus-projected energy, daily energy and hourly energy estimates belong on the independent **Solar forecast** dashboard page. Do not integrate forecast series into the Historic Data power axis.
+- Units matter: **kW = rate of power at a specific moment**; **kWh = energy delivered over an interval**. An approximate instantaneous balance in a screenshot does not independently validate sensor calibration or direction.
+
+### History UI contract — preserve unless explicitly requested
+
+The live `custom_components/saj_h2_control_enhanced/frontend/saj-tou-dynamic-card.js` graph uses Home Assistant's recorded `history/period` states and a **single kW axis** for the four power measurements, with zero baseline and negative battery/grid values below it. It has 6 h, 12 h, 24 h, 48 h and 7 d ranges; four separately selectable lines; legible tick intervals, responsive layout and minimized lines between missing intervals. Historic Data **does not fabricate samples**, does not average cumulative energy into an instantaneous reading, and makes **no Modbus writes**.
+
+Mouse hover / touch tap / focused keyboard left/right arrows select a time and show a vertical guide, colored markers and individual real recorder values with their **original sample timestamps**. Cursor time snaps at **5-minute** intervals for 6/12/24-hour views, **10-minute** intervals for 48 hours and **30-minute** intervals for 7 days. Inspection chooses the closest recorded sample only if it lies within **half the corresponding interval**, otherwise displays *no nearby reading*. This time-step snapping applies **only to cursor inspection**, not to Recorder sampling frequency or the plotted raw state history. **Do not describe the tooltip as an exact reading at the snapped minute**: it is the nearest eligible actual sample, identified by its recorded timestamp.
+
+**Preservation:** Owner-approved layout, interactive hover/touch/keyboard behaviour, one-axis kW semantics, separate forecast page, TOU operating-mode controls, editable 7+7 schedules, fallback/Standby confirmation, and all established safety/verification gates must remain intact. No live Modbus write test or new hardware verification occurred during this documentation change.
 
 ## 0. Single-repository packaging and installation (2026-11-02)
 
@@ -493,7 +510,7 @@ The root `hacs.json` makes the **controller** installable as a HACS custom Integ
 - `tests/test_install_script.py`: runs the actual installer offline using **one simulated repository archive**, verifies first install of **both** integrations, preservation of existing Safe Monitor, backup of controller before update, no external repo URL and no change to `configuration.yaml`. It also rejects obsolete `--with-safe-monitor` flag.
 - `tests/test_package_and_ui.py`: checks all bundled monitor files, root HACS/main integration layout, frontend version parity and that the installer refers to the bundle rather than a second download.
 - CI: Python compile, JS syntax, simulated Modbus write/readback safety, installer shell syntax, and the offline install tests. **These are not proof of live inverter compatibility.**
-- Version is **0.5.11** and frontend cache-bust is `/saj-h2-tou/v0511/saj-tou-dynamic-card.js`. Reserve **v1.0.0** for completed hardware validation.
+- Current version is **0.5.14** and frontend cache-bust is `/saj-h2-tou/v0514/saj-tou-dynamic-card.js`. Earlier v0.5.11 packaging release details are preserved above. Reserve **v1.0.0** for completed hardware validation.
 - **No changes** to the existing control write services, Modbus register mappings, permissions, confirmation dialogs or the user's current Safe Monitor installation were needed for this packaging release.
 
 **Historical appendix:** The full earlier handover is retained unabridged at [docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md](docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md); it contains original 2026-11-01 experiments, paired screenshots, previous mode-control iterations, firmware discovery, dashboard cache fixes, and repeated user feedback. Its early “planning-only” language was true at the time but is no longer a current feature status.
