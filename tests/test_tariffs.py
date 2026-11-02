@@ -74,6 +74,27 @@ class TariffTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"weekdays"):
             T.validate_profile(p)
 
+    def test_standard_fit_windows_and_export_fallback(self):
+        p=deepcopy(self.profile)
+        p["export_standard_windows"]=[
+            {"start":"06:00","end":"09:00","days":[0,1,2,3,4,5,6]}]
+        p["export_fallback_rate"]=-.04
+        p["export_high_windows"]=[
+            {"start":"18:00","end":"20:00","days":[0,1,2,3,4,5,6]}]
+        p["high_fit_eligibility"]="all_exports"
+        p=T.validate_profile(p)
+        self.assertEqual(T.choose_rates(p,local("2026-11-02T07:00"))[1]["id"],
+                         "standard")
+        self.assertEqual(T.choose_rates(p,local("2026-11-02T12:00"))[1]["id"],
+                         "fallback")
+        self.assertEqual(T.choose_rates(p,local("2026-11-02T18:30"))[1]["id"],
+                         "high")
+        self.assertAlmostEqual(T.choose_rates(p,local("2026-11-02T12:00"))[1]["rate"],-.04)
+        p["high_fit_eligibility"]="battery_only_unverified"
+        # Do not apply high FiT without verified export-origin evidence.
+        self.assertEqual(T.choose_rates(p,local("2026-11-02T18:30"))[1]["id"],
+                         "standard")
+
     def test_overnight_week_wrap_catches_overlap(self):
         p=deepcopy(self.profile)
         p["import_bands"]=[
