@@ -138,6 +138,36 @@ states["sensor.owner_cost_estimate"]={
            import_bands:[],export_bands:[]}
   }
 };
+// Daily read-only inverter kWh counters are not power (W) and should
+// remain separate from the gap-aware derived grid import/export totals.
+for(const [key,value] of Object.entries({
+  solar_today:15.26,home_today:4.86,
+  battery_charge_today:9.86,battery_discharge_today:0.42
+})){
+  const id="sensor.saj_h2_safe_monitor_"+key;
+  states[id]={entity_id:id,state:String(value),
+    attributes:{friendly_name:"SAJ H2 Safe Monitor "+key,
+                unit_of_measurement:"kWh"}};
+}
+for(const [key,value] of Object.entries({
+  solar:12410,home:2980,battery:-9440,soc:99,
+  stored:39.60,gridImport:0,gridExport:0,
+  outlook:78.36,remaining:15.32,tomorrow:94.34
+})){
+  const ids={
+    solar:"total_solar_power",
+    home:"home_consumption",
+    battery:"battery_power",soc:"battery_state_of_charge",
+    stored:"estimated_battery_energy",
+    gridImport:"grid_import_direction_unverified",
+    gridExport:"grid_export_direction_unverified",
+    outlook:"today_s_solar_outlook_actual_remaining",
+    remaining:"solar_forecast_remaining_today",
+    tomorrow:"tomorrow_s_solar_forecast"
+  };
+  const id="sensor.saj_h2_safe_monitor_"+ids[key];
+  states[id]={entity_id:id,state:String(value),attributes:{}};
+}
 card._hass={states,config:{currency:"AUD"},callApi:async()=>[]};
 
 const find=(root,className)=>[root,...root.walk()]
@@ -164,7 +194,29 @@ async function main(){
   row.children[0].listeners.click();
   assert.equal(row.children[0]._selectedText,"sensor.home_grid_signed_power");
 
-  const costs=card._costPage();
+  card._historyChart=()=>new MockNode("div");
+  const energy=card._energyOverview();
+  const daily=find(energy,"flowDailyTotals");
+  assert.ok(daily,"Live energy includes a daily cumulative row");
+  assert.equal(daily.children.length,5,"five cells align with five power columns");
+  assert.ok(daily.children[0].textContent.includes("15.26 kWh"));
+  assert.ok(daily.children[1].textContent.includes("4.86 kWh"));
+  assert.ok(daily.children[2].textContent.includes("9.86 kWh"));
+  assert.ok(daily.children[2].textContent.includes("0.42 kWh"));
+  assert.ok(daily.children[3].textContent.includes("0.03 kWh"));
+  assert.ok(daily.children[3].textContent.includes("0.20 kWh"));
+  assert.ok(daily.children[4].textContent.includes("40.00 kWh"),
+    "forecast-by-now is today's forecast minus remaining, NOT actual solar");
+  assert.ok(energy.textContent.includes("0 W")||energy.textContent.includes("0 W"),
+    "live power values remain in W independently of kWh row");
+  delete states["sensor.saj_h2_safe_monitor_battery_discharge_today"];
+  const absent=card._energyOverview();
+  assert.ok(find(absent,"flowDailyTotals").children[2].textContent.includes("—"),
+    "missing energy sensor must not be silently shown as zero");
+  states["sensor.saj_h2_safe_monitor_battery_discharge_today"]={
+    entity_id:"sensor.saj_h2_safe_monitor_battery_discharge_today",
+    state:"0.42",attributes:{unit_of_measurement:"kWh"}};
+    const costs=card._costPage();
   assert.equal(find(costs,"costEditorShell").open,false,
     "already configured tariff editor should be folded away");
   assert.equal(find(costs,"costBreakdown").open,false,
