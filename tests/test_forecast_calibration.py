@@ -75,6 +75,17 @@ class ForecastLearningTests(unittest.TestCase):
         self.assertTrue(result["factors"])
         self.assertTrue(all(0.65<=f<=1.15 for f in result["factors"].values()))
 
+    def test_repeated_hours_from_same_day_cannot_pass_holdout(self):
+        sample=[]
+        t=int(datetime(2026,8,1,tzinfo=timezone.utc).timestamp())
+        for i in range(80):
+            sample.append({"epoch":t+i*30,"date":"2026-08-01",
+                           "season":"winter","hour":10,
+                           "base":4.0,"actual":3.4,"ratio":0.85})
+        result=CAL.score_history(sample,{"eligible_hours":80})
+        self.assertFalse(result["approved"])
+        self.assertEqual(result["factors"],{})
+
     def test_do_not_deploy_regressive_model_or_sparse_history(self):
         start=int(datetime(2026,9,1,tzinfo=timezone.utc).timestamp())
         # Training biased low, holdout biased high: learned correction hurts
