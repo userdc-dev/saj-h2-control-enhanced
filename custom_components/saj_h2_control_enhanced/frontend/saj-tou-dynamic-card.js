@@ -373,6 +373,18 @@ const CSS = [
   ".forecastNotice{padding:10px;border-left:3px solid var(--warning-color,#d3a435);margin:10px 0;font-size:12px;line-height:1.6}",
     ".summaryLabel{color:var(--secondary-text-color,#aaa);font-weight:500}",
   ".summaryState strong{color:var(--primary-text-color,#fff);font-weight:700;font-variant-numeric:tabular-nums}",
+  ".vppQuickActions{margin:12px 0;border:1px solid var(--divider-color,#444);border-radius:12px;padding:14px 17px;background:var(--ha-card-background,var(--card-background-color,#202020))}",
+  ".vppQuickHead{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px}",
+  ".vppQuickHead h3{margin:0;font-size:16px}",
+  ".vppQuickRow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}",
+  ".vppQuickRow select,.vppQuickRow button{font-size:12px;min-height:35px;padding:7px 10px;border-radius:8px}",
+  ".vppQuickRow button:disabled{opacity:.5;cursor:not-allowed}",
+  ".vppReturnButton{margin-left:auto}",
+  ".vppQuickActions .vppWarning{font-size:11px;line-height:1.5;margin:10px 0 0}",
+  ".vppQuickActions .vppResult{font-size:12px;line-height:1.5;margin:10px 0}",
+  ".vppChecks{margin-top:10px;font-size:12px}",
+  ".vppChecks p{font-size:11px;line-height:1.5;margin:6px 0}",
+  "@media(max-width:660px){.vppReturnButton{margin-left:0}.vppQuickRow button{flex:1}}",
   ".controlCell{padding:14px 18px 15px;min-height:0}",
   ".controlSubhead{margin:0 0 11px}",
   ".controlSubhead h4{font-size:14px}",
@@ -489,6 +501,11 @@ class SajTOUDynamicCard extends HTMLElement {
     this._modeFeedback = "";
     this._modeFeedbackError = false;
     this._modeBusyEntry = "";
+    this._vppDuration = 10;
+    this._vppPreviewBusy = false;
+    this._vppPreviewText = "";
+    this._vppPreviewError = false;
+    this._vppPreviewReport = null;
     this._refreshBusy = false;
     this._refreshNotice = "";
     this._refreshNoticeError = false;
@@ -2420,6 +2437,7 @@ class SajTOUDynamicCard extends HTMLElement {
     }
     add(card,this._energyOverview());
     add(card,this._costOverview());
+    add(card,this._vppQuickActions(group));
     if (!this._drafts.has(group.id)) this._drafts.set(group.id,cloneDraft(group));
     const draft=this._drafts.get(group.id);
     const meta=el("section","controlPanel");
@@ -2717,6 +2735,126 @@ class SajTOUDynamicCard extends HTMLElement {
       this.render();
     }
   }
+  _vppQuickActions(group){
+    const e=group.entities;
+    const section=el("section","vppQuickActions");
+    const heading=el("div","vppQuickHead");
+    add(heading,el("h3",null,"VPP quick actions"),
+      el("span","muted","Timed dispatch · safe preview"));
+    add(section,heading);
+    const picker=el("div","vppQuickRow");
+    const duration=el("select");
+    duration.setAttribute("aria-label","VPP dispatch duration");
+    for(const [minutes,label] of [[5,"5 minutes"],[10,"10 minutes"],[60,"1 hour"]]){
+      const opt=el("option",null,label);
+      opt.value=String(minutes);
+      opt.selected=this._vppDuration===minutes;
+      duration.append(opt);
+    }
+    duration.disabled=this._vppPreviewBusy;
+    duration.addEventListener("change",()=>{
+      this._vppDuration=Number(duration.value);
+      this._vppPreviewText="";
+      this._vppPreviewReport=null;
+      this.render();
+    });
+    picker.append(duration);
+    for(const [direction,label] of [
+      ["charge","Preview max charge"],
+      ["discharge","Preview max discharge"]
+    ]){
+      const button=el("button","vppPreviewButton",label);
+      button.type="button";
+      button.disabled=this._vppPreviewBusy || this._modeBusy ||
+        this._fallbackBusy || this._scheduleWriteBusy;
+      button.title="Inspect the real TOU registers; read-only, no battery action";
+      button.addEventListener("click",()=>this._previewVpp(group,direction));
+      picker.append(button);
+    }
+    const mode=e.operating_mode?.attributes?.raw_mode_code;
+    const last=e.operating_mode?.attributes?.last_verified_read;
+    const age=last?(Date.now()-new Date(last).getTime())/1000:Infinity;
+    const draft=this._drafts.get(group.id);
+    const canReturn=mode===1 && Number.isFinite(age) && age>=0 && age<=180 &&
+      [0,1].includes(e.outside_schedule?.attributes?.raw_fallback_code) &&
+      Number.isInteger(e.charge_count?.attributes?.slot_enable_mask) &&
+      Number.isInteger(e.discharge_count?.attributes?.slot_enable_mask) &&
+      !draft?.changed && !this._modeBusy && !this._fallbackBusy &&
+      !this._scheduleWriteBusy && !this._vppPreviewBusy;
+    const self=el("button","vppReturnButton","Return to Self-consumption");
+    self.type="button";
+    self.disabled=mode===0 || !canReturn;
+    self.title=mode===0?"Already in Self-consumption":
+      "Verified existing mode-change path; confirmation required";
+    self.addEventListener("click",()=>
+      this._requestMode(group,0,"supervised_self_consumption_pilot"));
+    picker.append(self);
+    section.append(picker);
+    add(section,el("p","muted vppWarning",
+      "Timed Charge / Discharge buttons are read-only previews, NOT live commands. "+
+      "SAJ TOU slots recur weekly; safe cancellation after HA restarts and "+
+      "verified 100% charge limits are required before live activation. "+
+      "Return to Self-consumption uses the existing confirmed mode switch."));
+    if(this._vppPreviewBusy)
+      add(section,el("p","muted","Checking current inverter schedules…"));
+    if(this._vppPreviewText)
+      add(section,el("p","vppResult "+(this._vppPreviewError?"bad":"okay"),
+        this._vppPreviewText));
+    if(this._vppPreviewReport){
+      const report=this._vppPreviewReport;
+      const details=el("details","vppChecks");
+      add(details,el("summary",null,"Read-only VPP preflight details"));
+      add(details,el("p","muted",
+        "Proposed "+report.direction+" at raw "+report.requested_power_percent_raw+
+        "% · "+report.planned_start_local+" to "+report.planned_end_local+
+        " · spare slot "+(report.proposed_slot??"none")+
+        " · inverter mode "+report.existing_mode));
+      for(const blocker of report.blockers||[])
+        add(details,el("p","muted","Blocked: "+blocker));
+      for(const warning of report.warnings||[])
+        add(details,el("p","muted",warning));
+      section.append(details);
+    }
+    if(this._modeFeedback)
+      add(section,el("p",this._modeFeedbackError?"bad":"muted",
+        this._modeFeedback));
+    return section;
+  }
+  async _previewVpp(group,direction){
+    if(this._vppPreviewBusy||this._modeBusy||this._scheduleWriteBusy)return;
+    this._vppPreviewBusy=true;
+    this._vppPreviewError=false;
+    this._vppPreviewText="";
+    this._vppPreviewReport=null;
+    this.render();
+    try{
+      const data={direction,duration_minutes:this._vppDuration};
+      if(group.id&&!group.id.startsWith("sensor."))data.entry_id=group.id;
+      const response=await this._hass.callWS({
+        type:"call_service",domain:"saj_h2_control_enhanced",
+        service:"preview_vpp_dispatch",service_data:data,return_response:true
+      });
+      const report=response?.response||response;
+      if(report?.status!=="VPP_PREFLIGHT_ONLY" ||
+         report?.write_sent!==false || report?.live_activation_supported!==false){
+        throw new Error("Unexpected preview response; no inverter command was authorized");
+      }
+      this._vppPreviewReport=report;
+      this._vppPreviewText=report.preflight_passed?
+        "Preflight checks passed for the proposed window; live timed control remains LOCKED until safe restoration is field-tested.":
+        "Not safe to start: "+(report.blockers||[]).join("; ")+
+        ". No inverter writes sent.";
+      this._vppPreviewError=!report.preflight_passed;
+    }catch(error){
+      this._vppPreviewError=true;
+      this._vppPreviewText="Preflight unavailable: "+(error?.message||String(error))+
+        ". No timed dispatch command was sent.";
+    }finally{
+      this._vppPreviewBusy=false;
+      this.render();
+    }
+  }
+
   async _requestMode(group,target,service) {
     if (this._modeBusy||this._fallbackBusy) return;
     const current=group.entities.operating_mode?.attributes.raw_mode_code;
