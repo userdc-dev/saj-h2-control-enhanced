@@ -505,6 +505,58 @@ async def async_setup(hass: HomeAssistant, config):
         }),
         supports_response=SupportsResponse.ONLY,
     )
+    # v0.5.16: complete TOU import/export tariff schedules, signed FiT,
+    # explicit GST and other taxes. Only updates HA config-entry options and
+    # read-only cost accounting; never accesses Modbus write functions.
+    async def save_tariff_profile(call):
+        import json
+        from .tariffs import validate_profile
+        matching=[
+            e for e in hass.config_entries.async_entries(DOMAIN)
+            if getattr(e,"runtime_data",None) is not None and
+            (not call.data.get("entry_id") or
+             e.entry_id==call.data["entry_id"])
+        ]
+        if len(matching)!=1:
+            raise vol.Invalid("Select exactly one SAJ control entry")
+        selected=matching[0]
+        raw=call.data["profile_json"]
+        if len(raw)>40000:
+            raise vol.Invalid("Tariff setup exceeds maximum configuration size")
+        try:
+            profile=validate_profile(json.loads(raw))
+        except (ValueError,TypeError,KeyError) as exc:
+            raise vol.Invalid(f"Invalid time-of-use tariff: {exc}") from exc
+        profile["configured"]=True
+        profile["currency"]=hass.config.currency or profile["currency"]
+        accounting=getattr(selected.runtime_data,"energy_accounting",None)
+        if accounting is not None:
+            # Keep the old ledger before installing a new revision.
+            await accounting.async_save()
+        revision=datetime.now(timezone.utc).isoformat()
+        options=dict(selected.options)
+        options["tariff_profile"]=profile
+        options["tariff_revision"]=revision
+        hass.config_entries.async_update_entry(selected,options=options)
+        if accounting is not None:
+            accounting.on_tariff_changed()
+        return {
+            "status":"TOU_TARIFF_PROFILE_SAVED",
+            "write_sent":False,
+            "tariff_revision":revision,
+            "profile":profile,
+            "tracking_active":accounting is not None,
+            "notice":"New rates apply prospectively; past priced intervals are not re-priced.",
+        }
+
+    hass.services.async_register(
+        DOMAIN,"save_tariff_profile",save_tariff_profile,
+        schema=vol.Schema({
+            vol.Required("profile_json"):str,
+            vol.Optional("entry_id"):str,
+        }),
+        supports_response=SupportsResponse.ONLY,
+    )
     return True
 
 
