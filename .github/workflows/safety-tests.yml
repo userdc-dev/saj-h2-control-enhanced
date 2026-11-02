@@ -11,7 +11,7 @@ jobs:
         with:
           python-version: '3.13'
       - name: Syntax compile
-        run: python -m compileall -q control_core custom_components tests
+        run: python -m compileall -q control_core custom_components bundled_components tests
       - name: Check dynamic dashboard JavaScript syntax
         run: node --check custom_components/saj_h2_control_enhanced/frontend/saj-tou-dynamic-card.js
       - name: Offline tests (never access inverter)
@@ -30,5 +30,6 @@ jobs:
           python -m unittest discover -s tests -p 'test_dashboard_title.py'
           python -m unittest discover -s tests -p 'test_package_and_ui.py'
           python -m unittest discover -s tests -p 'test_install_script.py'
+          python -m unittest discover -s tests -p 'test_forecast_dashboard.py'
       - name: Verify zero-YAML installer syntax
         run: bash -n scripts/install.sh
