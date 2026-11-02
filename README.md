@@ -4,12 +4,14 @@
 
 > **New developer / AI assistant:** [READ THE COMPLETE DEVELOPER_HANDOFF.md FIRST](DEVELOPER_HANDOFF.md). The handover includes exact inverter registers, code architecture, real-vs-simulated testing evidence, safety gates, recovery steps, and outstanding requirements. The historical chronology is preserved in [the archive](docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md).
 >
-> **Version in this README:** v0.5.16. Inspect [manifest.json](custom_components/saj_h2_control_enhanced/manifest.json) and [GitHub Actions](https://github.com/userdc-dev/saj-h2-control-enhanced/actions) to confirm the current release.
+> **Version in this README:** v0.5.17. Inspect [manifest.json](custom_components/saj_h2_control_enhanced/manifest.json) and [GitHub Actions](https://github.com/userdc-dev/saj-h2-control-enhanced/actions) to confirm the current release.
 
 **Versioning rule:** Keep iterative improvements in the pre-1.0 patch series (`0.5.6`, `0.5.7`, etc.) until the complete feature set is stable and hardware-verified. Reserve **v1.0.0** for the final release; do not prematurely claim stability with a major version bump.
 
 ## What this integration does
 
+- **Home Assistant Energy power management:** offers three clearly identified W/measurement sensor aliases: signed grid power for **Standard**, separate positive imported and exported power for **Two sensors**. Energy kWh sensor aliases remain separate and existing IDs are preserved. See [Energy integration guide](docs/ENERGY_AND_COSTS.md).
+- **Fixed supply charge correction:** uses the **full user-configured daily supply fee per tracked local calendar day**, independently of partial sensor coverage; prior current-day prorated charges are reconciled during upgrade. No double-charging on a same-day tariff edit.
 - Supplies **Home Assistant Energy-ready sensor aliases** for grid energy import/export estimates, lifetime solar production, battery charge/discharge, signed power, SOC and home consumption. Grid kWh estimates use monitored power data and require direction verification; don't mistake them for utility meters.
 - Adds a **Costs & savings** dashboard tab and a compact Cost estimates summary, with editable signed **time-of-use import bands** (multiple morning/evening/overnight windows, weekdays and optional extra categories), standard/high export FiT schedules, separate fallback prices, optional GST/levies or rebates, and accrued today/month partial-coverage estimates. Negative feed-in tariffs and being paid to import are supported; live AEMO pricing is not yet active.
 - Improves the user-editable **Solar forecast** with persistent, bounded learning from reliably observed clear-sky solar production hours, while skipping likely curtailment and uncertain data.
