@@ -620,6 +620,7 @@ async def async_setup_entry(hass: HomeAssistant, entry):
         and getattr(m,"runtime_data",None) is not None),None)
     if selected_monitor is not None:
         safe_coordinator=selected_monitor.runtime_data
+        forecast._live_monitor=safe_coordinator
         accounting=SajEnergyAccounting(hass,entry,safe_coordinator)
         await accounting.async_initialize()
         coordinator.energy_accounting=accounting
