@@ -777,7 +777,8 @@ class SajTOUDynamicCard extends HTMLElement {
       solar:SAFE_ENERGY_IDS.solar,home:SAFE_ENERGY_IDS.home,
       battery:SAFE_ENERGY_IDS.battery,
       grid:SAFE_ENERGY_IDS.gridImport,gridExport:SAFE_ENERGY_IDS.gridExport,
-      forecast:SAFE_ENERGY_IDS.outlook
+      forecast:(this._forecastState()?.attributes?.settings?.configured?
+        this._forecastState().entity_id:SAFE_ENERGY_IDS.outlook)
     };
     const idList=Object.values(ids);
     const start=new Date(Date.now()-this._historyHours*3600000);
