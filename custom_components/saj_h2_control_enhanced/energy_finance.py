@@ -112,8 +112,14 @@ def snapshot_costs(totals, pricing, now, tz):
             costs[kind] = None
             continue
         supply_fraction = max(0, row.get("coverage_seconds", 0)/86400)
-        home = row.get("home_kwh")
-        battery = row.get("battery_discharge_kwh")
+        home = row.get("home_kwh") if (
+            row.get("coverage_seconds",0)>0 and
+            row.get("home_coverage_seconds",0)>=0.8*row["coverage_seconds"]
+        ) else None
+        battery = row.get("battery_discharge_kwh") if (
+            row.get("coverage_seconds",0)>0 and
+            row.get("battery_discharge_coverage_seconds",0)>=0.8*row["coverage_seconds"]
+        ) else None
         costs[kind] = {
             "import_kwh": round(imp, 3),
             "export_kwh": round(exp, 3),
@@ -198,7 +204,10 @@ class SajEnergyAccounting(DataUpdateCoordinator):
         if daily.get("period")!=day:
             self.totals["today"]=daily={"period":day,"import_kwh":0.0,
                 "export_kwh":0.0,"home_kwh":0.0,"solar_kwh":0.0,
-                "battery_discharge_kwh":0.0,"coverage_seconds":0.0}
+                "battery_discharge_kwh":0.0,"coverage_seconds":0.0,
+                "home_coverage_seconds":0.0,
+                "solar_coverage_seconds":0.0,
+                "battery_discharge_coverage_seconds":0.0}
         if monthly.get("period")!=month:
             self.totals["month"]=monthly={"period":month,"import_kwh":0.0,
                 "export_kwh":0.0,"coverage_seconds":0.0}
@@ -223,10 +232,10 @@ class SajEnergyAccounting(DataUpdateCoordinator):
                     if isinstance(current,(int,float)) and isinstance(previous,(int,float)):
                         energy=max(0,(max(current,0)+max(previous,0))/2)*dt/3600000
                         for row in (daily,monthly):
-                            row[field]=(row[field]+energy) if row.get(field) is not None else None
-                    else:
-                        # Unknown coverage must not be reported as zero energy.
-                        for row in (daily,monthly):row[field]=None
+                            row[field]=row.get(field,0.0)+energy
+                            row[field.replace("_kwh","_coverage_seconds")]=(
+                                row.get(field.replace("_kwh","_coverage_seconds"),0.0)+dt)
+                    # Missing measurements remain uncovered, not invented.
                 daily["coverage_seconds"]+=dt
                 monthly["coverage_seconds"]+=dt
         if isinstance(grid,(float,int)):
