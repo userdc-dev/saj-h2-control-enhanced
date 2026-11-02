@@ -1,3 +1,10 @@
+## Documentation / single-repository installation clarification (2026-11-02)
+
+- Corrected outdated instructions implying a second GitHub repository is necessary for Live energy. The read-only Safe Monitor source is already bundled in `bundled_components/saj_h2_safe` and installed by default by `scripts/install.sh` when absent.
+- Promoted the exact one-block curl + installer + Docker restart sequence for the original owner's setup.
+- Removed the obsolete `--with-safe-monitor` instruction. Existing monitor files, entity IDs, controller runtime, dashboard and all Modbus write protections remain untouched.
+- Explained the real HACS limitation transparently: standard HACS install deploys only the controller folder, so the one-script install is the full-install route for new users. The two HA config entries preserve backward compatibility.
+
 # Changelog — SAJ H2 Control Enhanced
 
 
