@@ -248,6 +248,21 @@ const CSS = [
   ".costDetail .pane p{margin:6px 0;font-size:12px;line-height:1.5}",
   ".energyGuide{border:1px solid var(--divider-color,#555);border-radius:12px;padding:14px;margin-top:16px}",
   ".energyGuide li{margin-bottom:9px;line-height:1.5;font-size:12px}",
+  ".energyGuideCompact{padding:0;overflow:hidden}",
+  ".energyGuideCompact .guideSummary{display:flex;justify-content:space-between;align-items:center;gap:12px;cursor:pointer;padding:14px 16px;font-size:13px;list-style-position:inside}",
+  ".energyGuideCompact[open] .guideSummary{border-bottom:1px solid var(--divider-color,#444)}",
+  ".energyGuideCompact > p{margin:12px 16px}",
+  ".guideGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr));gap:10px;padding:4px 13px 14px}",
+  ".guideGroup{border:1px solid var(--divider-color,#444);border-radius:11px;padding:12px;min-width:0}",
+  ".guideGroup h4{margin:0 0 10px;font-size:14px}",
+  ".guideItem{padding:8px 0;border-top:1px solid var(--divider-color,#333);min-width:0}",
+  ".guideItemTitle{display:block;font-size:12px;font-weight:600;margin-bottom:2px}",
+  ".guideFriendly{display:block;color:var(--secondary-text-color,#aaa);font-size:11px;overflow-wrap:anywhere;margin-bottom:5px}",
+  ".guideCopyRow{display:flex;align-items:center;gap:6px;min-width:0}",
+  ".guideCopyInput{min-width:0;flex:1;width:50px;box-sizing:border-box;user-select:text;-webkit-user-select:text;font-family:monospace;font-size:11px;height:34px;padding:5px 8px}",
+  ".guideCopyButton{padding:7px 9px;font-size:11px;min-height:34px;white-space:nowrap}",
+  ".guideCopyButton:disabled{opacity:.4}",
+  "@media(max-width:520px){.energyGuideCompact .guideSummary{flex-direction:column;align-items:flex-start}.guideGrid{padding:4px 9px 12px}}",
   ".energyEntity{font-size:11px;color:var(--secondary-text-color,#bbb);overflow-wrap:anywhere;display:block}",
   ".costNotice{padding:10px 12px;border-left:3px solid var(--warning-color,#d6ae57);background:rgba(128,128,128,.035);border-radius:0 7px 7px 0;font-size:12px;line-height:1.65;margin:12px 0}",
   ".costPage .costDetail{margin:16px 0 20px}",
@@ -996,62 +1011,106 @@ class SajTOUDynamicCard extends HTMLElement {
       this._costSaving=false;this._refreshTariffEditor();
     }
   }
+  _copyEntityId(value,button){
+    if(!value)return;
+    const feedback=(ok)=>{
+      button.textContent=ok?"Copied ✓":"Select the ID";
+      button.title=ok?"Copied to clipboard":"Select the ID in the field and copy it";
+      // Do not add persistent timers or listeners; the message is temporary
+      // until a normal HA dashboard render or the next click.
+    };
+    const fallback=()=>{
+      const input=button.parentElement?.querySelector("input");
+      if(input){input.focus();input.select();}
+      try{if(document.execCommand("copy"))feedback(true);else feedback(false);}
+      catch(_){feedback(false);}
+    };
+    if(navigator.clipboard?.writeText){
+      navigator.clipboard.writeText(value).then(()=>feedback(true),fallback);
+    }else fallback();
+  }
   _energySetupGuide(){
-    const section=el("section","energyGuide");
-    add(section,el("h3",null,"Home Assistant Energy — sensor guide"));
-    add(section,el("p","muted",
-      "Open Home Assistant Settings → Dashboards → Energy, and choose sensors by the names below. "+
-      "Energy totals (kWh) and instantaneous power (W) are distinct."));
-    const descriptions=[
-      ["Electricity grid imported","grid_import_energy_estimate",
-        "Estimated cumulative kWh from sampled signed grid power — provisional polarity"],
-      ["Electricity grid exported","grid_export_energy_estimate",
-        "Estimated cumulative kWh, not a certified grid meter"],
-      ["Grid · Power measurement (Standard)","grid_signed_power",
-        "Signed instantaneous W: positive assumed import, negative assumed export. Choose Standard after checking polarity."],
-      ["Grid · Power imported from grid (Two sensors)","grid_import_power",
-        "Positive W for imports only; choose as first statistic under Two sensors."],
-      ["Grid · Power exported to grid (Two sensors)","grid_export_power",
-        "Positive W for exports only; choose as second statistic under Two sensors."],
-      ["Solar production energy","solar_production_energy",
-        "Inverter lifetime kWh counter"],
-      ["Solar production power","solar_production_power",
-        "Instantaneous W, not cumulative kWh"],
-      ["Solar production forecast",null,
-        "Editable solar forecast on the separate Solar forecast tab; not metered generation"],
-      ["Battery energy charged","battery_charged_energy",
-        "Inverter lifetime kWh counter"],
-      ["Battery energy discharged","battery_discharged_energy",
-        "Inverter lifetime kWh counter"],
-      ["Battery state of charge","battery_state_of_charge",
-        "Battery percentage (%)"],
-      ["Battery power","battery_power","Signed W; charging negative"]
-    ];
-    const list=el("ul");
-    const entities=Object.values(this._hass?.states||{});
-    for(const [title,key,explain] of descriptions){
-      const item=el("li");
-      add(item,el("strong",null,title),el("div","muted",explain));
-      if(key){
-        const source=entities.find(s=>s.attributes?.saj_energy_role===key&&
-          s.entity_id && s.attributes?.friendly_name);
-        if(source)add(item,el("code","energyEntity",source.entity_id));
+    // Compact by default, but every ID is a real HA entity_id. Never
+    // manufacture names by slugifying the human-friendly labels.
+    const guide=el("details","energyGuide energyGuideCompact");
+    const heading=el("summary","guideSummary");
+    add(heading,el("strong",null,"Home Assistant Energy · Sensor IDs & copy"),
+      el("span","muted","Grid · Solar · Battery · Home"));
+    add(guide,heading);
+    add(guide,el("p","muted",
+      "Choose sensors under Settings → Dashboards → Energy. "+
+      "Each field below contains the actual Home Assistant entity ID; "+
+      "click the field to select it, or use Copy. W is live power; kWh is energy over time."));
+    const all=Object.values(this._hass?.states||{});
+    const owned=all.filter(v=>v.attributes?.saj_energy_role||
+      v.attributes?.saj_tou_role==="editable_forecast");
+    const match=(key)=>{
+      if(key==="editable_forecast"){
+        return owned.find(v=>v.attributes?.saj_tou_role==="editable_forecast"&&
+          (!this._selected||v.attributes?.saj_tou_entry_id===this._selected))||
+          owned.find(v=>v.attributes?.saj_tou_role==="editable_forecast");
       }
-      list.append(item);
+      return owned.find(v=>v.attributes?.saj_energy_role===key&&
+        (!this._selected||v.attributes?.saj_tou_entry_id===this._selected))||
+        owned.find(v=>v.attributes?.saj_energy_role===key);
+    };
+    const groups=[
+      ["Grid · Electricity",[
+        ["Imported energy · kWh","grid_import_energy_estimate"],
+        ["Exported energy · kWh","grid_export_energy_estimate"],
+        ["Signed power · W (Standard)","grid_signed_power"],
+        ["Imported power · W (Two sensors)","grid_import_power"],
+        ["Exported power · W (Two sensors)","grid_export_power"]
+      ]],
+      ["Solar",[
+        ["Solar energy · kWh","solar_production_energy"],
+        ["Solar power · W","solar_production_power"],
+        ["Solar forecast · kWh (not a meter)","editable_forecast"]
+      ]],
+      ["Battery",[
+        ["Energy charged · kWh","battery_charged_energy"],
+        ["Energy discharged · kWh","battery_discharged_energy"],
+        ["State of charge · %","battery_state_of_charge"],
+        ["Signed power · W","battery_power"]
+      ]],
+      ["Home",[
+        ["Home consumption · kWh","home_consumption_energy"],
+        ["Home power · W","home_consumption_power"]
+      ]]
+    ];
+    const grid=el("div","guideGrid");
+    for(const [groupTitle,items] of groups){
+      const card=el("section","guideGroup");
+      add(card,el("h4",null,groupTitle));
+      for(const [label,key] of items){
+        const item=el("div","guideItem");
+        const sensor=match(key);
+        const name=sensor?.attributes?.friendly_name||"Not available";
+        add(item,el("span","guideItemTitle",label),
+          el("small","guideFriendly",name));
+        const controls=el("div","guideCopyRow");
+        const field=el("input","guideCopyInput");
+        field.type="text";
+        field.readOnly=true;
+        field.value=sensor?.entity_id||"Not available — check integration";
+        field.title=sensor?.entity_id||"Sensor has not been loaded";
+        field.setAttribute("aria-label",label+" Home Assistant entity ID");
+        if(sensor)field.addEventListener("click",()=>field.select());
+        const copy=el("button","guideCopyButton","Copy");
+        copy.type="button";copy.disabled=!sensor;
+        copy.setAttribute("aria-label","Copy "+label+" entity ID");
+        if(sensor)copy.addEventListener("click",()=>this._copyEntityId(sensor.entity_id,copy));
+        add(controls,field,copy);add(item,controls);card.append(item);
+      }
+      grid.append(card);
     }
-    add(section,list);
-    add(section,el("div","costNotice",
-      "In Home Assistant Energy → Electricity grid → Type of power measurement: "+
-      "select Standard + 'Grid power • signed' for one signed W sensor; "+
-      "or select Two sensors and assign 'Power imported from grid' and 'Power exported to grid'. "+
-      "Use Inverted only if your meter confirms the signed sensor has reversed polarity. "+
-      "The import/export directions are provisional and should be checked against your meter."));
-    add(section,el("p","historyFoot",
-      "Power sensors are W with state_class measurement; energy counters are kWh with total_increasing. "+
-      "If a new sensor is missing from the 'Select a statistic' list, confirm it is numeric, enabled and included in Recorder, "+
-      "then allow at least one 5-minute statistics cycle and check Home Assistant's Statistics repair screen. "+
-      "Do not select both Standard and Two sensors for the same grid source."));
-    return section;
+    add(guide,grid);
+    add(guide,el("p","historyFoot",
+      "Grid import/export direction is provisional until verified with your utility meter. "+
+      "Under grid power measurement choose Standard + signed W, OR Two sensors + import/export W. "+
+      "Battery charge and discharge use separate cumulative kWh sensors. "+
+      "Missing sensors may require enabling entities or waiting for Recorder statistics."));
+    return guide;
   }
   _forecastState(){
     if(!this._hass?.states)return null;
