@@ -559,6 +559,32 @@ async def async_setup(hass: HomeAssistant, config):
         }),
         supports_response=SupportsResponse.ONLY,
     )
+    # Historical PV model calibration: read-only HA Recorder and archived
+    # meteorological observations. No inverter writes, no YAML or extra repo.
+    async def scan_forecast_history(call):
+        matches=[
+            e for e in hass.config_entries.async_entries(DOMAIN)
+            if getattr(e,"runtime_data",None) is not None
+            and (not call.data.get("entry_id") or
+                 e.entry_id==call.data["entry_id"])
+        ]
+        if len(matches)!=1:
+            raise vol.Invalid("Select exactly one SAJ H2 control entry")
+        forecast=getattr(matches[0].runtime_data,"editable_forecast",None)
+        if forecast is None:
+            raise vol.Invalid("Editable solar forecast is not configured")
+        days=call.data.get("days",180)
+        return {"write_sent":False,
+                "result":await forecast.async_backfill_history(days,force=True)}
+
+    hass.services.async_register(
+        DOMAIN,"scan_forecast_history",scan_forecast_history,
+        schema=vol.Schema({
+            vol.Optional("days",default=180):vol.In((30,90,180,365)),
+            vol.Optional("entry_id"):str,
+        }),
+        supports_response=SupportsResponse.ONLY,
+    )
     return True
 
 
@@ -697,6 +723,17 @@ async def async_setup_entry(hass: HomeAssistant, entry):
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     from .frontend_setup import async_ensure_dashboard
     await async_ensure_dashboard(hass)
+    # A light, bounded background scan on first setup and roughly weekly
+    # thereafter. The forecast model stays usable if Recorder, HA stats or
+    # archived weather is unavailable. Explicit user rescan is also supported.
+    from homeassistant.helpers.event import async_track_time_interval
+    async def scheduled_learning():
+        await forecast.async_backfill_history(days=180)
+    hass.async_create_task(scheduled_learning())
+    def weekly_learning(_now):
+        hass.async_create_task(scheduled_learning())
+    entry.async_on_unload(async_track_time_interval(
+        hass,weekly_learning,timedelta(days=7)))
     return True
 
 
