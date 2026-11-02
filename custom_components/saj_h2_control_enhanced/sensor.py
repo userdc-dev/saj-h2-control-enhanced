@@ -216,12 +216,12 @@ class SajCostEstimateSensor(CoordinatorEntity, SensorEntity):
     _attr_has_entity_name = True
     _attr_should_poll = False
     _attr_name = "Estimated electricity cost today"
-    _attr_native_unit_of_measurement = "AUD"
     _attr_device_class = SensorDeviceClass.MONETARY
     _attr_icon = "mdi:currency-usd"
 
     def __init__(self, accounting):
         super().__init__(accounting)
+        self._attr_native_unit_of_measurement = accounting.hass.config.currency or "AUD"
         self._attr_unique_id = f"{accounting.entry.entry_id}_cost_estimate"
         self._attr_device_info = {
             "identifiers":{(DOMAIN,accounting.entry.entry_id)},
