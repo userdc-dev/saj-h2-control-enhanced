@@ -386,6 +386,12 @@ const CSS = [
   ".vppQuickActions .vppResult{font-size:12px;line-height:1.5;margin:10px 0}",
   ".vppChecks{margin-top:10px;font-size:12px}",
   ".vppChecks p{font-size:11px;line-height:1.5;margin:6px 0}",
+  ".vppSupervisor{border:1px solid var(--divider-color,#444);border-radius:9px;margin-top:12px;font-size:12px}",
+  ".vppSupervisor summary{cursor:pointer;font-weight:650;padding:10px 12px}",
+  ".vppSupervisorBody{padding:0 12px 12px}",
+  ".vppSupervisorBody p{font-size:11px;line-height:1.5;margin:7px 0}",
+  ".vppSupervisor .vppQuickRow{margin:10px 0}",
+  ".vppSupervisor .vppAudit{color:var(--secondary-text-color,#aaa)}",
   "@media(max-width:660px){.vppReturnButton{margin-left:0}.vppQuickRow button{flex:1}}",
   ".controlCell{padding:14px 18px 15px;min-height:0}",
   ".controlSubhead{margin:0 0 11px}",
@@ -508,6 +514,11 @@ class SajTOUDynamicCard extends HTMLElement {
     this._vppPreviewText = "";
     this._vppPreviewError = false;
     this._vppPreviewReport = null;
+    this._vppSupervisorBusy = false;
+    this._vppSupervisorData = null;
+    this._vppSupervisorMessage = "";
+    this._vppSupervisorError = false;
+    this._vppSupervisorOpen = false;
     this._refreshBusy = false;
     this._refreshNotice = "";
     this._refreshNoticeError = false;
@@ -2841,11 +2852,116 @@ class SajTOUDynamicCard extends HTMLElement {
         add(details,el("p","muted",warning));
       section.append(details);
     }
+    section.append(this._vppSupervisorPanel(group));
     if(this._modeFeedback)
       add(section,el("p",this._modeFeedbackError?"bad":"muted",
         this._modeFeedback));
     return section;
   }
+
+  _vppSupervisorPanel(group){
+    const state=this._vppSupervisorData;
+    const status=state?.status||"Not checked";
+    const active=["rehearsal_scheduled","rehearsal_running"].includes(status);
+    const needsReview=["rehearsal_interrupted","review_required"].includes(status);
+    const draft=this._drafts.get(group.id);
+    const disabled=this._vppSupervisorBusy||this._vppPreviewBusy||
+      this._modeBusy||this._scheduleWriteBusy||this._fallbackBusy||
+      !!draft?.changed;
+    const shell=el("details","vppSupervisor");
+    shell.open=this._vppSupervisorOpen;
+    shell.addEventListener("toggle",()=>this._vppSupervisorOpen=shell.open);
+    add(shell,el("summary",null,"Safety supervisor · "+status.replaceAll("_"," ")));
+    const body=el("div","vppSupervisorBody");
+    add(body,el("p","muted",
+      "Persistent watchdog rehearsal only. No battery charge/discharge, "+
+      "TOU mode switch or schedule write will be sent. "+
+      "Live VPP dispatch is still locked."));
+    const actions=el("div","vppQuickRow");
+    const action=(label,service,data,blocked=false)=>{
+      const b=el("button","secondaryAction",label);
+      b.type="button";b.disabled=disabled||blocked;
+      b.addEventListener("click",()=>this._callVppSupervisor(group,service,data));
+      return b;
+    };
+    actions.append(action("Check status","vpp_rehearsal_status",{}));
+    if(this._vppPreviewReport?.preflight_passed && !active && !needsReview){
+      const b=action("Run dry-run rehearsal","start_vpp_safety_rehearsal",{
+        direction:this._vppPreviewReport.direction,
+        duration_minutes:this._vppPreviewReport.duration_minutes,
+        confirmation:"SIMULATE ONLY - NO INVERTER WRITES"
+      });
+      b.title="Re-check live schedules and rehearse the timeout, no inverter writes";
+      actions.append(b);
+    }
+    if(active)
+      actions.append(action("Cancel rehearsal","cancel_vpp_safety_rehearsal",{}));
+    if(state?.baseline_hash)
+      actions.append(action("Verify saved schedules","verify_vpp_safety_baseline",{}));
+    if(needsReview && state?.baseline_check==="unchanged")
+      actions.append(action("Acknowledge review","acknowledge_vpp_safety_warning",{}));
+    body.append(actions);
+    if(state){
+      add(body,el("p","muted",
+        "Journal: "+status.replaceAll("_"," ")+" · "+
+        (state.direction||"no direction")+
+        (state.ends_utc?" · proposed end "+
+          new Date(state.ends_utc).toLocaleString():"")+
+        " · baseline: "+(state.baseline_check||"not checked")+"."));
+      if(state.last_error)
+        add(body,el("p","bad",state.last_error));
+      const audit=Array.isArray(state.audit)?state.audit.slice(-3):[];
+      for(const entry of audit)
+        add(body,el("p","muted vppAudit",
+          new Date(entry.time_utc).toLocaleTimeString()+" · "+
+          String(entry.event).replaceAll("_"," ")));
+    }
+    if(this._vppSupervisorMessage)
+      add(body,el("p",this._vppSupervisorError?"bad":"muted",
+        this._vppSupervisorMessage));
+    add(shell,body);
+    return shell;
+  }
+
+  async _callVppSupervisor(group,service,data){
+    if(this._vppSupervisorBusy||this._modeBusy||this._scheduleWriteBusy)return;
+    if(service==="start_vpp_safety_rehearsal"&&!window.confirm(
+      "Start a READ-ONLY VPP safety rehearsal?\n\n"+
+      "No battery commands, operating-mode changes or TOU writes will "+
+      "be sent. Only a simulated countdown and permanent safety journal "+
+      "will be created."))return;
+    this._vppSupervisorBusy=true;
+    this._vppSupervisorMessage="";
+    this._vppSupervisorError=false;
+    this.render();
+    try{
+      const payload={...data};
+      if(group.id&&!group.id.startsWith("sensor."))payload.entry_id=group.id;
+      const response=await this._hass.callWS({
+        type:"call_service",domain:"saj_h2_control_enhanced",
+        service,service_data:payload,return_response:true
+      });
+      const report=response?.response||response;
+      if(!report||report.write_sent!==false||
+         report.live_activation_supported!==false||
+         report.can_dispatch!==false||!report.status){
+        throw new Error("Unrecognized supervisor response; no action accepted");
+      }
+      this._vppSupervisorData=report;
+      this._vppSupervisorMessage="Read-only supervisor: "+
+        report.status.replaceAll("_"," ")+". No inverter writes sent.";
+      this._vppSupervisorOpen=true;
+    }catch(error){
+      this._vppSupervisorError=true;
+      this._vppSupervisorMessage="Supervisor unavailable: "+
+        (error?.message||String(error))+". No VPP dispatch was authorized.";
+      this._vppSupervisorOpen=true;
+    }finally{
+      this._vppSupervisorBusy=false;
+      this.render();
+    }
+  }
+
   async _previewVpp(group,direction){
     if(this._vppPreviewBusy||this._modeBusy||this._scheduleWriteBusy)return;
     this._vppPreviewBusy=true;
