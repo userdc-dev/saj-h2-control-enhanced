@@ -935,17 +935,19 @@ async def async_setup_entry(hass: HomeAssistant, entry):
             if lock is not None:
                 async with lock:
                     from .schedule_transaction import read_full
-                    host,port=coordinator._connection_details()
-                    client=AsyncModbusTcpClient(
-                        host,port=int(port),timeout=5,retries=0)
+                    client=None
                     try:
+                        host,port=coordinator._connection_details()
+                        client=AsyncModbusTcpClient(
+                            host,port=int(port),timeout=5,retries=0)
                         if await client.connect():
                             snapshot=await read_full(client)
                     except Exception as exc:
                         _LOGGER.warning(
                             "VPP no-write baseline verification unavailable: %s",exc)
                     finally:
-                        client.close()
+                        if client is not None:
+                            client.close()
         try:
             report=await supervisor.tick(snapshot=snapshot)
             if report["status"]=="review_required":
