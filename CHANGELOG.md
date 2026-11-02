@@ -1,3 +1,10 @@
+## v0.5.21 — Fix incorrect Grid ± Historic Data hover (2026-11-02)
+
+- Fixed the **10-minute and longer-range Historic Data** tooltip incorrectly reporting **Grid ±: — no nearby reading** while the graph clearly plotted negative (exporting) purple power. Root cause: tooltip required `gridImport` **AND** `gridExport` Recorder events near the same hover time, even though split sensors update independently and unchanged zero states may have no fresh Recorder events.
+- Now displays the actual available direction: **export-only = negative signed kW**, **import-only = positive signed kW**, both recent/contemporaneous = signed net; no nearby samples in either direction = unavailable rather than inventing zero. Genuine zero shows as `0.00 kW · no net exchange`. Staggered nonzero samples are not incorrectly subtracted as synchronized readings. Retains exact sample timestamps, mouse/tap/keyboard interactions and current plotted lines.
+- Expanded the real-card Node frontend regression test with export-only/import-only, simultaneous, asynchronous, zero, stale and absent grid samples. No changes to Modbus, Home Assistant sensor IDs, backend accounting, tariff calculations, inverter modes, charge/discharge schedules or the Safe Monitor integration.
+- Frontend cache-busted from `/saj-h2-tou/v0520/` to `/saj-h2-tou/v0521/` so browsers retrieve the corrected card. Offline automation verifies the JS and interactions; on-device visual confirmation remains required.
+
 ## v0.5.20 — Daily energy totals in Live Energy and short Historic Data window (2026-11-02)
 
 - Added a neat fifth **Today so far** row to the existing five-column read-only Live Energy table: actual inverter **solar generated today**, **house consumed today**, **battery charged and discharged today** (all kWh), measured-period **grid imported and exported estimate** (kWh, direction still provisional), and the **forecast expected by now** (current-day forecast minus remaining estimate, not a meter reading).
