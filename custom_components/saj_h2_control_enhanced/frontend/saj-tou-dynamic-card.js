@@ -885,6 +885,7 @@ class SajTOUDynamicCard extends HTMLElement {
       this._historyError="Recorder history unavailable: "+(error?.message||String(error));
     }finally{
       this._historyPending=false;
+      if(hours!==this._historyHours){this._loadHistory();return;}
       if(this._page==="forecast"){
         this.render();
       }else{
