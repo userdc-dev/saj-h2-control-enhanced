@@ -245,7 +245,12 @@ const CSS = [
   ".historyToggle{border:1px solid var(--divider-color,#444);padding:7px 11px;border-radius:10px;cursor:pointer;white-space:nowrap}",
   ".historyToggle input{margin:0}.historyDot{font-size:15px}",
   "@media(max-width:650px){.liveHistory{padding:12px}.historyToggle{padding:6px 8px}.liveHistory .historyLegend{gap:6px}}",
-  ".historyFoot{font-size:11px;color:var(--secondary-text-color,#aaa);margin-top:8px;line-height:1.5}",
+  ".historySvg{touch-action:pan-y;cursor:crosshair;outline-offset:3px}",
+  ".historyTooltip{display:flex;flex-wrap:wrap;gap:7px 17px;align-items:center;padding:10px 12px;margin-top:6px;border:1px solid var(--divider-color,#45484c);border-radius:9px;background:var(--secondary-background-color,rgba(128,128,128,.06));font-size:12px;min-height:44px}",
+  ".historyTooltip strong{font-size:13px;margin-right:3px}",
+  ".historyTooltip .historyValue{white-space:nowrap;font-variant-numeric:tabular-nums}",
+  ".historyTooltip .historyEmpty{color:var(--secondary-text-color,#aaa)}",
+    ".historyFoot{font-size:11px;color:var(--secondary-text-color,#aaa);margin-top:8px;line-height:1.5}",
   ".forecastNotice{padding:10px;border-left:3px solid var(--warning-color,#d3a435);margin:10px 0;font-size:12px;line-height:1.6}",
     ".summaryLabel{color:var(--secondary-text-color,#aaa);font-weight:500}",
   ".summaryState strong{color:var(--primary-text-color,#fff);font-weight:700;font-variant-numeric:tabular-nums}",
@@ -829,7 +834,124 @@ class SajTOUDynamicCard extends HTMLElement {
       plot(series.gridImport,colors.grid);
       plot(series.gridExport,colors.grid,true);
     }
-    add(panel,svg);
+    // Mouse/touch/keyboard inspection: snaps to a time slot and reports the
+    // actual timestamp and reading nearest that slot, never an invented sample.
+    const intervalMinutes=this._historyHours<=24?5:this._historyHours<=48?10:30;
+    const intervalMs=intervalMinutes*60000;
+    const cursor=make("line",{x1:L,y1:T,x2:L,y2:B,stroke:"currentColor",
+      "stroke-opacity":".7","stroke-width":1.3,"stroke-dasharray":"4 4",
+      visibility:"hidden","pointer-events":"none"});
+    const markers={};
+    for(const [key,color] of Object.entries(colors)){
+      markers[key]=make("circle",{cx:L,cy:T,r:4.8,fill:color,
+        stroke:"var(--ha-card-background,#202124)","stroke-width":2,
+        visibility:"hidden","pointer-events":"none"});
+    }
+    const tooltip=el("div","historyTooltip");
+    tooltip.setAttribute("role","status");
+    tooltip.setAttribute("aria-live","off");
+    const intro=el("span","historyEmpty",
+      "Hover, tap or use ← / → on the graph to inspect recorded readings ("+
+      intervalMinutes+"-minute steps).");
+    tooltip.append(intro);
+    const nearest=(points,epoch)=>{
+      if(!points?.length)return null;
+      // Find the closest actual recorder sample using binary search.
+      let lo=0,hi=points.length;
+      while(lo<hi){
+        const mid=(lo+hi)>>1;
+        if(points[mid].t<epoch)lo=mid+1;else hi=mid;
+      }
+      const candidates=[points[lo-1],points[lo]].filter(Boolean);
+      const best=candidates.reduce((a,b)=>!a||
+        Math.abs(b.t-epoch)<Math.abs(a.t-epoch)?b:a,null);
+      return best&&Math.abs(best.t-epoch)<=intervalMs/2?best:null;
+    };
+    const fmtTimestamp=epoch=>new Date(epoch).toLocaleString(undefined,{
+      month:"short",day:"numeric",hour:"2-digit",minute:"2-digit",second:"2-digit"});
+    const showAt=(epoch)=>{
+      const snap=Math.max(start,Math.min(now,
+        Math.round(epoch/intervalMs)*intervalMs));
+      const cursorX=x(snap);
+      cursor.setAttribute("x1",cursorX);
+      cursor.setAttribute("x2",cursorX);
+      cursor.setAttribute("visibility","visible");
+      tooltip.replaceChildren(el("strong",null,
+        new Date(snap).toLocaleString(undefined,{
+          month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"})+
+        " · nearest actual readings"));
+      const readings={
+        solar:nearest(series.solar,snap),home:nearest(series.home,snap),
+        battery:nearest(series.battery,snap)
+      };
+      const imp=nearest(series.gridImport,snap);
+      const exp=nearest(series.gridExport,snap);
+      // Import/export sensor values are complementary only when both present.
+      readings.grid=imp&&exp?
+        {t:Math.max(imp.t,exp.t),y:imp.y-exp.y}:null;
+      for(const [key,label] of Object.entries(labels)){
+        const marker=markers[key];
+        const value=readings[key];
+        const visible=activeKeys.includes(key);
+        if(!visible||!value){
+          marker.setAttribute("visibility","hidden");
+        }else{
+          marker.setAttribute("cx",x(value.t));
+          marker.setAttribute("cy",y(value.y));
+          marker.setAttribute("visibility","visible");
+        }
+        if(!visible)continue;
+        const item=el("span","historyValue");
+        item.style.color=colors[key];
+        item.textContent=label+": "+(value?
+          (value.y/1000).toFixed(2)+" kW":"— no nearby reading");
+        if(value){
+          item.title="Recorded "+fmtTimestamp(value.t);
+        }
+        tooltip.append(item);
+      }
+      const stamped=Object.entries(readings).filter(([k,v])=>
+        activeKeys.includes(k)&&v).map(([k,v])=>
+        k+": "+new Date(v.t).toLocaleTimeString(undefined,{hour:"2-digit",
+          minute:"2-digit",second:"2-digit"}));
+      if(stamped.length)add(tooltip,el("small","historyEmpty",
+        "Actual sample times — "+stamped.join(" · ")));
+    };
+    const hide=()=>{
+      cursor.setAttribute("visibility","hidden");
+      Object.values(markers).forEach(m=>m.setAttribute("visibility","hidden"));
+    };
+    svg.setAttribute("tabindex","0");
+    svg.setAttribute("aria-label",
+      "Historic Data graph. Use arrow keys for "+intervalMinutes+
+      "-minute intervals, or move pointer to inspect actual recorded power.");
+    let keyboardTime=now;
+    svg.addEventListener("pointermove",event=>{
+      // Pointer location via rendered SVG bounding box, mapped to viewBox.
+      const rect=svg.getBoundingClientRect();
+      if(!rect.width)return;
+      const px=(event.clientX-rect.left)/rect.width*960;
+      if(px<L||px>R){hide();return;}
+      keyboardTime=start+(px-L)/(R-L)*(now-start);
+      showAt(keyboardTime);
+    });
+    svg.addEventListener("pointerdown",event=>{
+      const rect=svg.getBoundingClientRect();
+      if(!rect.width)return;
+      const px=(event.clientX-rect.left)/rect.width*960;
+      if(px<L||px>R)return;
+      keyboardTime=start+(px-L)/(R-L)*(now-start);
+      showAt(keyboardTime);
+    });
+    svg.addEventListener("pointerleave",hide);
+    svg.addEventListener("keydown",event=>{
+      if(event.key!=="ArrowLeft"&&event.key!=="ArrowRight")return;
+      event.preventDefault();
+      keyboardTime=Math.max(start,Math.min(now,keyboardTime+
+        (event.key==="ArrowRight"?intervalMs:-intervalMs)));
+      showAt(keyboardTime);
+    });
+    add(panel,svg,tooltip);
     add(panel,el("p","historyFoot",
       "One scale for every line (kW). Battery above 0 = discharging; below 0 = charging. "+
       "Grid above 0 = importing; below 0 = exporting (direction inferred from SAJ monitor). "+
