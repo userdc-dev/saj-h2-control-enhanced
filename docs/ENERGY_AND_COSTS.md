@@ -2,6 +2,10 @@
 
 **One repository:** `userdc-dev/saj-h2-control-enhanced`. The read-only monitor `saj_h2_safe` ships in `bundled_components/`; the controller reuses an existing *configured* monitor entry on the **same inverter IP**. It never overwrites existing monitor code, changes historical entities or sends Modbus writes for energy/cost functions.
 
+## Compact in-dashboard sensor picker (v0.5.18)
+
+On the **SAJ TOU Control → Costs & savings** page, scroll to the bottom and open the small **Home Assistant Energy · Sensor IDs & copy** section. Four responsive columns group **Grid, Solar, Battery and Home**. The guide obtains each friendly name and full selectable/copyable `sensor.*` ID **directly from your Home Assistant instance**, with a Copy button. For battery setup there are separate **Energy charged (kWh)**, **Energy discharged (kWh)**, **State of charge (%)** and **Battery power (W)** entries. Missing integrations are shown as unavailable, not guessed. Click the text field to select the ID for manual copying if your browser restricts the Clipboard API. Keep this reference collapsed when not needed.
+
 ## A. Home Assistant Energy setup
 
 **1. Install or update** using the supported `scripts/install.sh` installer (see [INSTALLATION.md](INSTALLATION.md)). Configure **SAJ H2 Safe Monitor** first under **Settings → Devices & services** if it is not already configured, then **SAJ H2 Control Enhanced** with the same inverter host/port. Existing entries should be reused; do not remove, rename or recreate your existing monitor.
