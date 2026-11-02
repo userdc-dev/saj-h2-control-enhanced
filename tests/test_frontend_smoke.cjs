@@ -194,6 +194,7 @@ async function main(){
   row.children[0].listeners.click();
   assert.equal(row.children[0]._selectedText,"sensor.home_grid_signed_power");
 
+  const originalHistoryChart=card._historyChart.bind(card);
   card._historyChart=()=>new MockNode("div");
   const energy=card._energyOverview();
   const daily=find(energy,"flowDailyTotals");
@@ -216,7 +217,8 @@ async function main(){
   states["sensor.saj_h2_safe_monitor_battery_discharge_today"]={
     entity_id:"sensor.saj_h2_safe_monitor_battery_discharge_today",
     state:"0.42",attributes:{unit_of_measurement:"kWh"}};
-    card._historyHours=1/6;
+    card._historyChart=originalHistoryChart;
+  card._historyHours=1/6;
   card._historyData={
     solar:[{t:Date.now()-120000,y:3200},{t:Date.now()-60000,y:4200}],
     home:[{t:Date.now()-120000,y:1500},{t:Date.now()-60000,y:1100}],
