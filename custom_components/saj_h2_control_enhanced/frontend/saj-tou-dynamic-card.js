@@ -1967,7 +1967,8 @@ class SajTOUDynamicCard extends HTMLElement {
       const candidates=[points[lo-1],points[lo]].filter(Boolean);
       const best=candidates.reduce((a,b)=>!a||
         Math.abs(b.t-epoch)<Math.abs(a.t-epoch)?b:a,null);
-      return best&&Math.abs(best.t-epoch)<=intervalMs/2?best:null;
+      const tolerance=this._historyHours<=1/6?45000:intervalMs/2;
+      return best&&Math.abs(best.t-epoch)<=tolerance?best:null;
     };
     const fmtTimestamp=epoch=>new Date(epoch).toLocaleString(undefined,{
       month:"short",day:"numeric",hour:"2-digit",minute:"2-digit",second:"2-digit"});
