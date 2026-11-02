@@ -61,7 +61,7 @@ const globals={
     execCommand:()=>true
   },
   customElements:{get:name=>registry.get(name),define:(name,ctor)=>registry.set(name,ctor)},
-  window:{customCards:[]},
+  window:{customCards:[],confirm:()=>true},
   navigator:{clipboard:{writeText:async value=>{copied.push(value);}}},
   HTMLElement:MockHTMLElement,
   Intl,Date,Promise,Math,Map,Set,Number,Object,String,JSON,
@@ -309,7 +309,11 @@ async function main(){
   assert.ok(vpp.textContent.includes("Return to Self-consumption"));
   assert.ok(vpp.textContent.includes("read-only previews"));
   const buttons=findAll(vpp,"button");
-  assert.equal(buttons.length,3,"two dry-run previews and a safe mode button");
+  assert.equal(buttons.length,4,
+    "two previews, existing live mode action and separate no-write supervisor status");
+  assert.ok(find(vpp,"vppSupervisor"),"watchdog is in a collapsible safety section");
+  assert.ok(vpp.textContent.includes("No battery charge/discharge"),
+    "dry-run interface must not imply any physical command");
   assert.ok(buttons[0].listeners.click&&buttons[1].listeners.click);
   const ws=[];
   card._hass.callWS=async payload=>{
@@ -337,6 +341,52 @@ async function main(){
   const safeModeButton=buttons[2];
   assert.equal(safeModeButton.disabled,false,
     "self-consumption mode button uses verified state and remains available");
+  const reports=[];
+  card._hass.callWS=async payload=>{
+    reports.push(payload);
+    if(payload.service==="vpp_rehearsal_status")
+      return {response:{status:"idle",write_sent:false,
+        live_activation_supported:false,can_dispatch:false,
+        audit:[],baseline_check:"not_checked"}};
+    if(payload.service==="start_vpp_safety_rehearsal")
+      return {response:{status:"rehearsal_scheduled",write_sent:false,
+        live_activation_supported:false,can_dispatch:false,
+        audit:[{time_utc:new Date().toISOString(),event:"rehearsal_journaled"}],
+        direction:"discharge",ends_utc:new Date().toISOString(),
+        baseline_hash:"abc",baseline_check:"verified_at_start"}};
+    if(payload.service==="cancel_vpp_safety_rehearsal")
+      return {response:{status:"rehearsal_cancelled",write_sent:false,
+        live_activation_supported:false,can_dispatch:false,
+        audit:[],direction:"discharge",baseline_check:"not_checked"}};
+    throw Error("Unexpected service called: "+payload.service);
+  };
+  await card._callVppSupervisor(device,"vpp_rehearsal_status",{});
+  assert.equal(reports[0].service,"vpp_rehearsal_status");
+  assert.equal(card._vppSupervisorData.status,"idle");
+  card._vppPreviewReport={
+    status:"VPP_PREFLIGHT_ONLY",preflight_passed:true,
+    direction:"discharge",duration_minutes:5,
+    write_sent:false,live_activation_supported:false
+  };
+  const supervisorPanel=card._vppSupervisorPanel(device);
+  const rehearse=findAll(supervisorPanel,"button").find(
+    b=>b.textContent==="Run dry-run rehearsal");
+  assert.ok(rehearse?.listeners.click,"simulated watchdog starts only after preflight");
+  await rehearse.listeners.click();
+  assert.equal(reports[1].service,"start_vpp_safety_rehearsal");
+  assert.equal(reports[1].service_data.confirmation,
+    "SIMULATE ONLY - NO INVERTER WRITES");
+  assert.equal(card._vppSupervisorData.status,"rehearsal_scheduled");
+  const cancelPanel=card._vppSupervisorPanel(device);
+  const cancelButton=findAll(cancelPanel,"button").find(b=>b.textContent==="Cancel rehearsal");
+  assert.ok(cancelButton);
+  await cancelButton.listeners.click();
+  assert.equal(reports[2].service,"cancel_vpp_safety_rehearsal");
+  assert.equal(card._vppSupervisorData.status,"rehearsal_cancelled");
+  assert.ok(!reports.some(r=>["apply_schedules","supervised_tou_pilot",
+    "start_vpp_dispatch","supervised_self_consumption_pilot"].includes(r.service)),
+    "safety rehearsals must not invoke any Modbus-writing service");
+
   // Four-page navigation must physically isolate inverter writes from
   // the read-only Energy page, not merely hide them behind collapsed details.
   // Keep TOU draft changes when navigating to Energy and back.
