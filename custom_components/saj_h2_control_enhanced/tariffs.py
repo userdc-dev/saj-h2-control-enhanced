@@ -230,7 +230,19 @@ def tax_adjustment(base,profile,component):
     return base*(gst+other)
 
 
-def priced_slice(imp_kwh,exp_kwh,seconds,profile,when):
+def full_daily_supply(profile):
+    """Charge one signed day of supply, including only opted-in extra taxes.
+
+    Unlike sampled power, the retailer's fixed daily fee does not disappear
+    during telemetry gaps. Caller must enforce exactly-once calendar-day
+    accrual and preserve existing charges when the tariff is edited.
+    """
+    base=profile["daily_supply"]
+    tax=tax_adjustment(base,profile,"supply")
+    return base+tax,tax
+
+
+def priced_slice(imp_kwh,exp_kwh,seconds,profile,when,include_supply=True):
     """Return signed costs/credits for observed interval at given local time."""
     imp_band,exp_band=choose_rates(profile,when)
     imp_base=imp_kwh*imp_band["rate"]
@@ -243,7 +255,8 @@ def priced_slice(imp_kwh,exp_kwh,seconds,profile,when):
         when.date()+timedelta(days=1),time.min,tzinfo=zone)
     day_seconds=(next_midnight.astimezone(timezone.utc)-
                  midnight.astimezone(timezone.utc)).total_seconds()
-    supply_base=seconds/day_seconds*profile["daily_supply"]
+    supply_base=(seconds/day_seconds*profile["daily_supply"]
+                 if include_supply else 0.0)
     import_tax=tax_adjustment(imp_base,profile,"import")
     export_tax=tax_adjustment(exp_base,profile,"export")
     supply_tax=tax_adjustment(supply_base,profile,"supply")
@@ -284,7 +297,8 @@ def iter_minute_slices(start,end,tz):
         cursor=next_end
 
 
-def price_power_interval(start,end,start_power_w,end_power_w,profile,tz,split_fn):
+def price_power_interval(start,end,start_power_w,end_power_w,profile,tz,split_fn,
+                         include_supply=True):
     """Price actual positive-import/negative-export watts by local minute/rule.
 
     Linear interpolation of W over a short sample interval; each sub-slice is
@@ -301,7 +315,8 @@ def price_power_interval(start,end,start_power_w,end_power_w,profile,tz,split_fn
         pb=start_power_w+(end_power_w-start_power_w)*fraction_b
         duration=(b-a).total_seconds()
         imp,exp=split_fn(pa,pb,duration)
-        priced=priced_slice(imp,exp,duration,profile,local_mid)
+        priced=priced_slice(imp,exp,duration,profile,local_mid,
+                            include_supply=include_supply)
         result.append({
             "start":a,"end":b,"local":local_mid,"seconds":duration,
             "import_kwh":imp,"export_kwh":exp,**priced,
