@@ -1,3 +1,10 @@
+## v0.5.25 — Reliable VPP battery SOC preflight (2026-11-02)
+
+- Fixed the message **Recent battery state of charge is unavailable** when the Control dashboard was otherwise connected. The old preflight depended on a single assumed Home Assistant sensor ID and a 90-second sensor timestamp.
+- The preflight now double-reads SAJ battery SOC holding register `0x406F` on its existing connection, validates raw 0–100% values and refuses inconsistent/invalid replies. Both preview and supervisor rehearsal use this verified reading.
+- Expanded preflight details show the verified percentage or a clear readback error. The 95% charging ceiling and 10% discharge reserve remain unchanged. No new inverter writes or timed dispatches are enabled.
+- Added direct Modbus SOC regression tests and frontend display coverage. Frontend URL updated to `/saj-h2-tou/v0525/`.
+
 ## v0.5.24 — Persistent no-write VPP safety supervisor & recovery tests (2026-11-02)
 
 - Added an isolated **safety supervisor** under the existing Control → VPP quick actions panel. Collapsed by default to maintain a clean uncluttered UI; inspect the persistent journal, run a **simulation-only** charge/discharge rehearsal for 5/10/60 minutes, cancel the simulation, compare saved baseline and acknowledge interrupted sessions after exact readback verification.
