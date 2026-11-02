@@ -553,6 +553,8 @@ class SajTOUDynamicCard extends HTMLElement {
           {start:"10:00",end:"15:00",days:[...every]}]}
       ],
       export_standard_rate:Number(legacy.export_rate??0.05),
+      export_standard_windows:[],
+      export_fallback_rate:Number(legacy.export_rate??0.05),
       export_high_rate:0.25,
       export_high_windows:[{start:"17:00",end:"21:00",days:[...every]}],
       high_fit_eligibility:"battery_only_unverified",
@@ -710,7 +712,8 @@ class SajTOUDynamicCard extends HTMLElement {
       const remove=control("Remove time",()=>{
         windows.splice(index,1);this._refreshTariffEditor();
       },"tariffRemove");
-      remove.disabled=windows.length<=1 && windows!==p.export_high_windows;
+      remove.disabled=windows.length<=1 &&
+        windows!==p.export_high_windows && windows!==p.export_standard_windows;
       add(times,remove);add(container,times);
       const days=el("div","tariffDays");
       days.setAttribute("aria-label",label+" weekdays");
@@ -793,8 +796,27 @@ class SajTOUDynamicCard extends HTMLElement {
       field("Standard export FiT ("+currency+"/kWh)",
         p.export_standard_rate,v=>p.export_standard_rate=v),
       field("Special / battery high FiT ("+currency+"/kWh)",
-        p.export_high_rate,v=>p.export_high_rate=v));
+        p.export_high_rate,v=>p.export_high_rate=v),
+      field("Other export fallback ("+currency+"/kWh)",
+        p.export_fallback_rate,v=>p.export_fallback_rate=v));
     add(exports,exportFields);
+    add(exports,el("h4",null,"Standard FiT times"),
+      el("p","muted",
+        "With no standard windows, the standard FiT applies at every time except qualifying high-FiT windows. "+
+        "Add standard windows to restrict it; other times then use the separate 'Other export fallback' rate."));
+    const standardWindows=el("div","tariffStandardWindows");
+    p.export_standard_windows.forEach((w,i)=>
+      standardWindows.append(windowView(w,p.export_standard_windows,i,
+        "Standard FiT window "+(i+1))));
+    const addStandard=control("+ Add standard FiT window",()=>{
+      p.export_standard_windows.push({
+        start:"00:00",end:"07:00",days:[0,1,2,3,4,5,6]
+      });
+      this._refreshTariffEditor();
+    },"tariffAdd");
+    addStandard.disabled=p.export_standard_windows.length>=24;
+    add(exports,standardWindows,addStandard);
+    add(exports,el("h4",null,"Special high-FiT times"));
     const eligibility=el("label","tariffField");
     add(eligibility,el("span",null,"Which exports qualify for the high FiT?"));
     const eligible=el("select");
@@ -915,7 +937,8 @@ class SajTOUDynamicCard extends HTMLElement {
     if(!profile){this._costMessage="No tariff settings to save.";this._costError=true;return;}
     const numeric=[
       profile.default_import_rate,profile.export_standard_rate,
-      profile.export_high_rate,profile.daily_supply,profile.gst_percent,
+      profile.export_fallback_rate,profile.export_high_rate,
+      profile.daily_supply,profile.gst_percent,
       profile.other_tax_percent,...profile.import_bands.map(b=>b.rate)
     ];
     if(numeric.some(n=>typeof n!=="number"||!Number.isFinite(n))){
@@ -924,7 +947,8 @@ class SajTOUDynamicCard extends HTMLElement {
     }
     if(!profile.import_bands.every(b=>b.name.trim()&&b.windows.length &&
        b.windows.every(w=>w.days?.length&&w.start!==w.end)) ||
-       !profile.export_high_windows.every(w=>w.days?.length&&w.start!==w.end)){
+       !profile.export_high_windows.every(w=>w.days?.length&&w.start!==w.end) ||
+       !profile.export_standard_windows.every(w=>w.days?.length&&w.start!==w.end)){
       this._costMessage="Check category names, start/end times and selected weekdays.";
       this._costError=true;this._refreshTariffEditor();return;
     }
