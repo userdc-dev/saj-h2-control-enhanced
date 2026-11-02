@@ -418,61 +418,170 @@ async def async_setup(hass: HomeAssistant, config):
         }),
         supports_response=SupportsResponse.ONLY,
     )
-    # Future VPP dispatch controls: read-only preflight ONLY. A TOU
-    # schedule is weekly recurring, not a one-shot timer. Never activate a
-    # high-power schedule without a tested restart-safe restoration watchdog.
-    async def preview_vpp_dispatch(call):
-        if pilot_lock.locked():
-            raise vol.Invalid("Another inverter operation is running; cannot preview")
-        matches = [
+    # The VPP safety supervisor is a durable, read-only rehearsal engine.
+    # The global lock serializes all direct TOU writes and double-read checks.
+    # NO service in this section may issue a Modbus write.
+    hass.data.setdefault(DOMAIN,{})["pilot_lock"] = pilot_lock
+
+    def _vpp_entry(data):
+        entries=[
             e for e in hass.config_entries.async_entries(DOMAIN)
-            if getattr(e, "runtime_data", None) is not None
-            and (not call.data.get("entry_id")
-                 or e.entry_id == call.data["entry_id"])
+            if getattr(e,"runtime_data",None) is not None and
+            (not data.get("entry_id") or e.entry_id==data["entry_id"])
         ]
-        if len(matches) != 1:
-            raise vol.Invalid("Select exactly one SAJ H2 inverter")
-        coordinator = matches[0].runtime_data
+        if len(entries)!=1:
+            raise vol.Invalid("Select exactly one configured SAJ control inverter")
+        return entries[0]
+
+    async def _fresh_vpp_preflight(data):
+        """Caller MUST hold pilot_lock before invoking this Modbus double-read."""
+        entry=_vpp_entry(data)
+        coordinator=entry.runtime_data
         from .schedule_transaction import read_full, ScheduleTransactionError
         from .vpp_quick_preview import preview_dispatch
         from zoneinfo import ZoneInfo
 
+        host,port=coordinator._connection_details()
+        client=AsyncModbusTcpClient(host,port=int(port),timeout=5,retries=0)
+        try:
+            if not await client.connect():
+                raise vol.Invalid("Cannot reach inverter for VPP double-read")
+            snapshot=await read_full(client)
+            soc_state=hass.states.get(
+                "sensor.saj_h2_safe_monitor_battery_state_of_charge"
+            )
+            soc=None
+            if soc_state:
+                try:
+                    reading_time=getattr(soc_state,"last_updated",None)
+                    age=(datetime.now(timezone.utc)-reading_time).total_seconds()
+                    if 0 <= age <= 90:
+                        soc=float(soc_state.state)
+                except (TypeError,ValueError,AttributeError):
+                    pass
+            preview=preview_dispatch(
+                snapshot[2],
+                direction=data["direction"],
+                duration_minutes=data["duration_minutes"],
+                now=datetime.now(ZoneInfo(
+                    hass.config.time_zone or "Australia/Adelaide"
+                )),
+                soc=soc,
+            )
+            return entry,snapshot,preview
+        except ScheduleTransactionError as exc:
+            raise vol.Invalid("VPP read-only preflight refused: "+str(exc)) from exc
+        finally:
+            client.close()
+
+    async def preview_vpp_dispatch(call):
         async with pilot_lock:
-            host, port = coordinator._connection_details()
-            client = AsyncModbusTcpClient(host, port=int(port), timeout=5, retries=0)
+            _,_,result=await _fresh_vpp_preflight(call.data)
+            return result
+
+    _vpp_preview_schema=vol.Schema({
+        vol.Required("direction"):vol.In(("charge","discharge")),
+        vol.Required("duration_minutes"):vol.All(
+            vol.Coerce(int),vol.In((5,10,60))),
+        vol.Optional("entry_id"):str,
+    })
+    hass.services.async_register(
+        DOMAIN,"preview_vpp_dispatch",preview_vpp_dispatch,
+        schema=_vpp_preview_schema,
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    async def vpp_rehearsal_status(call):
+        entry=_vpp_entry(call.data)
+        return entry.runtime_data.vpp_supervisor.status()
+
+    hass.services.async_register(
+        DOMAIN,"vpp_rehearsal_status",vpp_rehearsal_status,
+        schema=vol.Schema({vol.Optional("entry_id"):str}),
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    async def start_vpp_safety_rehearsal(call):
+        if call.data["confirmation"]!="SIMULATE ONLY - NO INVERTER WRITES":
+            raise vol.Invalid("Literal simulation-only confirmation required")
+        async with pilot_lock:
+            entry,snapshot,preview=await _fresh_vpp_preflight(call.data)
+            from .vpp_safety_supervisor import SupervisorError
+            try:
+                return await entry.runtime_data.vpp_supervisor.begin_rehearsal(
+                    preview,snapshot)
+            except SupervisorError as exc:
+                raise vol.Invalid(str(exc)) from exc
+
+    hass.services.async_register(
+        DOMAIN,"start_vpp_safety_rehearsal",start_vpp_safety_rehearsal,
+        schema=vol.Schema({
+            vol.Required("direction"):vol.In(("charge","discharge")),
+            vol.Required("duration_minutes"):vol.All(
+                vol.Coerce(int),vol.In((5,10,60))),
+            vol.Required("confirmation"):vol.In(
+                ("SIMULATE ONLY - NO INVERTER WRITES",)),
+            vol.Optional("entry_id"):str,
+        }),
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    async def cancel_vpp_safety_rehearsal(call):
+        from .vpp_safety_supervisor import SupervisorError
+        async with pilot_lock:
+            entry=_vpp_entry(call.data)
+            try:
+                return await entry.runtime_data.vpp_supervisor.cancel()
+            except SupervisorError as exc:
+                raise vol.Invalid(str(exc)) from exc
+
+    hass.services.async_register(
+        DOMAIN,"cancel_vpp_safety_rehearsal",cancel_vpp_safety_rehearsal,
+        schema=vol.Schema({vol.Optional("entry_id"):str}),
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    async def verify_vpp_safety_baseline(call):
+        """Manual no-write double-read; compare FULL raw TOU register words."""
+        from .vpp_safety_supervisor import SupervisorError
+        from .schedule_transaction import read_full, ScheduleTransactionError
+        async with pilot_lock:
+            entry=_vpp_entry(call.data)
+            supervisor=entry.runtime_data.vpp_supervisor
+            if supervisor.record.get("baseline") is None:
+                raise vol.Invalid("No saved VPP baseline to verify")
+            host,port=entry.runtime_data._connection_details()
+            client=AsyncModbusTcpClient(
+                host,port=int(port),timeout=5,retries=0)
             try:
                 if not await client.connect():
-                    raise vol.Invalid("Cannot reach inverter for VPP preflight")
-                snapshot = await read_full(client)
-                # Never rely solely on browser-supplied SOC for any decision.
-                soc_sensor = hass.states.get(
-                    "sensor.saj_h2_safe_monitor_battery_state_of_charge"
-                )
-                try:
-                    soc = float(soc_sensor.state) if soc_sensor else None
-                except (ValueError, TypeError):
-                    soc = None
-                return preview_dispatch(
-                    snapshot[2],
-                    direction=call.data["direction"],
-                    duration_minutes=call.data["duration_minutes"],
-                    now=datetime.now(ZoneInfo(
-                        hass.config.time_zone or "Australia/Adelaide"
-                    )),
-                    soc=soc,
-                )
-            except ScheduleTransactionError as exc:
-                raise vol.Invalid("VPP preflight refused: "+str(exc)) from exc
+                    raise vol.Invalid("Cannot connect for baseline verification")
+                snapshot=await read_full(client)
+                return await supervisor.verify_baseline(snapshot)
+            except (ScheduleTransactionError,SupervisorError) as exc:
+                raise vol.Invalid("Baseline verification refused: "+str(exc)) from exc
             finally:
                 client.close()
 
     hass.services.async_register(
-        DOMAIN, "preview_vpp_dispatch", preview_vpp_dispatch,
-        schema=vol.Schema({
-            vol.Required("direction"): vol.In(("charge", "discharge")),
-            vol.Required("duration_minutes"): vol.All(vol.Coerce(int), vol.In((5, 10, 60))),
-            vol.Optional("entry_id"): str,
-        }),
+        DOMAIN,"verify_vpp_safety_baseline",verify_vpp_safety_baseline,
+        schema=vol.Schema({vol.Optional("entry_id"):str}),
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    async def acknowledge_vpp_safety_warning(call):
+        from .vpp_safety_supervisor import SupervisorError
+        async with pilot_lock:
+            entry=_vpp_entry(call.data)
+            try:
+                return await entry.runtime_data.vpp_supervisor.acknowledge()
+            except SupervisorError as exc:
+                raise vol.Invalid(str(exc)) from exc
+
+    hass.services.async_register(
+        DOMAIN,"acknowledge_vpp_safety_warning",
+        acknowledge_vpp_safety_warning,
+        schema=vol.Schema({vol.Optional("entry_id"):str}),
         supports_response=SupportsResponse.ONLY,
     )
 
@@ -741,6 +850,26 @@ class SajTOUCoordinator(DataUpdateCoordinator):
 async def async_setup_entry(hass: HomeAssistant, entry):
     coordinator = SajTOUCoordinator(hass, entry)
     await coordinator.async_config_entry_first_refresh()
+    # Safe local journal is attached to this inverter only. It cannot
+    # authorize writes; interrupted sessions are flagged on startup.
+    from .vpp_safety_supervisor import VPPSafetySupervisor, ACTIVE, parse_utc
+    from homeassistant.components.persistent_notification import (
+        async_create as async_create_notification,
+    )
+    supervisor=VPPSafetySupervisor(hass,entry)
+    await supervisor.load()
+    coordinator.vpp_supervisor=supervisor
+    if supervisor.record["status"] in ("review_required","rehearsal_interrupted"):
+        async_create_notification(
+            hass,
+            "SAJ VPP safety rehearsal needs review. No inverter writes were "
+            "issued by the rehearsal. Open SAJ H2 Control → Control → "
+            "VPP quick actions, verify the saved TOU baseline and "
+            "acknowledge only after inspection. "
+            +str(supervisor.record.get("last_error") or ""),
+            title="SAJ H2 VPP supervisor — review required",
+            notification_id="saj_h2_vpp_review_"+entry.entry_id,
+        )
     entry.runtime_data = coordinator
     # Forecast is an independent read-only weather fetch, never required for
     # inverter setup. Failure must not block existing TOU controls.
@@ -792,6 +921,49 @@ async def async_setup_entry(hass: HomeAssistant, entry):
         hass.async_create_task(scheduled_learning())
     entry.async_on_unload(async_track_time_interval(
         hass,weekly_learning,timedelta(days=7)))
+
+    async def vpp_watchdog_tick():
+        if supervisor.record["status"] not in ACTIVE:
+            return
+        now=datetime.now(timezone.utc)
+        end=parse_utc(supervisor.record["ends_utc"])
+        snapshot=None
+        if now>=end:
+            # At the end of the rehearsal compare ALL device raw words,
+            # under the same lock as live manual commands. Never auto-restore.
+            lock=hass.data.get(DOMAIN,{}).get("pilot_lock")
+            if lock is not None:
+                async with lock:
+                    from .schedule_transaction import read_full
+                    host,port=coordinator._connection_details()
+                    client=AsyncModbusTcpClient(
+                        host,port=int(port),timeout=5,retries=0)
+                    try:
+                        if await client.connect():
+                            snapshot=await read_full(client)
+                    except Exception as exc:
+                        _LOGGER.warning(
+                            "VPP no-write baseline verification unavailable: %s",exc)
+                    finally:
+                        client.close()
+        try:
+            report=await supervisor.tick(snapshot=snapshot)
+            if report["status"]=="review_required":
+                async_create_notification(
+                    hass,
+                    "VPP rehearsal ended but the saved inverter schedule could "
+                    "not be verified unchanged. No VPP inverter writes were sent; "
+                    "inspect elekeeper, then use Verify baseline in Control.",
+                    title="SAJ VPP — schedule review required",
+                    notification_id="saj_h2_vpp_review_"+entry.entry_id,
+                )
+        except Exception:
+            _LOGGER.exception("VPP safety watchdog tick failed; no writes attempted")
+
+    def scheduled_vpp_tick(_now):
+        hass.async_create_task(vpp_watchdog_tick())
+    entry.async_on_unload(async_track_time_interval(
+        hass,scheduled_vpp_tick,timedelta(seconds=20)))
     return True
 
 
