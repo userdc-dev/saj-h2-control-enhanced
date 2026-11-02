@@ -1,3 +1,11 @@
+## v0.5.12 — Editable dashboard solar forecasts and Live energy history (2026-11-02)
+
+- Added an in-dashboard Solar forecast page opened from the Live energy forecast column or Forecast details button, without affecting the TOU control screen.
+- Added read-only Open-Meteo forecast computation from editable panel groups (9/15/6 panels, 440 W each; azimuth 29°/27°/299°, tilt 25°), efficiency (87%) and AC nameplate (10 kW) as *reviewable defaults*.
+- Added editable settings service and HA forecast sensor. Settings save to the control integration configuration entry only, with backend validation; they do not write inverter registers or alter the previously installed Safe Monitor.
+- Added day/hour forecasts, actual-versus-projected graph, and five selectable Home Assistant recorder histories in Live energy. Forecast uses its own energy axis; power series display magnitudes.
+- Preserved existing control mode, TOU schedules, fallback, dashboard, original SAJ Energy and safety logic. The initial implementation requires real HA/browser checking; no inverter writes are used for forecast features.
+
 # Changelog — SAJ H2 Control Enhanced
 
 ## 0.5.11 — 2026-11-02 (fully bundled monitor and simple one-command installer)
