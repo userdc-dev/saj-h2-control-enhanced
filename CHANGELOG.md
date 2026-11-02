@@ -1,3 +1,12 @@
+## v0.5.15 — Home Assistant Energy, signed electricity costs and measured forecast learning (2026-11-02)
+
+- Added new read-only, clearly named HA Energy compatible solar production energy/power, battery charging/discharging energy, battery SOC/power and home energy/power aliases with correct device classes and long-term statistics state classes.
+- Added **estimated** cumulative grid import/export kWh from conservatively integrated existing signed grid power; handles sign crossings, skips missing intervals, persists lifetime/day/month totals, and flags unverified polarity. Does not reinterpret ambiguous SAJ raw grid counters or rewrite the separate Safe Monitor.
+- Added **Costs & savings** dashboard tab and summary with signed editable import/export tariffs and supply charges, today/month partial-period net cost, and carefully qualified combined self-supply value plus non-additive battery discharge potential. Future AEMO live pricing remains unimplemented.
+- Added independent editable forecast self-calibration learned from at least 45 min of actual clear-sky power observations with SOC curtailment guard, per-hour bounded factors, and persisted history; resets calibration on changed model settings.
+- Added [docs/ENERGY_AND_COSTS.md](docs/ENERGY_AND_COSTS.md) with manual Energy setup steps and warnings about duplicate meter inputs, assumed grid direction, incomplete coverage and price assumptions.
+- Maintained all original TOU modes, fallback, 7+7 schedules, user confirmations, readback checks and no automatic Modbus writes. Offline CI is **not** browser/hardware verification.
+
 ## v0.5.14 — Inspect Historic Data with mouse, touch or keyboard (2026-11-02)
 
 - Added crosshair and nearest-recorded-value detail panel to Historic Data. Hover or tap on the graph, or focus the graph and use left/right arrow keys to step through history.
