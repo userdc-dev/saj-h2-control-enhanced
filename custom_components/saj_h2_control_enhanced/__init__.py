@@ -418,6 +418,64 @@ async def async_setup(hass: HomeAssistant, config):
         }),
         supports_response=SupportsResponse.ONLY,
     )
+    # Future VPP dispatch controls: read-only preflight ONLY. A TOU
+    # schedule is weekly recurring, not a one-shot timer. Never activate a
+    # high-power schedule without a tested restart-safe restoration watchdog.
+    async def preview_vpp_dispatch(call):
+        if pilot_lock.locked():
+            raise vol.Invalid("Another inverter operation is running; cannot preview")
+        matches = [
+            e for e in hass.config_entries.async_entries(DOMAIN)
+            if getattr(e, "runtime_data", None) is not None
+            and (not call.data.get("entry_id")
+                 or e.entry_id == call.data["entry_id"])
+        ]
+        if len(matches) != 1:
+            raise vol.Invalid("Select exactly one SAJ H2 inverter")
+        coordinator = matches[0].runtime_data
+        from .schedule_transaction import read_full, ScheduleTransactionError
+        from .vpp_quick_preview import preview_dispatch
+        from zoneinfo import ZoneInfo
+
+        async with pilot_lock:
+            host, port = coordinator._connection_details()
+            client = AsyncModbusTcpClient(host, port=int(port), timeout=5, retries=0)
+            try:
+                if not await client.connect():
+                    raise vol.Invalid("Cannot reach inverter for VPP preflight")
+                snapshot = await read_full(client)
+                # Never rely solely on browser-supplied SOC for any decision.
+                soc_sensor = hass.states.get(
+                    "sensor.saj_h2_safe_monitor_battery_state_of_charge"
+                )
+                try:
+                    soc = float(soc_sensor.state) if soc_sensor else None
+                except (ValueError, TypeError):
+                    soc = None
+                return preview_dispatch(
+                    snapshot[2],
+                    direction=call.data["direction"],
+                    duration_minutes=call.data["duration_minutes"],
+                    now=datetime.now(ZoneInfo(
+                        hass.config.time_zone or "Australia/Adelaide"
+                    )),
+                    soc=soc,
+                )
+            except ScheduleTransactionError as exc:
+                raise vol.Invalid("VPP preflight refused: "+str(exc)) from exc
+            finally:
+                client.close()
+
+    hass.services.async_register(
+        DOMAIN, "preview_vpp_dispatch", preview_vpp_dispatch,
+        schema=vol.Schema({
+            vol.Required("direction"): vol.In(("charge", "discharge")),
+            vol.Required("duration_minutes"): vol.In((5, 10, 60)),
+            vol.Optional("entry_id"): str,
+        }),
+        supports_response=SupportsResponse.ONLY,
+    )
+
     # Forecast settings update ONLY this HA config entry. Never touches Modbus.
     async def save_forecast_settings(call):
         import json
