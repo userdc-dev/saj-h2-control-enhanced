@@ -1,3 +1,10 @@
+## v0.5.14 — Inspect Historic Data with mouse, touch or keyboard (2026-11-02)
+
+- Added crosshair and nearest-recorded-value detail panel to Historic Data. Hover or tap on the graph, or focus the graph and use left/right arrow keys to step through history.
+- The cursor snaps to five-minute intervals for 6/12/24-hour views, ten minutes for 48-hour views, and thirty minutes for seven-day views; actual sensor readings retain their original timestamp and are never fabricated.
+- Tooltip values show solar, house, signed battery and inferred signed grid (import minus export). Missing readings within half an interval show unavailable instead of stale or invented values.
+- Kept the existing real-data graph, independent forecast, controls and Modbus safety measures untouched.
+
 ## v0.5.13 — Historic Data readability refresh (2026-11-02)
 
 - Replaced the cramped Live energy history chart with a clearer **Historic Data** chart using a single kW scale, round-number ticks, subtle gridlines, better timeline labels and selectable 6h/12h/24h/48h/7d ranges.
