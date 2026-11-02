@@ -197,7 +197,7 @@ class SajEditableForecast(DataUpdateCoordinator):
         Never compound two independent correction factors multiplicatively.
         An unvalidated historical backtest cannot alter a forecast.
         """
-        local=datetime.fromtimestamp(start_epoch,timezone.utc).astimezone(
+        local=datetime.fromtimestamp(start_epoch+1800,timezone.utc).astimezone(
             ZoneInfo(self.hass.config.time_zone or "Australia/Adelaide"))
         hour=str(local.hour)
         live=self.factors.get(hour,1.0)
@@ -224,7 +224,7 @@ class SajEditableForecast(DataUpdateCoordinator):
         daytime=0.0
         full_day=0.0
         for end,item in self._forecast_hours.items():
-            local=datetime.fromtimestamp(end-3600,timezone.utc).astimezone(tz)
+            local=datetime.fromtimestamp(end-1800,timezone.utc).astimezone(tz)
             if local.date()!=tomorrow:
                 continue
             predicted=item["base_kwh"]*self._hour_factor(end-3600)
@@ -482,7 +482,7 @@ class SajEditableForecast(DataUpdateCoordinator):
                     # kWh over a one-hour sample, estimated on PV side.
                     # Do not cap by AC inverter nameplate: DC charging may coexist.
                     raw=wh * efficiency / 100 / 1000
-                    local_hour=datetime.fromtimestamp(end-1,timezone.utc).astimezone(
+                    local_hour=datetime.fromtimestamp(end-1800,timezone.utc).astimezone(
                         ZoneInfo(self.hass.config.time_zone or "Australia/Adelaide")).hour
                     factor=self._hour_factor(end-3600)
                     hours[end] = {
@@ -511,7 +511,7 @@ class SajEditableForecast(DataUpdateCoordinator):
         samples = []
         for end, item in sorted(self._forecast_hours.items()):
             start = datetime.fromtimestamp(end - 3600, timezone.utc)
-            local = start.astimezone(tz)
+            local = (start+timedelta(minutes=30)).astimezone(tz)
             day = local.date().isoformat()
             totals[day] = totals.get(day, 0.0) + item["kwh"]
             fraction = max(0.0, min(1.0, (end - now.timestamp()) / 3600))
