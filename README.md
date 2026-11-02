@@ -4,12 +4,15 @@
 
 > **New developer / AI assistant:** [READ THE COMPLETE DEVELOPER_HANDOFF.md FIRST](DEVELOPER_HANDOFF.md). The handover includes exact inverter registers, code architecture, real-vs-simulated testing evidence, safety gates, recovery steps, and outstanding requirements. The historical chronology is preserved in [the archive](docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md).
 >
-> **Version in this README:** v0.5.11. Inspect [manifest.json](custom_components/saj_h2_control_enhanced/manifest.json) and [GitHub Actions](https://github.com/userdc-dev/saj-h2-control-enhanced/actions) to confirm the current release.
+> **Version in this README:** v0.5.15. Inspect [manifest.json](custom_components/saj_h2_control_enhanced/manifest.json) and [GitHub Actions](https://github.com/userdc-dev/saj-h2-control-enhanced/actions) to confirm the current release.
 
 **Versioning rule:** Keep iterative improvements in the pre-1.0 patch series (`0.5.6`, `0.5.7`, etc.) until the complete feature set is stable and hardware-verified. Reserve **v1.0.0** for the final release; do not prematurely claim stability with a major version bump.
 
 ## What this integration does
 
+- Supplies **Home Assistant Energy-ready sensor aliases** for grid energy import/export estimates, lifetime solar production, battery charge/discharge, signed power, SOC and home consumption. Grid kWh estimates use monitored power data and require direction verification; don't mistake them for utility meters.
+- Adds a **Costs & savings** dashboard tab and a compact Cost estimates summary, with editable signed static import/export prices and daily supply charges, today/month partial-coverage estimates, and carefully labelled combined self-supply value. Negative feed-in tariffs and being paid to import are supported; live AEMO pricing is not yet active.
+- Improves the user-editable **Solar forecast** with persistent, bounded learning from reliably observed clear-sky solar production hours, while skipping likely curtailment and uncertain data.
 - Controls operating mode: **Self-consumption ↔ Time-of-Use**. Both directions have been verified on the owner's actual SAJ H2-10K-S3-A inverter and in elekeeper.
 - Edits **up to seven charge** and **seven discharge** time slots, with 24-hour time pickers, Monday–Sunday day choices, add/remove, and a power slider showing **both percentage and estimated watts**.
 - Uses **Save schedule changes to inverter** with internal validation and **one confirmation popup**; each changed Modbus word is verified. Multiple writes are not atomic; an interruption could leave partial settings.
@@ -49,7 +52,7 @@ Core TOU registers: charge mask `0x3604`, discharge mask `0x3605`, charge slots 
 
 ## Install or update — one GitHub repository, no YAML
 
-**Full beginner-friendly guide:** [Installation and upgrades](docs/INSTALLATION.md).
+**Full beginner-friendly guide:** [Installation and upgrades](docs/INSTALLATION.md). For selecting built-in HA Energy entities, editing signed tariff rates and understanding safe estimate limitations, see **[Energy & Costs guide](docs/ENERGY_AND_COSTS.md)**.
 
 All required control code, the separate read-only monitoring *component*, the dashboard card and the installer are contained **in this repository**. You do **not** need to download a second GitHub repository, modify `configuration.yaml`, register a JavaScript resource or paste dashboard YAML.
 
