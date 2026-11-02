@@ -1,5 +1,7 @@
 """Expose actual inverter TOU settings as read-only HA sensor entities."""
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import (
+    SensorEntity, SensorDeviceClass, SensorStateClass,
+)
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 
@@ -131,9 +133,89 @@ class SajEditableForecastSensor(CoordinatorEntity, SensorEntity):
         }
 
 
+# These stable, human-readable read-only aliases are intended for the built-in
+# Home Assistant Energy configuration. Grid kWh is explicitly estimated from
+# signed power samples; NEVER imply the raw SAJ feed-in/sell registers are
+# direction-verified. No duplicate Modbus connections are opened here.
+ENERGY_BRIDGE = {
+    "solar_production_energy": ("Solar production energy • total","solar_total","kWh","energy"),
+    "solar_production_power": ("Solar production power","total_pv_power","W","power"),
+    "battery_charged_energy": ("Battery energy charged • total","battery_charge_total","kWh","energy"),
+    "battery_discharged_energy": ("Battery energy discharged • total","battery_discharge_total","kWh","energy"),
+    "battery_state_of_charge": ("Battery state of charge","battery_soc","%","battery"),
+    "battery_power": ("Battery power • signed","battery_power","W","power"),
+    "home_consumption_energy": ("Home energy consumed • total","home_total","kWh","energy"),
+    "home_consumption_power": ("House consumption power","home_load_power","W","power"),
+    "grid_import_power": ("Grid import power • provisional","grid_import","W","power"),
+    "grid_export_power": ("Grid export power • provisional","grid_export","W","power"),
+    "grid_import_energy_estimate": ("Grid energy imported • estimated","accounting:lifetime:import_kwh","kWh","energy"),
+    "grid_export_energy_estimate": ("Grid energy exported • estimated","accounting:lifetime:export_kwh","kWh","energy"),
+}
+
+class SajEnergyBridgeSensor(CoordinatorEntity, SensorEntity):
+    """Expose existing monitor values with correct HA Energy statistics metadata."""
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+
+    def __init__(self, accounting, key):
+        super().__init__(accounting)
+        self.key = key
+        name, source, unit, kind = ENERGY_BRIDGE[key]
+        self.source = source
+        self._attr_name = name
+        self._attr_unique_id = f"{accounting.entry.entry_id}_energy_bridge_{key}"
+        self._attr_native_unit_of_measurement = unit
+        self._attr_device_class = {
+            "energy":SensorDeviceClass.ENERGY,
+            "power":SensorDeviceClass.POWER,
+            "battery":SensorDeviceClass.BATTERY,
+        }[kind]
+        self._attr_state_class = (
+            SensorStateClass.TOTAL_INCREASING if kind=="energy"
+            else SensorStateClass.MEASUREMENT
+        )
+        self._attr_device_info = {
+            "identifiers":{(DOMAIN,accounting.entry.entry_id)},
+            "name":"SAJ H2 TOU Readback",
+            "manufacturer":"SAJ",
+            "model":"H2 · existing read-only monitor data",
+        }
+
+    @property
+    def native_value(self):
+        data=self.coordinator.data or {}
+        if self.source.startswith("accounting:"):
+            _,period,key=self.source.split(":")
+            return data.get("accounting",{}).get(period,{}).get(key)
+        if not self.coordinator.monitor.last_update_success:
+            return None
+        return data.get(self.source)
+
+    @property
+    def extra_state_attributes(self):
+        estimated=self.source.startswith("accounting:")
+        grid=self.key.startswith("grid_")
+        return {
+            "source":"Home Assistant recorded SAJ Safe Monitor data",
+            "saj_energy_role":self.key,
+            "read_only":True,
+            "direction_unverified":grid,
+            "estimated_not_billing_meter":estimated,
+            "explanation":(
+                "Power-integrated estimate; only monitored intervals count. "
+                "Verify grid polarity before use for billing."
+                if estimated else
+                "Uses existing lifetime inverter counter or instantaneous power/SOC."),
+        }
+
+
 async def async_setup_entry(hass, entry, async_add_entities):
     entities = [SajTOUSensor(entry.runtime_data, key) for key in DETAILS]
     forecast = getattr(entry.runtime_data, "editable_forecast", None)
     if forecast is not None:
         entities.append(SajEditableForecastSensor(forecast))
+    accounting = getattr(entry.runtime_data,"energy_accounting",None)
+    if accounting is not None:
+        entities.extend(SajEnergyBridgeSensor(accounting,key) for key in ENERGY_BRIDGE)
     async_add_entities(entities)
