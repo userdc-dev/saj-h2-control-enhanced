@@ -418,6 +418,50 @@ async def async_setup(hass: HomeAssistant, config):
         }),
         supports_response=SupportsResponse.ONLY,
     )
+    # Forecast settings update ONLY this HA config entry. Never touches Modbus.
+    async def save_forecast_settings(call):
+        import json
+        from .forecast import validate_settings, settings_for
+        matches = [
+            e for e in hass.config_entries.async_entries(DOMAIN)
+            if getattr(e, "runtime_data", None) is not None and
+            (not call.data.get("entry_id") or e.entry_id == call.data["entry_id"])
+        ]
+        if len(matches) != 1:
+            raise vol.Invalid("Select exactly one SAJ control device")
+        selected = matches[0]
+        try:
+            groups = json.loads(call.data["groups_json"])
+            groups, efficiency, ac_limit = validate_settings(
+                groups, call.data["efficiency"], call.data["ac_limit_kw"])
+        except (ValueError, TypeError) as exc:
+            raise vol.Invalid(str(exc)) from exc
+        from .forecast import SajEditableForecast
+        opts = dict(selected.options)
+        opts.update({
+            "forecast_groups": groups,
+            "forecast_efficiency": efficiency,
+            "forecast_ac_limit_kw": ac_limit,
+            "forecast_configured": True,
+        })
+        hass.config_entries.async_update_entry(selected, options=opts)
+        forecast = getattr(selected.runtime_data, "editable_forecast", None)
+        if forecast is not None:
+            await forecast.async_request_refresh()
+        return {"status": "FORECAST_SETTINGS_SAVED", "write_sent": False,
+                "settings": settings_for(selected),
+                "forecast_available": bool(forecast and forecast.last_update_success)}
+
+    hass.services.async_register(
+        DOMAIN, "save_forecast_settings", save_forecast_settings,
+        schema=vol.Schema({
+            vol.Required("groups_json"): str,
+            vol.Required("efficiency"): vol.All(vol.Coerce(float), vol.Range(min=1, max=100)),
+            vol.Required("ac_limit_kw"): vol.All(vol.Coerce(float), vol.Range(min=0.5, max=100)),
+            vol.Optional("entry_id"): str,
+        }),
+        supports_response=SupportsResponse.ONLY,
+    )
     return True
 
 
@@ -517,6 +561,15 @@ async def async_setup_entry(hass: HomeAssistant, entry):
     coordinator = SajTOUCoordinator(hass, entry)
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
+    # Forecast is an independent read-only weather fetch, never required for
+    # inverter setup. Failure must not block existing TOU controls.
+    from .forecast import SajEditableForecast
+    forecast = SajEditableForecast(hass, entry)
+    coordinator.editable_forecast = forecast
+    try:
+        await forecast.async_refresh()
+    except Exception as exc:
+        _LOGGER.warning("Optional solar forecast unavailable: %s", exc)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     from .frontend_setup import async_ensure_dashboard
     await async_ensure_dashboard(hass)
