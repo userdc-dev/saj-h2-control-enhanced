@@ -596,7 +596,7 @@ class SajTOUDynamicCard extends HTMLElement {
     }finally{this._forecastSaving=false;this.render();}
   }
   _actualProjectedChart(hourly){
-    const panel=el("section","forecastHistory");
+    const panel=el("section","forecastHistory actualForecast");
     if(!hourly.length){
       add(panel,el("p","muted","Hourly forecast data not yet available."));
       return panel;
@@ -667,7 +667,7 @@ class SajTOUDynamicCard extends HTMLElement {
     return panel;
   }
   _historyChart(){
-    const panel=el("section","forecastHistory");
+    const panel=el("section","forecastHistory liveHistory");
     const top=el("div","historyHead");
     add(top,el("h3",null,"Live energy · history"));
     const select=el("select");
@@ -691,7 +691,7 @@ class SajTOUDynamicCard extends HTMLElement {
       box.type="checkbox";box.checked=this._historyVisible[key];
       box.addEventListener("change",()=>{
         this._historyVisible[key]=box.checked;
-        const old=this.shadowRoot.querySelector(".forecastHistory");
+        const old=this.shadowRoot.querySelector(".liveHistory");
         if(old)old.replaceWith(this._historyChart());
       });
       const swatch=el("span");swatch.style.color=colors[key];
@@ -818,8 +818,12 @@ class SajTOUDynamicCard extends HTMLElement {
       this._historyError="Recorded history unavailable: "+(err?.message||String(err));
     }finally{
       this._historyPending=false;
-      const old=this.shadowRoot?.querySelector(".forecastHistory");
-      if(old)old.replaceWith(this._historyChart());
+      if(this._page==="forecast"){
+        this.render();
+      }else{
+        const old=this.shadowRoot?.querySelector(".liveHistory");
+        if(old)old.replaceWith(this._historyChart());
+      }
     }
   }
   getCardSize() {return 7;}
