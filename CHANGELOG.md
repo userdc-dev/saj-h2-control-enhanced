@@ -1,3 +1,12 @@
+## v0.5.22 — Wholesale VPP quick-action safety foundation (2026-11-02)
+
+- Added a clean, minimal **VPP quick actions** section on Energy & controls with **5 / 10 / 60 minute** selector, read-only **Preview max charge / discharge** buttons and a confirmed **Return to Self-consumption** button using the existing verified self-consumption mode action.
+- New `preview_vpp_dispatch` service performs fresh double-read of 7 charge + 7 discharge TOU slots, checks no overlaps / free slot / already-configured outside-TOU self-consumption / fresh battery SOC reserve / verified weekday / midnight / DST rules, and returns a precise proposed window with blockers. Returns `VPP_PREFLIGHT_ONLY`, `write_sent:false`, `live_activation_supported:false`, `can_start:false` in all cases.
+- **No live timed charge/discharge writes**. TOU slots recur weekly and the existing multi-register schedule-write engine has no safe, restart-proof automatic rollback. The owner's raw 100% discharge display has direct paired observations, but 100% charge readback is not yet verified; no power, SOC or export-rate guarantee is offered.
+- Kept inverter write services, all 7+7 existing slots, fallback modes, price estimates, forecast, read-only graphs and Home Assistant Energy aliases unchanged. Solar curtailment is intentionally deferred pending exact firmware registers and hardware tests.
+- Added [VPP Quick Actions safety roadmap](docs/VPP_QUICK_ACTIONS.md), standalone Python preflight tests and dashboard-service interaction smoke test. CI remains hardware-free and cannot certify a VPP dispatch.
+- Changed frontend cache-busting path to `/saj-h2-tou/v0522/`.
+
 ## v0.5.21 — Fix incorrect Grid ± Historic Data hover (2026-11-02)
 
 - Fixed the **10-minute and longer-range Historic Data** tooltip incorrectly reporting **Grid ±: — no nearby reading** while the graph clearly plotted negative (exporting) purple power. Root cause: tooltip required `gridImport` **AND** `gridExport` Recorder events near the same hover time, even though split sensors update independently and unchanged zero states may have no fresh Recorder events.
