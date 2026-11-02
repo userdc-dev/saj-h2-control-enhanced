@@ -6,7 +6,7 @@
 **Older full development diary:** [docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md](docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md) (57 KB historical archive; early claims of “planning-only” are OBSOLETE)  
 **Paired app evidence:** [docs/SAJ_APP_TOU_OBSERVATIONS.md](docs/SAJ_APP_TOU_OBSERVATIONS.md)  
 **Bundled read-only monitor:** `bundled_components/saj_h2_safe` **inside this repository**. Preserve already installed `saj_h2_safe` and the owner's existing SAJ Energy dashboard; do not require another repository.  
-**Current v0.5.16 CI evidence:** https://github.com/userdc-dev/saj-h2-control-enhanced/actions/runs/41374905064 — passed full Python/JS syntax, simulated Modbus safety, packaging, installer syntax and fake-archive install/update tests. This is **offline evidence, not live hardware certification**.
+**Current v0.5.17 CI evidence:** https://github.com/userdc-dev/saj-h2-control-enhanced/actions/runs/41379006231 — passed full Python/JS syntax, simulated Modbus safety, packaging, installer syntax and fake-archive install/update tests. This is **offline evidence, not live hardware certification**.
 
 > The owner wants this file to be detailed enough that a human developer or future assistant with **only this repo and these notes** understands the purpose, chronology, code, register mapping, tests, successful live observations, unresolved issues, installation, safety constraints, and next actions. Do not delete or hollow out this handover. Keep it current whenever changing actual features.
 >
@@ -22,7 +22,7 @@
 
 **Billing limitations:** One full fee is posted on each tracked calendar day during operation; **days when HA was wholly offline and never observed are not automatically backfilled**. Even with full supply charges, energy costs may be incomplete during recorder outages and the resulting estimates are not legally or financially equivalent to a retailer bill. DST dates count one whole supply fee, not a fraction of a 23h or 25h day. Taxes on fixed supply use the user's selected signed percentage options. Never change or auto-write inverter operating mode/TOU registers as a side effect.
 
-**Regression coverage:** `tests/test_tariff_accounting.py` tests full no-telemetry supply with $1.4944 example, zero double charge on repeated observations, midday edits using prior and new daily rates, month rollover, store/restart persistence, migration from old partial fee, and legacy flat full supply. Existing time-of-use/negative rate/DST/Modbus guard tests remain. Offline CI is not yet physical-browser verification; request post-upgrade screenshots showing the whole supply charge and the Power measurement statistic selector.
+**Regression coverage:** `tests/test_energy_finance.py` also guards all three Home Assistant grid power aliases and their W/measurement metadata; `tests/test_tariff_accounting.py` tests full no-telemetry supply with $1.4944 example, zero double charge on repeated observations, midday edits using prior and new daily rates, month rollover, store/restart persistence, migration from old partial fee, and legacy flat full supply. Existing time-of-use/negative rate/DST/Modbus guard tests remain. Offline CI is not yet physical-browser verification; request post-upgrade screenshots showing the whole supply charge and the Power measurement statistic selector.
 
 ## v0.5.16 — Time-of-use tariffs, export eligibility, GST and accrual (2026-11-02)
 
