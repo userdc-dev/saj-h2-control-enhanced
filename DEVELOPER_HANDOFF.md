@@ -6,7 +6,7 @@
 **Older full development diary:** [docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md](docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md) (57 KB historical archive; early claims of “planning-only” are OBSOLETE)  
 **Paired app evidence:** [docs/SAJ_APP_TOU_OBSERVATIONS.md](docs/SAJ_APP_TOU_OBSERVATIONS.md)  
 **Bundled read-only monitor:** `bundled_components/saj_h2_safe` **inside this repository**. Preserve already installed `saj_h2_safe` and the owner's existing SAJ Energy dashboard; do not require another repository.  
-**Current v0.5.15 CI evidence:** https://github.com/userdc-dev/saj-h2-control-enhanced/actions/runs/41372413972 — passed full Python/JS syntax, simulated Modbus safety, packaging, installer syntax and fake-archive install/update tests. This is **offline evidence, not live hardware certification**.
+**Current v0.5.16 CI evidence:** https://github.com/userdc-dev/saj-h2-control-enhanced/actions/runs/41374677156 — passed full Python/JS syntax, simulated Modbus safety, packaging, installer syntax and fake-archive install/update tests. This is **offline evidence, not live hardware certification**.
 
 > The owner wants this file to be detailed enough that a human developer or future assistant with **only this repo and these notes** understands the purpose, chronology, code, register mapping, tests, successful live observations, unresolved issues, installation, safety constraints, and next actions. Do not delete or hollow out this handover. Keep it current whenever changing actual features.
 >
