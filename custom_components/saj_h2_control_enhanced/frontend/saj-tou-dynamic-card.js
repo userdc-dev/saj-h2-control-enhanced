@@ -563,8 +563,9 @@ class SajTOUDynamicCard extends HTMLElement {
         ["Grid export credit / fee",row.export_credit,"currency"],
         ["Standing charge (prorated)",row.supply_cost,"currency"]
       ]){
-        add(box,el("p",null,k+": "+(typeof v==="number"?
-          unit==="currency"?this._currency(v):v.toFixed(2)+" "+unit:"—"));
+        const shown=typeof v==="number"?
+          (unit==="currency"?this._currency(v):v.toFixed(2)+" "+unit):"—";
+        add(box,el("p",null,k+": "+shown));
       }
       if(row)add(box,el("p","muted",
         "Recorded coverage: "+(row.coverage_seconds/3600).toFixed(1)+
