@@ -1,11 +1,17 @@
-## Documentation / single-repository installation clarification (2026-11-02)
-
-- Corrected outdated instructions implying a second GitHub repository is necessary for Live energy. The read-only Safe Monitor source is already bundled in `bundled_components/saj_h2_safe` and installed by default by `scripts/install.sh` when absent.
-- Promoted the exact one-block curl + installer + Docker restart sequence for the original owner's setup.
-- Removed the obsolete `--with-safe-monitor` instruction. Existing monitor files, entity IDs, controller runtime, dashboard and all Modbus write protections remain untouched.
-- Explained the real HACS limitation transparently: standard HACS install deploys only the controller folder, so the one-script install is the full-install route for new users. The two HA config entries preserve backward compatibility.
-
 # Changelog — SAJ H2 Control Enhanced
+
+## 0.5.11 — 2026-11-02 (fully bundled monitor and simple one-command installer)
+
+- Included **all seven source files** for the separate read-only Safe Monitor directly under `bundled_components/saj_h2_safe/` in this repository, with unchanged HA `saj_h2_safe` domain and monitoring logic. The Live energy section no longer requires visiting/downloading another repository.
+- Reworked `scripts/install.sh` to fetch **only this repository**, install both controller and monitor from its single archive **by default**, and never overwrite an existing Safe Monitor. Backups of controller code remain outside `custom_components/`.
+- Removed the obsolete `--with-safe-monitor` flag; `--control-only` is available for explicit controller-only installs.
+- Promoted the exact one-block **curl → install → docker restart** commands for the original Kamrui HA setup in `README.md` and `docs/INSTALLATION.md`, with instructions to substitute a different HA config path on other hosts.
+- First-run installation is via the HA UI for **SAJ H2 Safe Monitor** and **SAJ H2 Control Enhanced**, without `configuration.yaml` or Lovelace YAML/JS resource edits.
+- Correctly documented that HACS normally installs the main controller domain only; full two-domain installation should use the bundled one-command script or manual file copy **from this repository**, not an external source.
+- Added offline package and installer regressions proving the one-repository download, directory placement, Safe Monitor preservation, backups and no YAML modifications. No new Modbus write behavior.
+- Version and frontend cache: **0.5.11** and `/saj-h2-tou/v0511/saj-tou-dynamic-card.js`. v1.0.0 remains reserved for final hardware-verified stability.
+
+
 
 
 ## 0.5.10 — 2026-11-02 (compact schedule controls, actual live status summary, zero-YAML packaging)
