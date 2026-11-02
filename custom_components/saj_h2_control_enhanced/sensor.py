@@ -146,8 +146,9 @@ ENERGY_BRIDGE = {
     "battery_power": ("Battery power • signed","battery_power","W","power"),
     "home_consumption_energy": ("Home energy consumed • total","home_total","kWh","energy"),
     "home_consumption_power": ("House consumption power","home_load_power","W","power"),
-    "grid_import_power": ("Grid import power • provisional","grid_import","W","power"),
-    "grid_export_power": ("Grid export power • provisional","grid_export","W","power"),
+    "grid_signed_power": ("Grid power • signed (import + / export −)","grid_power","W","power"),
+    "grid_import_power": ("Power imported from grid • provisional","grid_import","W","power"),
+    "grid_export_power": ("Power exported to grid • provisional","grid_export","W","power"),
     "grid_import_energy_estimate": ("Grid energy imported • estimated","accounting:lifetime:import_kwh","kWh","energy"),
     "grid_export_energy_estimate": ("Grid energy exported • estimated","accounting:lifetime:export_kwh","kWh","energy"),
 }
