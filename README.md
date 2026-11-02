@@ -4,7 +4,7 @@
 
 > **New developer / AI assistant:** [READ THE COMPLETE DEVELOPER_HANDOFF.md FIRST](DEVELOPER_HANDOFF.md). The handover includes exact inverter registers, code architecture, real-vs-simulated testing evidence, safety gates, recovery steps, and outstanding requirements. The historical chronology is preserved in [the archive](docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md).
 >
-> **Version in this README:** v0.5.10. Inspect [manifest.json](custom_components/saj_h2_control_enhanced/manifest.json) and [GitHub Actions](https://github.com/userdc-dev/saj-h2-control-enhanced/actions) to confirm the current release.
+> **Version in this README:** v0.5.11. Inspect [manifest.json](custom_components/saj_h2_control_enhanced/manifest.json) and [GitHub Actions](https://github.com/userdc-dev/saj-h2-control-enhanced/actions) to confirm the current release.
 
 **Versioning rule:** Keep iterative improvements in the pre-1.0 patch series (`0.5.6`, `0.5.7`, etc.) until the complete feature set is stable and hardware-verified. Reserve **v1.0.0** for the final release; do not prematurely claim stability with a major version bump.
 
@@ -40,6 +40,8 @@ The integration is **not** a completed universal inverter controller: forced tim
 | `frontend/saj-tou-dynamic-card.js` | Time-of-use control UI plus read-only live energy graphics and table |
 | `frontend_setup.py` | Versioned frontend resource and independent dashboard |
 | `sensor.py` | Device readback sensors; never speculative setting states |
+| `bundled_components/saj_h2_safe/` | Bundled, independent read-only energy/forecast component installed from this repository |
+| `scripts/install.sh` | One-repo installer for controller and missing monitor with no YAML changes |
 
 Core TOU registers: charge mask `0x3604`, discharge mask `0x3605`, charge slots `0x3606–0x361A`, discharge slots `0x361B–0x362F`, mode `0x3647`, outside fallback `0x365F`. See the [full handover](DEVELOPER_HANDOFF.md#4-authoritative-modbus-tou-layout-and-encodings) for bytes, masks, examples and provenance.
 
