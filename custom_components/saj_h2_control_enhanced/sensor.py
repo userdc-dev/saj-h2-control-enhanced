@@ -245,6 +245,7 @@ class SajCostEstimateSensor(CoordinatorEntity, SensorEntity):
             "saj_tou_role":"cost_estimate",
             "saj_tou_entry_id":self.coordinator.entry.entry_id,
             "pricing":data.get("pricing",{}),
+            "current_tariff":data.get("current_tariff"),
             "today":data.get("costs",{}).get("today"),
             "month":data.get("costs",{}).get("month"),
             "direction_unverified":True,
