@@ -530,8 +530,8 @@ class SajTOUDynamicCard extends HTMLElement {
     const today=state.attributes.today,month=state.attributes.month;
     const stats=el("div","costStatGrid");
     for(const [label,row,note] of [
-      ["Today (tracked)",today,"Partial-day estimate"],
-      ["This month (tracked)",month,"Partial-month estimate"]
+      ["Today (tracked)",today,"Full daily supply + measured electricity"],
+      ["This month (tracked)",month,"One daily supply charge per tracked day"]
     ]){
       const card=el("div","costStat");
       add(card,el("span","muted",label),
@@ -544,8 +544,8 @@ class SajTOUDynamicCard extends HTMLElement {
     }
     add(section,stats);
     add(section,el("p","historyFoot",
-      "Estimated grid flows are integrated from power readings; missing periods are excluded. "+
-      "Signed rates are supported. Values are not a replacement for your retailer's bill."));
+      "The full daily supply charge is included once per monitored calendar day, even with no energy readings. "+
+      "Import/export charges cover recorded intervals only; this is not a retailer bill."));
     return section;
   }
   _tariffDefault(legacy){
@@ -621,8 +621,9 @@ class SajTOUDynamicCard extends HTMLElement {
         "Check your bill or plan factsheet, set every applicable time window and tax rule, then save."));
     }else{
       add(root,el("p","muted",
-        "Rates apply when electricity is measured, not retroactively. "+
-        "Changing a tariff preserves already accumulated costs and starts a new revision."));
+        "Import/export rates apply to electricity as it is measured. "+
+        "A full daily supply charge is posted once for each tracked local calendar day, regardless of monitoring gaps. "+
+        "Changing a tariff preserves accumulated costs, and does not charge the same day's supply fee again."));
     }
     const stats=el("div","costStatGrid");
     for(const [name,key,row,small] of [
@@ -653,6 +654,7 @@ class SajTOUDynamicCard extends HTMLElement {
           ["Import charge incl. applicable tax","import_cost","money"],
           ["Export payment / fee incl. applicable tax","export_credit","money"],
           ["Supply charge incl. applicable tax","supply_cost","money"],
+          ["Full daily supply fees counted","supply_days_charged","days"],
           ["Additional tax adjustment (already included)","tax_adjustment","money"],
           ["High-FiT potential adjustment (not credited)","high_fit_unverified_difference","money"]
         ]){
@@ -660,13 +662,15 @@ class SajTOUDynamicCard extends HTMLElement {
              typeof row[key]!=="number")continue;
           const value=row[key];
           const rendered=typeof value!=="number"?"—":unit==="energy"?
-            value.toFixed(3)+" kWh":this._currency(value);
+            value.toFixed(3)+" kWh":unit==="days"?
+            value.toFixed(0)+" day(s)":this._currency(value);
           add(card,el("p",null,label+": "+rendered));
         }
         add(card,el("p","muted",
           "Energy coverage: "+(Number(row.coverage_seconds||0)/3600).toFixed(1)+
           " h · Tariff-priced coverage: "+
-          (Number(row.tariff_coverage_seconds||0)/3600).toFixed(1)+" h"));
+          (Number(row.tariff_coverage_seconds||0)/3600).toFixed(1)+
+          " h. Fixed supply is charged per day, separately from recorded energy."));
         if(row.label)add(card,el("p","muted",row.label));
         for(const [heading,key] of [
           ["Import rate breakdown","import_bands"],
@@ -1003,6 +1007,12 @@ class SajTOUDynamicCard extends HTMLElement {
         "Estimated cumulative kWh from sampled signed grid power — provisional polarity"],
       ["Electricity grid exported","grid_export_energy_estimate",
         "Estimated cumulative kWh, not a certified grid meter"],
+      ["Grid · Power measurement (Standard)","grid_signed_power",
+        "Signed instantaneous W: positive assumed import, negative assumed export. Choose Standard after checking polarity."],
+      ["Grid · Power imported from grid (Two sensors)","grid_import_power",
+        "Positive W for imports only; choose as first statistic under Two sensors."],
+      ["Grid · Power exported to grid (Two sensors)","grid_export_power",
+        "Positive W for exports only; choose as second statistic under Two sensors."],
       ["Solar production energy","solar_production_energy",
         "Inverter lifetime kWh counter"],
       ["Solar production power","solar_production_power",
@@ -1030,10 +1040,17 @@ class SajTOUDynamicCard extends HTMLElement {
       list.append(item);
     }
     add(section,list);
+    add(section,el("div","costNotice",
+      "In Home Assistant Energy → Electricity grid → Type of power measurement: "+
+      "select Standard + 'Grid power • signed' for one signed W sensor; "+
+      "or select Two sensors and assign 'Power imported from grid' and 'Power exported to grid'. "+
+      "Use Inverted only if your meter confirms the signed sensor has reversed polarity. "+
+      "The import/export directions are provisional and should be checked against your meter."));
     add(section,el("p","historyFoot",
-      "All sensor aliases use correct HA energy/power/battery device classes. "+
-      "The estimated grid kWh counters begin accumulating only once monitoring is active. "+
-      "Confirm grid polarity against your utility meter before relying on them for Energy totals."));
+      "Power sensors are W with state_class measurement; energy counters are kWh with total_increasing. "+
+      "If a new sensor is missing from the 'Select a statistic' list, confirm it is numeric, enabled and included in Recorder, "+
+      "then allow at least one 5-minute statistics cycle and check Home Assistant's Statistics repair screen. "+
+      "Do not select both Standard and Two sensors for the same grid source."));
     return section;
   }
   _forecastState(){
