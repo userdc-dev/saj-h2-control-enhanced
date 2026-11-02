@@ -462,6 +462,49 @@ async def async_setup(hass: HomeAssistant, config):
         }),
         supports_response=SupportsResponse.ONLY,
     )
+    # User-editable static tariff model: changes cost calculations only.
+    async def save_cost_settings(call):
+        from .energy_finance import validate_pricing
+        matches=[
+            e for e in hass.config_entries.async_entries(DOMAIN)
+            if getattr(e,"runtime_data",None) is not None
+            and (not call.data.get("entry_id") or e.entry_id==call.data["entry_id"])
+        ]
+        if len(matches)!=1:
+            raise vol.Invalid("Select exactly one SAJ H2 control entry")
+        selected=matches[0]
+        try:
+            import_rate,export_rate,supply=validate_pricing(
+                call.data["import_rate"],call.data["export_rate"],
+                call.data["daily_supply"])
+        except ValueError as exc:
+            raise vol.Invalid(str(exc)) from exc
+        opts=dict(selected.options)
+        opts.update({
+            "import_rate":import_rate,"export_rate":export_rate,
+            "daily_supply":supply,"currency":"AUD",
+            "configured":True,
+        })
+        hass.config_entries.async_update_entry(selected,options=opts)
+        accounting=getattr(selected.runtime_data,"energy_accounting",None)
+        if accounting is not None:
+            accounting.refresh_snapshot()
+        return {
+            "status":"COST_SETTINGS_SAVED","write_sent":False,
+            "pricing":{k:opts[k] for k in
+                       ("import_rate","export_rate","daily_supply","currency")},
+        }
+
+    hass.services.async_register(
+        DOMAIN,"save_cost_settings",save_cost_settings,
+        schema=vol.Schema({
+            vol.Required("import_rate"):vol.Coerce(float),
+            vol.Required("export_rate"):vol.Coerce(float),
+            vol.Required("daily_supply"):vol.Coerce(float),
+            vol.Optional("entry_id"):str,
+        }),
+        supports_response=SupportsResponse.ONLY,
+    )
     return True
 
 
@@ -566,6 +609,32 @@ async def async_setup_entry(hass: HomeAssistant, entry):
     from .forecast import SajEditableForecast
     forecast = SajEditableForecast(hass, entry)
     coordinator.editable_forecast = forecast
+    # Attach to a separately configured read-only monitor without changing
+    # its files, IDs, config or polling. The controller still runs if missing.
+    from .energy_finance import SajEnergyAccounting
+    safe_entries=hass.config_entries.async_entries("saj_h2_safe")
+    source_id=entry.data.get("source_monitor_entry_id")
+    host=entry.data.get("host")
+    selected_monitor=next((m for m in safe_entries if
+        (m.entry_id==source_id or m.data.get("host")==host)
+        and getattr(m,"runtime_data",None) is not None),None)
+    if selected_monitor is not None:
+        safe_coordinator=selected_monitor.runtime_data
+        accounting=SajEnergyAccounting(hass,entry,safe_coordinator)
+        await accounting.async_initialize()
+        coordinator.energy_accounting=accounting
+        entry.async_on_unload(safe_coordinator.async_add_listener(
+            accounting.on_monitor_update))
+        # Forecast learning also samples existing read-only PV data, not Modbus.
+        entry.async_on_unload(safe_coordinator.async_add_listener(
+            forecast.on_live_update))
+        _LOGGER.info("Attached read-only cost and energy sensors to existing SAJ monitor")
+    else:
+        _LOGGER.info("Safe Monitor not yet loaded; TOU controls and forecast remain available")
+    try:
+        await forecast.async_load_learning()
+    except Exception as exc:
+        _LOGGER.warning("Could not load solar forecast learning: %s", exc)
     try:
         await forecast.async_refresh()
     except Exception as exc:
@@ -577,4 +646,10 @@ async def async_setup_entry(hass: HomeAssistant, entry):
 
 
 async def async_unload_entry(hass: HomeAssistant, entry):
+    accounting=getattr(getattr(entry,"runtime_data",None),"energy_accounting",None)
+    if accounting is not None:
+        try:
+            await accounting.async_save()
+        except Exception:
+            _LOGGER.exception("Could not flush energy accounting state")
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
