@@ -351,6 +351,7 @@ class SajTOUDynamicCard extends HTMLElement {
     this._selected = "";
     this._lastSignature = "";
     this._lastEnergySignature = "";
+    this._lastForecastSignature = "";
     this._modeBusy = false;
     this._fallbackBusy = false;
     this._fallbackFeedback = "";
@@ -392,6 +393,8 @@ class SajTOUDynamicCard extends HTMLElement {
     const energySig=Object.values(SAFE_ENERGY_IDS).map(id=>
       hass.states?.[id]?.state??"—").join("|");
     const forecastSig=this._forecastState()?.last_updated||"";
+    const forecastChanged=forecastSig!==this._lastForecastSignature;
+    this._lastForecastSignature=forecastSig;
     const combinedEnergySig=energySig+"|"+forecastSig;
     if (sig!==this._lastSignature) {
       this._lastSignature=sig;
@@ -406,10 +409,15 @@ class SajTOUDynamicCard extends HTMLElement {
       this._lastEnergySignature=energySig;
       // Updating safe monitoring graphics must not reset an active time input
       // or discard an in-progress TOU schedule draft.
-      const old=this.shadowRoot?.querySelector(".energyOverview");
-      if(old)old.replaceWith(this._energyOverview());
-      else this.render();
-      if(this._page==="forecast")this.render();
+      if(this._page==="forecast"){
+        // Live power updates every ~10 seconds. Do not destroy a user-edited
+        // forecast settings input on each telemetry update.
+        if(forecastChanged&&!this._forecastSaving)this.render();
+      }else{
+        const old=this.shadowRoot?.querySelector(".energyOverview");
+        if(old)old.replaceWith(this._energyOverview());
+        else this.render();
+      }
     }
   }
   _goPage(page){
