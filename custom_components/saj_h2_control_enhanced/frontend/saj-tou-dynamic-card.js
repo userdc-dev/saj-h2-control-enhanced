@@ -233,7 +233,24 @@ const CSS = [
   ".forecastSettingGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:8px;margin:10px 0}",
   ".forecastSettingGrid label{display:flex;flex-direction:column;gap:5px;font-size:12px}",
   ".forecastSettingGrid input{width:100%;box-sizing:border-box}",
-  ".forecastHistory{border:1px solid var(--divider-color,#555);padding:14px;border-radius:12px;margin-top:16px}",
+  ".costSection{margin:16px 0;padding:18px;border:1px solid var(--divider-color,#555);border-radius:14px;background:var(--card-background-color,#222528)}",
+  ".costHeader{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px}",
+  ".costHeader h3{font-size:18px;margin:0}",
+  ".costStatGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:12px 0}",
+  ".costStat{border:1px solid var(--divider-color,#50545a);border-radius:11px;padding:13px;background:rgba(120,120,120,.04)}",
+  ".costStat strong{font-size:21px;display:block;letter-spacing:.1px;margin:7px 0;font-variant-numeric:tabular-nums}",
+  ".costStat small{font-size:11px;color:var(--secondary-text-color,#aaa);line-height:1.45;display:block}",
+  ".costSettings{margin:16px 0;padding:15px;border:1px solid var(--divider-color,#555);border-radius:12px}",
+  ".costInputs{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:14px 0}",
+  ".costInputs label{font-size:12px;display:flex;flex-direction:column;gap:7px}",
+  ".costInputs input{width:100%;box-sizing:border-box}",
+  ".costDetail{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:13px}",
+  ".costDetail .pane p{margin:6px 0;font-size:12px;line-height:1.5}",
+  ".energyGuide{border:1px solid var(--divider-color,#555);border-radius:12px;padding:14px;margin-top:16px}",
+  ".energyGuide li{margin-bottom:9px;line-height:1.5;font-size:12px}",
+  ".energyEntity{font-size:11px;color:var(--secondary-text-color,#bbb);overflow-wrap:anywhere;display:block}",
+  ".costNotice{padding:10px 12px;border-left:3px solid var(--warning-color,#d6ae57);background:rgba(128,128,128,.035);border-radius:0 7px 7px 0;font-size:12px;line-height:1.65;margin:12px 0}",
+    ".forecastHistory{border:1px solid var(--divider-color,#555);padding:14px;border-radius:12px;margin-top:16px}",
   ".historyHead{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}",
   ".historyLegend{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}",
   ".historyLegend label{font-size:12px;display:flex;align-items:center;gap:5px}",
@@ -381,6 +398,11 @@ class SajTOUDynamicCard extends HTMLElement {
     this._schedulePlan = null;
     this._schedulePlanKey = "";
     this._page = "control";
+    this._costForm = null;
+    this._costEditing = false;
+    this._costSaving = false;
+    this._costMessage = "";
+    this._costError = false;
     this._forecastForm = null;
     this._forecastSaving = false;
     this._forecastMessage = "";
@@ -404,9 +426,10 @@ class SajTOUDynamicCard extends HTMLElement {
     const energySig=Object.values(SAFE_ENERGY_IDS).map(id=>
       hass.states?.[id]?.state??"—").join("|");
     const forecastSig=this._forecastState()?.last_updated||"";
+    const costSig=this._costState()?.last_updated||"";
     const forecastChanged=forecastSig!==this._lastForecastSignature;
     this._lastForecastSignature=forecastSig;
-    const combinedEnergySig=energySig+"|"+forecastSig;
+    const combinedEnergySig=energySig+"|"+forecastSig+"|"+costSig;
     if (sig!==this._lastSignature) {
       this._lastSignature=sig;
       this._lastEnergySignature=combinedEnergySig;
@@ -420,10 +443,10 @@ class SajTOUDynamicCard extends HTMLElement {
       this._lastEnergySignature=energySig;
       // Updating safe monitoring graphics must not reset an active time input
       // or discard an in-progress TOU schedule draft.
-      if(this._page==="forecast"){
-        // Live power updates every ~10 seconds. Do not destroy a user-edited
-        // forecast settings input on each telemetry update.
-        if(forecastChanged&&!this._forecastSaving)this.render();
+      if(this._page==="forecast"||this._page==="cost"){
+        // Preserve focused editable settings while live telemetry refreshes.
+        if(this._page==="forecast"&&forecastChanged&&!this._forecastSaving)this.render();
+        if(this._page==="cost"&&!this._costEditing&&!this._costSaving)this.render();
       }else{
         const old=this.shadowRoot?.querySelector(".energyOverview");
         if(old)old.replaceWith(this._energyOverview());
@@ -434,6 +457,242 @@ class SajTOUDynamicCard extends HTMLElement {
   _goPage(page){
     this._page=page;
     this.render();
+  }
+  _costState(){
+    if(!this._hass?.states)return null;
+    const entries=Object.values(this._hass.states).filter(s=>
+      s.attributes?.saj_tou_role==="cost_estimate");
+    return entries.find(s=>s.attributes.saj_tou_entry_id===this._selected)
+      ||entries[0]||null;
+  }
+  _currency(value){
+    if(typeof value!=="number"||!Number.isFinite(value))return "—";
+    const currency=this._costState()?.attributes?.pricing?.currency||"AUD";
+    return new Intl.NumberFormat("en-AU",{
+      style:"currency",currency,minimumFractionDigits:2,
+      maximumFractionDigits:2}).format(value);
+  }
+  _costOverview(){
+    const section=el("section","costSection");
+    const head=el("div","costHeader");
+    const heading=el("div");
+    add(heading,el("h3",null,"Cost estimates"),
+      el("span","muted","Electricity import, export and standing charges"));
+    const detail=el("button","secondaryAction","View costs & settings ›");
+    detail.type="button";
+    detail.addEventListener("click",()=>this._goPage("cost"));
+    add(head,heading,detail);
+    add(section,head);
+    const state=this._costState();
+    const settings=state?.attributes?.pricing||{};
+    if(!state){
+      add(section,el("div","costNotice",
+        "Energy accounting is unavailable. Configure SAJ H2 Safe Monitor using the same inverter IP, then reload this integration. No tariff or grid energy is being guessed."));
+      return section;
+    }
+    if(!settings.configured)
+      add(section,el("div","costNotice",
+        "Example electricity prices are not your tariff. Open Costs & savings to enter your import rate, export credit or fee, and daily supply charge."));
+    const today=state.attributes.today,month=state.attributes.month;
+    const stats=el("div","costStatGrid");
+    for(const [label,row,note] of [
+      ["Today (tracked)",today,"Partial-day estimate"],
+      ["This month (tracked)",month,"Partial-month estimate"]
+    ]){
+      const card=el("div","costStat");
+      add(card,el("span","muted",label),
+        el("strong",null,settings.configured&&row?
+          this._currency(row.net_cost):"—"),
+        el("small",null,note+" · "+(row?
+          (row.coverage_seconds/3600).toFixed(1)+" hours monitored":
+          "recordings pending")));
+      stats.append(card);
+    }
+    add(section,stats);
+    add(section,el("p","historyFoot",
+      "Estimated grid flows are integrated from power readings; missing periods are excluded. "+
+      "Signed rates are supported. Values are not a replacement for your retailer's bill."));
+    return section;
+  }
+  _costPage(){
+    const root=el("section");
+    const header=el("div","forecastHeader");
+    add(header,el("h2",null,"Costs & savings"),
+      el("span","muted","Static tariffs · read-only estimates"));
+    add(root,header);
+    const state=this._costState();
+    if(!state){
+      add(root,el("p","costNotice",
+        "The read-only SAJ H2 Safe Monitor must be installed, configured and running on the same inverter before cost and energy records appear. Settings are not available until then."));
+      return root;
+    }
+    const data=state.attributes;
+    const p=data.pricing||{};
+    if(!p.configured)add(root,el("p","costNotice",
+      "Prices below are EXAMPLE defaults, not your electricity plan. Please enter your actual import cost, export payment/fee and supply charge before interpreting estimated dollars."));
+    const stats=el("div","costStatGrid");
+    const rows=[
+      ["Today · estimated net",data.today?.net_cost,"Partially recorded today"],
+      ["Month · estimated net",data.month?.net_cost,"Partially recorded this month"],
+      ["Today · self-supply & export value",data.today?.self_supply_estimated_benefit,
+       "Illustrative combined benefit; solar and battery cannot be separated reliably"],
+      ["Today · battery discharge potential",data.today?.battery_discharge_illustrative_value,
+       "Gross illustration only; NOT additional savings to add to the combined benefit"]
+    ];
+    for(const [label,value,note] of rows){
+      const stat=el("div","costStat");
+      add(stat,el("span","muted",label),
+        el("strong",null,p.configured?this._currency(value):"—"),
+        el("small",null,note));
+      stats.append(stat);
+    }
+    add(root,stats);
+    const details=el("div","costDetail");
+    for(const [label,row] of [["Today (available coverage)",data.today],
+                              ["This month (available coverage)",data.month]]){
+      const box=el("div","pane");
+      add(box,el("h3",null,label));
+      if(!row){
+        add(box,el("p","muted","Waiting for recorded grid power readings."));
+      }else for(const [k,v,unit] of [
+        ["Grid imported",row.import_kwh,"kWh"],
+        ["Grid exported",row.export_kwh,"kWh"],
+        ["Solar generated (observed intervals)",row.solar_kwh,"kWh"],
+        ["Home use (observed intervals)",row.home_kwh,"kWh"],
+        ["Grid import cost",row.import_cost,"currency"],
+        ["Grid export credit / fee",row.export_credit,"currency"],
+        ["Standing charge (prorated)",row.supply_cost,"currency"]
+      ]){
+        add(box,el("p",null,k+": "+(typeof v==="number"?
+          unit==="currency"?this._currency(v):v.toFixed(2)+" "+unit:"—"));
+      }
+      if(row)add(box,el("p","muted",
+        "Recorded coverage: "+(row.coverage_seconds/3600).toFixed(1)+
+        " hours. No missing past intervals are filled in."));
+      details.append(box);
+    }
+    add(root,details);
+    if(!this._costForm)this._costForm={
+      import_rate:Number(p.import_rate??0.35),
+      export_rate:Number(p.export_rate??0.05),
+      daily_supply:Number(p.daily_supply??1.0)
+    };
+    const form=this._costForm;
+    const pane=el("section","costSettings");
+    add(pane,el("h3",null,"Electricity price settings"));
+    add(pane,el("p","muted",
+      "Static rates in AUD. Enter a positive import rate when you PAY for grid energy; negative if you are PAID to import. "+
+      "Positive export rate means the retailer pays you; negative means you pay a fee to export. Signed daily supply charges are also supported."));
+    const inputs=el("div","costInputs");
+    const field=(label,key,step)=>{
+      const holder=el("label");
+      add(holder,el("span",null,label));
+      const input=el("input");
+      input.type="number";input.step=String(step);
+      input.min="-100";input.max="100";
+      input.value=String(form[key]);
+      input.setAttribute("aria-label",label);
+      input.addEventListener("focus",()=>this._costEditing=true);
+      input.addEventListener("input",()=>{
+        const n=Number(input.value);
+        if(input.value!==""&&Number.isFinite(n))form[key]=n;
+      });
+      input.addEventListener("blur",()=>this._costEditing=false);
+      holder.append(input);
+      return holder;
+    };
+    add(inputs,
+      field("Grid import cost (AUD/kWh)","import_rate",0.001),
+      field("Grid export payment (AUD/kWh)","export_rate",0.001),
+      field("Daily supply charge (AUD/day)","daily_supply",0.01));
+    add(pane,inputs);
+    const save=el("button","primaryAction",
+      this._costSaving?"Saving…":"Save electricity prices");
+    save.type="button";save.disabled=this._costSaving;
+    save.addEventListener("click",()=>this._saveCostSettings());
+    add(pane,save);
+    if(this._costMessage)
+      add(pane,el("p",this._costError?"bad":"okay",this._costMessage));
+    add(pane,el("p","historyFoot",
+      "Dynamic tariffs (including future AEMO integration) are not enabled yet. "+
+      "No price changes alter inverter operating modes, TOU schedules or battery controls."));
+    add(root,pane);
+    add(root,el("p","costNotice",
+      "These are estimates, not bill calculations. Grid direction is not yet independently validated. "+
+      "Self-supply value assumes home demand would otherwise be imported at a flat rate. "+
+      "Battery discharge value can overlap solar benefit or represent grid-charged energy; do not add the two figures together. "+
+      "Supply charges count monitored hours, not an assumed full day or full month."));
+    add(root,this._energySetupGuide());
+    return root;
+  }
+  async _saveCostSettings(){
+    const form=this._costForm;
+    if(!form||Object.values(form).some(v=>!Number.isFinite(v)||v< -100||v>100)){
+      this._costMessage="Enter valid signed rates between −100 and +100.";
+      this._costError=true;this.render();return;
+    }
+    this._costSaving=true;this._costEditing=false;this._costMessage="";
+    this.render();
+    try{
+      const data={...form};
+      if(this._selected&&!this._selected.startsWith("sensor."))
+        data.entry_id=this._selected;
+      const answer=await this._hass.callWS({
+        type:"call_service",domain:"saj_h2_control_enhanced",
+        service:"save_cost_settings",service_data:data,return_response:true
+      });
+      this._costMessage="Rates saved; cost calculations updated. No inverter writes.";
+      this._costError=false;this._costForm=null;
+    }catch(error){
+      this._costMessage="Could not save rates: "+(error?.message||String(error));
+      this._costError=true;
+    }finally{
+      this._costSaving=false;this.render();
+    }
+  }
+  _energySetupGuide(){
+    const section=el("section","energyGuide");
+    add(section,el("h3",null,"Home Assistant Energy — sensor guide"));
+    add(section,el("p","muted",
+      "Open Home Assistant Settings → Dashboards → Energy, and choose sensors by the names below. "+
+      "Energy totals (kWh) and instantaneous power (W) are distinct."));
+    const descriptions=[
+      ["Electricity grid imported","grid_import_energy_estimate",
+        "Estimated cumulative kWh from sampled signed grid power — provisional polarity"],
+      ["Electricity grid exported","grid_export_energy_estimate",
+        "Estimated cumulative kWh, not a certified grid meter"],
+      ["Solar production energy","solar_production_energy",
+        "Inverter lifetime kWh counter"],
+      ["Solar production power","solar_production_power",
+        "Instantaneous W, not cumulative kWh"],
+      ["Solar production forecast",null,
+        "Editable solar forecast on the separate Solar forecast tab; not metered generation"],
+      ["Battery energy charged","battery_charged_energy",
+        "Inverter lifetime kWh counter"],
+      ["Battery energy discharged","battery_discharged_energy",
+        "Inverter lifetime kWh counter"],
+      ["Battery state of charge","battery_state_of_charge",
+        "Battery percentage (%)"],
+      ["Battery power","battery_power","Signed W; charging negative"]
+    ];
+    const list=el("ul");
+    const entities=Object.values(this._hass?.states||{});
+    for(const [title,key,explain] of descriptions){
+      const item=el("li");
+      add(item,el("strong",null,title),el("div","muted",explain));
+      if(key){
+        const source=entities.find(s=>s.attributes?.saj_energy_role===key&&
+          s.entity_id && s.attributes?.friendly_name);
+        if(source)add(item,el("code","energyEntity",source.entity_id));
+      }
+      list.append(item);
+    }
+    add(section,list);
+    add(section,el("p","historyFoot",
+      "All sensor aliases use correct HA energy/power/battery device classes. "+
+      "The estimated grid kWh counters begin accumulating only once monitoring is active. "+
+      "Confirm grid polarity against your utility meter before relying on them for Energy totals."));
+    return section;
   }
   _forecastState(){
     if(!this._hass?.states)return null;
@@ -1174,7 +1433,7 @@ class SajTOUDynamicCard extends HTMLElement {
     }
     const nav=el("nav","sajNav");
     nav.setAttribute("aria-label","SAJ dashboard pages");
-    for(const [id,title] of [["control","Energy & controls"],["forecast","Solar forecast"]]){
+    for(const [id,title] of [["control","Energy & controls"],["cost","Costs & savings"],["forecast","Solar forecast"]]){
       const button=el("button",null,title);
       button.type="button";
       if(this._page===id)button.setAttribute("aria-current","page");
@@ -1184,6 +1443,10 @@ class SajTOUDynamicCard extends HTMLElement {
     add(card,nav);
     if(this._page==="forecast"){
       add(card,this._forecastPage());
+      return;
+    }
+    if(this._page==="cost"){
+      add(card,this._costPage());
       return;
     }
     if(devices.length>1){
@@ -1240,6 +1503,7 @@ class SajTOUDynamicCard extends HTMLElement {
       add(card,notice);
     }
     add(card,this._energyOverview());
+    add(card,this._costOverview());
     if (!this._drafts.has(group.id)) this._drafts.set(group.id,cloneDraft(group));
     const draft=this._drafts.get(group.id);
     const meta=el("section","controlPanel");
