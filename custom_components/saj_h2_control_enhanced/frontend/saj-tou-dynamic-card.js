@@ -464,6 +464,11 @@ class SajTOUDynamicCard extends HTMLElement {
     this._historyHours = 24;
     this._historyVisible = {solar:true,home:true,battery:true,grid:true};
     this._historySignature = "";
+    this._forecastHistoryData = null;
+    this._forecastHistoryPending = false;
+    this._forecastHistoryError = "";
+    this._forecastHistoryDate = "";
+    this._forecastHistoryFetchedAt = 0;
   }
   setConfig(config) {this._cfg=config||{};this.render();}
   set hass(hass) {
@@ -1339,75 +1344,248 @@ class SajTOUDynamicCard extends HTMLElement {
       this._forecastMessage="Forecast settings not saved: "+(err?.message||String(err));
     }finally{this._forecastSaving=false;this.render();}
   }
+  _bindForecastBar(row,tooltip,message){
+    // Real touch/mouse/keyboard inspection for forecast bars.
+    row.tabIndex=0;
+    row.setAttribute("role","img");
+    row.setAttribute("aria-label",message);
+    row.title=message;
+    const reveal=()=>{tooltip.textContent=message;};
+    row.addEventListener("pointerenter",reveal);
+    row.addEventListener("pointerdown",reveal);
+    row.addEventListener("focus",reveal);
+    row.addEventListener("click",reveal);
+  }
+  async _loadForecastHistory(force=false){
+    if(this._forecastHistoryPending||!this._hass)return;
+    const now=new Date();
+    const start=new Date(now);
+    start.setHours(0,0,0,0);
+    const date=start.toLocaleDateString("en-CA");
+    if(!force&&this._forecastHistoryDate===date&&
+       Date.now()-this._forecastHistoryFetchedAt<5*60000)return;
+    this._forecastHistoryPending=true;
+    this._forecastHistoryError="";
+    try{
+      const query="?filter_entity_id="+encodeURIComponent(SAFE_ENERGY_IDS.solar)+
+        "&end_time="+encodeURIComponent(now.toISOString())+"&minimal_response";
+      const response=await this._hass.callApi("GET",
+        "history/period/"+encodeURIComponent(start.toISOString())+query);
+      if(!Array.isArray(response))throw Error("Unexpected Recorder data");
+      const samples=[];
+      for(const series of response){
+        if(!Array.isArray(series)||!series.length)continue;
+        const id=series.find(v=>v.entity_id)?.entity_id;
+        if(id!==SAFE_ENERGY_IDS.solar)continue;
+        for(const item of series){
+          const time=Date.parse(item.last_changed||item.last_updated||"");
+          const state=String(item.state);
+          if(["unknown","unavailable",""].includes(state))continue;
+          const watts=Number(state);
+          if(Number.isFinite(time)&&time>=start.getTime()&&time<=now.getTime()&&
+             Number.isFinite(watts)&&watts>=0)samples.push({t:time,y:watts});
+        }
+      }
+      samples.sort((a,b)=>a.t-b.t);
+      this._forecastHistoryData=samples;
+      this._forecastHistoryDate=date;
+      this._forecastHistoryFetchedAt=Date.now();
+    }catch(error){
+      this._forecastHistoryError="Could not read recorded solar power: "+
+        (error?.message||String(error));
+      this._forecastHistoryData=[];
+      this._forecastHistoryDate=date;
+      this._forecastHistoryFetchedAt=Date.now();
+    }finally{
+      this._forecastHistoryPending=false;
+      if(this._page==="forecast"&&!this._forecastSaving)this.render();
+    }
+  }
   _actualProjectedChart(hourly){
     const panel=el("section","forecastHistory actualForecast");
+    const heading=el("div","historyHead");
+    const description=el("div");
+    add(description,el("h4",null,"Today · Cumulative solar energy (kWh)"),
+      el("div","muted","Forecast vs recorded production · hover, tap or use ← / →"));
+    const refresh=el("button","guideCopyButton","Refresh actual readings");
+    refresh.type="button";
+    refresh.disabled=this._forecastHistoryPending;
+    refresh.addEventListener("click",()=>{
+      this._forecastHistoryFetchedAt=0;
+      this._loadForecastHistory(true);
+    });
+    add(heading,description,refresh);
+    add(panel,heading);
     if(!hourly.length){
-      add(panel,el("p","muted","Hourly forecast data not yet available."));
+      add(panel,el("p","muted","Hourly weather forecast not available."));
       return panel;
     }
-    const solarHistory=this._historyData?.solar||[];
-    if(!this._historyData&&!this._historyPending)this._loadHistory();
     const now=new Date();
     const midnight=new Date(now);
     midnight.setHours(0,0,0,0);
     const midnightMs=midnight.getTime();
-    const projection=[];
-    let accumulated=0;
-    const ordered=hourly.slice().sort((a,b)=>a.hour.localeCompare(b.hour));
-    projection.push({hour:0,kwh:0});
-    for(const record of ordered){
-      const h=Number(record.hour.slice(0,2)),minute=Number(record.hour.slice(3,5));
-      if(!Number.isFinite(h)||!Number.isFinite(minute))continue;
-      accumulated+=Math.max(0,Number(record.kwh)||0);
-      projection.push({hour:h+minute/60+1,kwh:accumulated});
+    if(this._forecastHistoryDate!==midnight.toLocaleDateString("en-CA")||
+       (!this._forecastHistoryPending &&
+        (!this._forecastHistoryData||Date.now()-this._forecastHistoryFetchedAt>5*60000)))
+      this._loadForecastHistory();
+    const records=Array.isArray(this._forecastHistoryData)?this._forecastHistoryData:[];
+    const projected=[{hour:0,kwh:0}];
+    let sum=0;
+    for(const h of [...hourly].sort((a,b)=>a.hour.localeCompare(b.hour))){
+      const startHour=Number(String(h.hour).slice(0,2));
+      if(!Number.isInteger(startHour)||startHour<0||startHour>=24)continue;
+      sum+=Math.max(0,Number(h.kwh)||0);
+      projected.push({hour:startHour+1,kwh:sum});
     }
-    const actual=[{hour:0,kwh:0}];
-    let total=0,prior=null;
-    for(const sample of solarHistory){
-      if(sample.t<midnightMs||sample.t>Date.now())continue;
-      if(prior&&sample.t-prior.t<=30*60000){
-        total+=Math.max(0,(Math.max(0,sample.y)+Math.max(0,prior.y))/2)*
-          (sample.t-prior.t)/3600000000;
+    projected.sort((a,b)=>a.hour-b.hour);
+    const actual=[];
+    let total=0,previous=null,missingSeconds=0;
+    for(const item of records){
+      if(previous){
+        const dt=item.t-previous.t;
+        if(dt>0&&dt<=30*60000){
+          total+=(Math.max(0,item.y)+Math.max(0,previous.y))*dt/7200000000;
+        }else if(dt>30*60000)missingSeconds+=dt/1000;
       }
-      actual.push({hour:(sample.t-midnightMs)/3600000,kwh:total});
-      prior=sample;
+      actual.push({t:item.t,hour:(item.t-midnightMs)/3600000,kwh:total});
+      previous=item;
     }
-    const peak=Math.max(1,...projection.map(p=>p.kwh),...actual.map(p=>p.kwh));
+    const peak=Math.max(1,...projected.map(v=>v.kwh),...actual.map(v=>v.kwh));
     const ns="http://www.w3.org/2000/svg";
     const svg=document.createElementNS(ns,"svg");
-    svg.setAttribute("viewBox","0 0 920 280");
-    svg.setAttribute("class","historySvg");
+    svg.setAttribute("viewBox","0 0 920 300");
+    svg.setAttribute("class","historySvg forecastSvg");
     svg.setAttribute("role","img");
-    svg.setAttribute("aria-label","Cumulative actual solar production compared with projected PV output today");
-    const shape=(tag,attrs,content)=>{
+    svg.setAttribute("tabindex","0");
+    svg.setAttribute("aria-label",
+      "Cumulative forecast versus recorded solar energy. Move pointer or use left and right arrow keys in five-minute steps.");
+    const shape=(tag,attrs,textValue)=>{
       const node=document.createElementNS(ns,tag);
       for(const [k,v] of Object.entries(attrs))node.setAttribute(k,String(v));
-      if(content!==undefined)node.textContent=content;
-      svg.append(node);return node;
+      if(textValue!==undefined)node.textContent=String(textValue);
+      svg.append(node);
+      return node;
     };
-    const x=h=>50+Math.max(0,Math.min(24,h))/24*820;
-    const y=kwh=>235-Math.max(0,Math.min(1,kwh/peak))*205;
+    const L=48,R=896,T=20,B=252;
+    const x=h=>L+Math.max(0,Math.min(24,h))/24*(R-L);
+    const y=k=>B-Math.max(0,Math.min(1,k/peak))*(B-T);
     for(let i=0;i<=4;i++){
-      const yy=30+(205*i/4);
-      shape("line",{x1:50,y1:yy,x2:870,y2:yy,stroke:"currentColor","stroke-opacity":".15"});
-      shape("text",{x:43,y:yy+4,fill:"currentColor","text-anchor":"end","font-size":11},
-        (peak*(4-i)/4).toFixed(0));
+      const level=peak*i/4,yy=y(level);
+      shape("line",{x1:L,y1:yy,x2:R,y2:yy,
+        stroke:"currentColor","stroke-opacity":i===0?".3":".12"});
+      shape("text",{x:L-8,y:yy+4,fill:"currentColor",
+        "fill-opacity":".75","font-size":12,"text-anchor":"end"},level.toFixed(0));
     }
-    for(let h=0;h<=24;h+=6)shape("text",{
-      x:x(h),y:260,fill:"currentColor","font-size":12,"text-anchor":"middle"},h+":00");
-    for(const [points,color] of [[projection,"#dfb548"],[actual,"#529ce7"]]){
+    shape("text",{x:12,y:13,fill:"currentColor","font-size":12},"kWh");
+    for(let h=0;h<=24;h+=4){
+      const xx=x(h);
+      shape("text",{x:xx,y:278,fill:"currentColor","font-size":12,
+        "text-anchor":h===0?"start":h===24?"end":"middle"},
+        String(h).padStart(2,"0")+":00");
+    }
+    for(const [points,color] of [[projected,"#eab54c"],[actual,"#55a4ed"]]){
       if(points.length<2)continue;
-      const d=points.map((p,i)=>(i?"L":"M")+x(p.hour).toFixed(1)+","+
-        y(p.kwh).toFixed(1)).join(" ");
-      shape("path",{d,stroke:color,"stroke-width":2.5,fill:"none",
+      const path=points.map((pt,i)=>(i?"L":"M")+x(pt.hour).toFixed(1)+","+
+        y(pt.kwh).toFixed(1)).join(" ");
+      shape("path",{d:path,stroke:color,"stroke-width":2.7,fill:"none",
         "stroke-linecap":"round","stroke-linejoin":"round"});
     }
-    add(panel,svg,el("div","historyFoot",
-      "● Projected PV production (yellow)  ● Recorded actual PV production (blue) · kWh accumulated today. "+
-      "Actual is integrated from Home Assistant history and can be incomplete if recordings have gaps; "+
-      "the model's AC limit is not applied to PV-side production."));
-    if(!solarHistory.length)add(panel,el("p","muted",
-      "Actual production graph will appear when Home Assistant recorded history becomes available."));
+    const cursor=shape("line",{x1:L,y1:T,x2:L,y2:B,
+      stroke:"currentColor","stroke-width":1.2,"stroke-dasharray":"4 4",
+      "stroke-opacity":".65",visibility:"hidden","pointer-events":"none"});
+    const actualDot=shape("circle",{cx:L,cy:B,r:4,fill:"#55a4ed",
+      stroke:"var(--ha-card-background,#202124)","stroke-width":2,
+      visibility:"hidden","pointer-events":"none"});
+    const expectedDot=shape("circle",{cx:L,cy:B,r:4,fill:"#eab54c",
+      stroke:"var(--ha-card-background,#202124)","stroke-width":2,
+      visibility:"hidden","pointer-events":"none"});
+    // Transparent hit target allows hovering anywhere in the chart, not
+    // just where a colored line happens to be drawn.
+    shape("rect",{x:L,y:T,width:R-L,height:B-T,fill:"transparent",
+      "pointer-events":"all"});
+    const tooltip=el("div","historyTooltip forecastTooltip");
+    tooltip.setAttribute("role","status");
+    tooltip.textContent="Hover or tap the graph for values at a chosen time (5-minute cursor).";
+    const findRecorded=(time)=>{
+      if(!actual.length)return null;
+      let lo=0,hi=actual.length;
+      while(lo<hi){
+        const mid=(lo+hi)>>1;
+        if(actual[mid].t<time)lo=mid+1;else hi=mid;
+      }
+      const candidates=[actual[lo-1],actual[lo]].filter(Boolean);
+      const nearest=candidates.reduce((a,b)=>!a||
+        Math.abs(b.t-time)<Math.abs(a.t-time)?b:a,null);
+      return nearest&&Math.abs(nearest.t-time)<=10*60000?nearest:null;
+    };
+    const fmtTime=t=>new Date(t).toLocaleTimeString(undefined,
+      {hour:"2-digit",minute:"2-digit"});
+    const showAt=(fraction)=>{
+      const hour=Math.max(0,Math.min(24,
+        Math.round(fraction*24*12)/12));
+      const t=midnightMs+hour*3600000;
+      const prior=projected.filter(pt=>pt.hour<=hour).at(-1);
+      const measured=findRecorded(t);
+      const cursorX=x(hour);
+      cursor.setAttribute("x1",cursorX);
+      cursor.setAttribute("x2",cursorX);
+      cursor.setAttribute("visibility","visible");
+      expectedDot.setAttribute("visibility",prior?"visible":"hidden");
+      if(prior){expectedDot.setAttribute("cx",x(prior.hour));
+        expectedDot.setAttribute("cy",y(prior.kwh));}
+      actualDot.setAttribute("visibility",measured?"visible":"hidden");
+      if(measured){actualDot.setAttribute("cx",x(measured.hour));
+        actualDot.setAttribute("cy",y(measured.kwh));}
+      tooltip.replaceChildren();
+      add(tooltip,el("strong",null,fmtTime(t)));
+      const expected=el("span","historyValue",
+        "● Forecast through "+String(prior?.hour??0).padStart(2,"0")+
+        ":00 · "+(prior?prior.kwh.toFixed(2)+" kWh":"—"));
+      expected.style.color="#eab54c";
+      const reported=el("span","historyValue",
+        "● Recorded "+(measured?
+          measured.kwh.toFixed(2)+" kWh at "+fmtTime(measured.t):
+          "— no nearby measurement"));
+      reported.style.color="#55a4ed";
+      add(tooltip,expected,reported);
+    };
+    let keyboardFraction=0;
+    svg.addEventListener("pointermove",event=>{
+      const bounds=svg.getBoundingClientRect();
+      if(!bounds.width)return;
+      const position=(event.clientX-bounds.left)/bounds.width*920;
+      if(position<L||position>R)return;
+      keyboardFraction=(position-L)/(R-L);
+      showAt(keyboardFraction);
+    });
+    svg.addEventListener("pointerdown",event=>{
+      const bounds=svg.getBoundingClientRect();
+      if(!bounds.width)return;
+      const position=(event.clientX-bounds.left)/bounds.width*920;
+      keyboardFraction=Math.max(0,Math.min(1,(position-L)/(R-L)));
+      showAt(keyboardFraction);
+    });
+    svg.addEventListener("pointerleave",()=>{
+      cursor.setAttribute("visibility","hidden");
+      actualDot.setAttribute("visibility","hidden");
+      expectedDot.setAttribute("visibility","hidden");
+    });
+    svg.addEventListener("keydown",event=>{
+      if(event.key!=="ArrowLeft"&&event.key!=="ArrowRight")return;
+      event.preventDefault();
+      keyboardFraction=Math.max(0,Math.min(1,keyboardFraction+
+        (event.key==="ArrowRight"?1:-1)/288));
+      showAt(keyboardFraction);
+    });
+    add(panel,svg,tooltip);
+    add(panel,el("p","historyFoot",
+      "Yellow: forecast from hourly irradiance. Blue: solar energy integrated from available Recorder power samples"+
+      (records.length?" since "+fmtTime(records[0].t):" (waiting for samples)")+
+      ". This blue total may be LOW if recordings started late or contain gaps"+
+      (missingSeconds>60?" ("+(missingSeconds/3600).toFixed(1)+" hours of gaps)":"")+
+      ". No missing energy is fabricated."));
+    if(this._forecastHistoryError)
+      add(panel,el("p","muted",this._forecastHistoryError));
     return panel;
   }
   _historyChart(){
