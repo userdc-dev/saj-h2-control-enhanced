@@ -326,7 +326,9 @@ async function main(){
       warnings:[],planned_start_local:"2026-11-02T17:35:00+10:30",
       planned_end_local:"2026-11-02T17:45:00+10:30",
       proposed_slot:1,requested_power_percent_raw:100,
-      existing_mode:"Time-of-use"
+      existing_mode:"Time-of-use",
+      battery_soc_percent:92.5,
+      battery_soc_source:"fresh inverter 0x406F (double-read)"
     }};
   };
   await buttons[0].listeners.click();
@@ -335,6 +337,9 @@ async function main(){
   assert.equal(ws[0].service_data.direction,"charge");
   assert.equal(ws[0].service_data.duration_minutes,10);
   assert.ok(card._vppPreviewText.includes("No inverter writes sent"));
+  assert.ok(card._vppQuickActions(device).textContent.includes(
+    "Battery SOC: 92.50% · fresh double-read from inverter"),
+    "preflight must show directly verified SOC without cluttering main controls");
   assert.ok(!ws.some(r=>r.service==="apply_schedules"||
     r.service==="supervised_tou_pilot"),
     "preview buttons must never send inverter writes");
