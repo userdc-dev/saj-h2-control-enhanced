@@ -218,7 +218,30 @@ const CSS = [
   ".controlPanelHead h3{font-size:17px;white-space:nowrap}",
   ".controlSummary{display:flex;align-items:center;gap:9px;flex-wrap:wrap;justify-content:flex-end}",
   ".summaryState{display:flex;align-items:baseline;gap:7px;padding:7px 10px;border:1px solid var(--divider-color,#43484c);border-radius:10px;background:rgba(128,128,128,.045);font-size:12px;line-height:1.3;white-space:nowrap}",
-  ".summaryLabel{color:var(--secondary-text-color,#aaa);font-weight:500}",
+  ".sajNav{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px;border-bottom:1px solid var(--divider-color,#555);padding-bottom:10px}",
+  ".sajNav button[aria-current=page]{border-color:var(--primary-color,#16b9b1);color:var(--primary-text-color,#fff);font-weight:700}",
+  ".forecastLink{color:var(--primary-color,#39bace);background:transparent;border:0;text-decoration:underline;cursor:pointer;font:inherit;padding:2px}",
+  ".forecastHeader{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin:10px 0 14px}",
+  ".forecastStats{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;margin:12px 0}",
+  ".forecastStat{border:1px solid var(--divider-color,#555);border-radius:10px;padding:12px;background:var(--secondary-background-color,transparent)}",
+  ".forecastStat b{display:block;font-size:19px;margin-top:7px}",
+  ".forecastDays{display:grid;gap:9px;margin:12px 0 18px}",
+  ".forecastDay{display:grid;grid-template-columns:minmax(75px,120px) 1fr 90px;align-items:center;gap:8px;font-size:12px}",
+  ".forecastTrack{height:12px;border-radius:8px;background:var(--divider-color,#444);overflow:hidden}",
+  ".forecastFill{height:100%;background:var(--primary-color,#16b9b1);border-radius:8px}",
+  ".forecastSettings{margin:18px 0;padding:16px;border:1px solid var(--divider-color,#555);border-radius:12px}",
+  ".forecastSettingGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:8px;margin:10px 0}",
+  ".forecastSettingGrid label{display:flex;flex-direction:column;gap:5px;font-size:12px}",
+  ".forecastSettingGrid input{width:100%;box-sizing:border-box}",
+  ".forecastHistory{border:1px solid var(--divider-color,#555);padding:14px;border-radius:12px;margin-top:16px}",
+  ".historyHead{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}",
+  ".historyLegend{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}",
+  ".historyLegend label{font-size:12px;display:flex;align-items:center;gap:5px}",
+  ".historyLegend input{accent-color:var(--primary-color,#16b9b1)}",
+  ".historySvg{display:block;width:100%;height:auto;max-height:320px}",
+  ".historyFoot{font-size:11px;color:var(--secondary-text-color,#aaa);margin-top:8px;line-height:1.5}",
+  ".forecastNotice{padding:10px;border-left:3px solid var(--warning-color,#d3a435);margin:10px 0;font-size:12px;line-height:1.6}",
+    ".summaryLabel{color:var(--secondary-text-color,#aaa);font-weight:500}",
   ".summaryState strong{color:var(--primary-text-color,#fff);font-weight:700;font-variant-numeric:tabular-nums}",
   ".controlCell{padding:14px 18px 15px;min-height:0}",
   ".controlSubhead{margin:0 0 11px}",
@@ -345,6 +368,17 @@ class SajTOUDynamicCard extends HTMLElement {
     this._scheduleWriteError = false;
     this._schedulePlan = null;
     this._schedulePlanKey = "";
+    this._page = "control";
+    this._forecastForm = null;
+    this._forecastSaving = false;
+    this._forecastMessage = "";
+    this._forecastError = false;
+    this._historyData = null;
+    this._historyPending = false;
+    this._historyError = "";
+    this._historyHours = 24;
+    this._historyVisible = {solar:true,home:true,battery:true,grid:true,forecast:true};
+    this._historySignature = "";
   }
   setConfig(config) {this._cfg=config||{};this.render();}
   set hass(hass) {
@@ -357,22 +391,350 @@ class SajTOUDynamicCard extends HTMLElement {
     })].join(":")).join(";");
     const energySig=Object.values(SAFE_ENERGY_IDS).map(id=>
       hass.states?.[id]?.state??"—").join("|");
+    const forecastSig=this._forecastState()?.last_updated||"";
+    const combinedEnergySig=energySig+"|"+forecastSig;
     if (sig!==this._lastSignature) {
       this._lastSignature=sig;
-      this._lastEnergySignature=energySig;
+      this._lastEnergySignature=combinedEnergySig;
       // Follow external elekeeper changes unless the user is editing a draft.
       devices.forEach(g=>{
         const existing=this._drafts.get(g.id);
         if (existing && !existing.changed) this._drafts.set(g.id,cloneDraft(g));
       });
       this.render();
-    } else if(energySig!==this._lastEnergySignature) {
+    } else if(combinedEnergySig!==this._lastEnergySignature) {
       this._lastEnergySignature=energySig;
       // Updating safe monitoring graphics must not reset an active time input
       // or discard an in-progress TOU schedule draft.
       const old=this.shadowRoot?.querySelector(".energyOverview");
       if(old)old.replaceWith(this._energyOverview());
       else this.render();
+      if(this._page==="forecast")this.render();
+    }
+  }
+  _goPage(page){
+    this._page=page;
+    this.render();
+  }
+  _forecastState(){
+    if(!this._hass?.states)return null;
+    const states=Object.values(this._hass.states);
+    const matches=states.filter(st=>st.attributes?.saj_tou_role==="editable_forecast");
+    return matches.find(st=>st.attributes.saj_tou_entry_id===this._selected)
+      ||matches[0]||null;
+  }
+  _forecastSettings(){
+    return this._forecastState()?.attributes?.settings||{
+      groups:[{count:9,watts:440,azimuth:29,tilt:25},
+              {count:15,watts:440,azimuth:27,tilt:25},
+              {count:6,watts:440,azimuth:299,tilt:25}],
+      efficiency:87,ac_limit_kw:10,configured:false};
+  }
+  _forecastPage(){
+    const section=el("section");
+    const header=el("div","forecastHeader");
+    add(header,el("h2",null,"Solar forecast"),
+      el("span","muted","Open-Meteo · Read-only weather estimate"));
+    add(section,header);
+    const state=this._forecastState();
+    const data=state?.attributes||{};
+    if(!state)add(section,el("p","forecastNotice",
+      "Forecast settings are not yet available. Update the control integration and restart Home Assistant."));
+    const stats=el("div","forecastStats");
+    for(const [title,value] of [
+      ["Today",data.today],["Remaining today",data.remaining_today],
+      ["Tomorrow",data.tomorrow],["Next seven days",data.week]
+    ]){
+      const item=el("div","forecastStat");
+      add(item,el("span","muted",title),el("b",null,
+        typeof value==="number"?fmtEnergy(value):"—"));
+      stats.append(item);
+    }
+    add(section,stats);
+    if(data.updated)add(section,el("p","muted",
+      "Forecast updated: "+formatLocalTime(data.updated)));
+    add(section,el("p","muted",
+      "PV-side energy forecast. The AC inverter limit does not necessarily cap total PV production while charging the battery."));
+    const daily=Array.isArray(data.daily)?data.daily:[];
+    const heading=el("h3",null,"Next seven days");add(section,heading);
+    const days=el("div","forecastDays");
+    const max=Math.max(1,...daily.map(d=>Number(d.kwh)||0));
+    for(const day of daily){
+      const row=el("div","forecastDay");
+      const date=new Date(day.date+"T12:00:00");
+      const name=Number.isNaN(date.getTime())?day.date:
+        date.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"});
+      const track=el("div","forecastTrack");
+      const fill=el("div","forecastFill");
+      fill.style.width=Math.max(0,Math.min(100,(Number(day.kwh)||0)/max*100))+"%";
+      track.append(fill);
+      add(row,el("span",null,name),track,
+        el("strong",null,fmtEnergy(Number(day.kwh)||0)));
+      days.append(row);
+    }
+    if(!daily.length)add(days,el("p","muted","Forecast pending weather service response."));
+    add(section,days);
+    const hourly=Array.isArray(data.hourly_today)?data.hourly_today:[];
+    add(section,el("h3",null,"Today · hourly PV forecast"));
+    if(hourly.length){
+      const plot=el("div","forecastDays");
+      const peak=Math.max(1,...hourly.map(h=>Number(h.kwh)||0));
+      for(const h of hourly){
+        const row=el("div","forecastDay");
+        const track=el("div","forecastTrack");
+        const fill=el("div","forecastFill");
+        fill.style.width=Math.max(0,Math.min(100,(Number(h.kwh)||0)/peak*100))+"%";
+        track.append(fill);
+        add(row,el("span",null,h.hour),track,
+          el("span",null,(Number(h.kwh)||0).toFixed(2)+" kWh"));
+        plot.append(row);
+      }
+      add(section,plot);
+    }else add(section,el("p","muted","Hourly weather forecast is unavailable."));
+    const settings=this._forecastSettings();
+    if(!this._forecastForm)this._forecastForm={
+      groups:settings.groups.map(g=>({...g})),
+      efficiency:settings.efficiency,ac_limit_kw:settings.ac_limit_kw
+    };
+    const wrapper=el("section","forecastSettings");
+    add(wrapper,el("h3",null,"Your solar system settings"));
+    if(!settings.configured)add(wrapper,el("p","forecastNotice",
+      "These are example defaults from the original 30-panel SAJ installation. Please review and change them to match YOUR roof, panel layout, inverter and efficiency before relying on this forecast."));
+    const form=this._forecastForm;
+    const groups=el("div");
+    const field=(label,value,step,min,max,onChange)=>{
+      const holder=el("label");
+      holder.append(el("span",null,label));
+      const input=el("input");
+      input.type="number";input.step=String(step);
+      input.min=String(min);input.max=String(max);input.value=String(value);
+      input.addEventListener("change",()=>{
+        const n=Number(input.value);
+        if(Number.isFinite(n))onChange(n);
+      });
+      holder.append(input);
+      return holder;
+    };
+    const rebuild=()=>{
+      this._forecastForm=form;this.render();
+    };
+    form.groups.forEach((g,i)=>{
+      const row=el("div","forecastSettingGrid");
+      add(row,
+        field("Panels",g.count,1,1,100,v=>g.count=v),
+        field("Watts / panel",g.watts,1,1,800,v=>g.watts=v),
+        field("Azimuth ° from north",g.azimuth,1,0,360,v=>g.azimuth=v),
+        field("Tilt °",g.tilt,1,0,90,v=>g.tilt=v));
+      const remove=el("button",null,"Remove group "+(i+1));
+      remove.type="button";remove.disabled=form.groups.length<=1;
+      remove.addEventListener("click",()=>{form.groups.splice(i,1);rebuild();});
+      const item=el("div","pane");
+      add(item,el("strong",null,"Panel group "+(i+1)),row,remove);
+      groups.append(item);
+    });
+    add(wrapper,groups);
+    const addGroup=el("button",null,"+ Add panel group");
+    addGroup.type="button";addGroup.disabled=form.groups.length>=8;
+    addGroup.addEventListener("click",()=>{
+      form.groups.push({count:1,watts:440,azimuth:0,tilt:25});rebuild();
+    });
+    add(wrapper,addGroup);
+    const totals=el("div","forecastSettingGrid");
+    add(totals,
+      field("System efficiency (%)",form.efficiency,1,1,100,v=>form.efficiency=v),
+      field("Inverter AC limit (kW)",form.ac_limit_kw,0.1,0.5,100,v=>form.ac_limit_kw=v));
+    add(wrapper,totals);
+    const dc=form.groups.reduce((sum,g)=>sum+g.count*g.watts,0);
+    add(wrapper,el("p","muted",
+      "Total DC array: "+form.groups.reduce((sum,g)=>sum+g.count,0)+
+      " panels · "+(dc/1000).toFixed(2)+" kWp. Azimuth: 0° north, 90° east, 180° south, 270° west."));
+    const save=el("button","primaryAction",
+      this._forecastSaving?"Saving & recalculating…":"Save settings & recalculate");
+    save.disabled=this._forecastSaving||!state;
+    save.addEventListener("click",()=>this._saveForecastSettings());
+    add(wrapper,save);
+    if(this._forecastMessage)add(wrapper,el("p",
+      this._forecastError?"bad":"okay",this._forecastMessage));
+    add(wrapper,el("p","historyFoot",
+      "Only the forecast model is changed. No inverter operating mode, battery setting or schedule is modified."));
+    add(section,wrapper);
+    return section;
+  }
+  async _saveForecastSettings(){
+    const f=this._forecastForm;
+    const count=f.groups.reduce((sum,g)=>sum+g.count,0);
+    if(!f.groups.length||f.groups.length>8||count>800||
+       f.groups.some(g=>!Number.isInteger(g.count)||g.count<1||g.count>100||
+         !Number.isFinite(g.watts)||g.watts<1||g.watts>800||
+         !Number.isFinite(g.azimuth)||g.azimuth<0||g.azimuth>360||
+         !Number.isFinite(g.tilt)||g.tilt<0||g.tilt>90)||
+       !Number.isFinite(f.efficiency)||f.efficiency<1||f.efficiency>100||
+       !Number.isFinite(f.ac_limit_kw)||f.ac_limit_kw<0.5||f.ac_limit_kw>100){
+      this._forecastMessage="Check group counts, wattage, azimuth, tilt, efficiency and AC limit.";
+      this._forecastError=true;this.render();return;
+    }
+    this._forecastSaving=true;this._forecastMessage="";this.render();
+    try{
+      const data={
+        groups_json:JSON.stringify(f.groups),efficiency:f.efficiency,
+        ac_limit_kw:f.ac_limit_kw
+      };
+      if(this._selected && !this._selected.startsWith("sensor."))data.entry_id=this._selected;
+      const response=await this._hass.callWS({
+        type:"call_service",domain:"saj_h2_control_enhanced",
+        service:"save_forecast_settings",service_data:data,return_response:true
+      });
+      this._forecastMessage=response?.response?.forecast_available===false?
+        "Settings saved. Weather service unavailable; retry with refresh later.":
+        "Settings saved. Forecast recalculated from your panel layout.";
+      this._forecastError=false;this._forecastForm=null;
+    }catch(err){
+      this._forecastError=true;
+      this._forecastMessage="Forecast settings not saved: "+(err?.message||String(err));
+    }finally{this._forecastSaving=false;this.render();}
+  }
+  _historyChart(){
+    const panel=el("section","forecastHistory");
+    const top=el("div","historyHead");
+    add(top,el("h3",null,"Live energy · history"));
+    const select=el("select");
+    for(const hours of [6,12,24,48,168]){
+      const option=el("option",null,hours===168?"7 days":hours+" hours");
+      option.value=String(hours);option.selected=hours===this._historyHours;select.append(option);
+    }
+    select.setAttribute("aria-label","Energy history period");
+    select.addEventListener("change",()=>{
+      this._historyHours=Number(select.value);
+      this._historySignature="";
+      this._historyData=null;this._loadHistory();
+    });
+    add(top,select);add(panel,top);
+    const legend=el("div","historyLegend");
+    const labels={solar:"Solar",home:"House",battery:"Battery",grid:"Grid",forecast:"Forecast"};
+    const colors={solar:"#e9ad28",home:"#4aa3f1",battery:"#57c78a",grid:"#d882df",forecast:"#e86c69"};
+    for(const [key,label] of Object.entries(labels)){
+      const holder=el("label");
+      const box=el("input");
+      box.type="checkbox";box.checked=this._historyVisible[key];
+      box.addEventListener("change",()=>{
+        this._historyVisible[key]=box.checked;
+        const old=this.shadowRoot.querySelector(".forecastHistory");
+        if(old)old.replaceWith(this._historyChart());
+      });
+      const swatch=el("span");swatch.style.color=colors[key];
+      swatch.textContent="●";
+      add(holder,box,swatch,el("span",null,label));legend.append(holder);
+    }
+    add(panel,legend);
+    const history=this._historyData;
+    if(!history){
+      add(panel,el("p","muted",this._historyError||"Loading recorded sensor history…"));
+      if(!this._historyPending)this._loadHistory();
+      return panel;
+    }
+    const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
+    svg.setAttribute("viewBox","0 0 920 280");
+    svg.setAttribute("class","historySvg");
+    svg.setAttribute("role","img");
+    svg.setAttribute("aria-label","Historical solar, house, battery and grid in kW; forecast in kWh on separate scale");
+    const ns="http://www.w3.org/2000/svg";
+    const shape=(tag,attrs,content)=>{
+      const node=document.createElementNS(ns,tag);
+      Object.entries(attrs).forEach(([k,v])=>node.setAttribute(k,String(v)));
+      if(content!==undefined)node.textContent=content;
+      svg.append(node);return node;
+    };
+    const left=52,right=864,topY=20,bottom=240;
+    const powerKeys=["solar","home","battery","grid"];
+    const powerPoints=powerKeys.flatMap(k=>history[k]||[]);
+    const forecastPoints=history.forecast||[];
+    const maxPower=Math.max(1,...powerPoints.map(p=>Math.abs(p.y)));
+    const maxForecast=Math.max(1,...forecastPoints.map(p=>p.y));
+    const now=Date.now(),start=now-this._historyHours*3600000;
+    const x=t=>left+Math.max(0,Math.min(1,(t-start)/(now-start)))*(right-left);
+    const yP=v=>bottom-(v/maxPower)*(bottom-topY);
+    const yF=v=>bottom-(v/maxForecast)*(bottom-topY);
+    for(let i=0;i<=4;i++){
+      const py=topY+(bottom-topY)*i/4;
+      shape("line",{x1:left,y1:py,x2:right,y2:py,stroke:"currentColor","stroke-opacity":".15"});
+      shape("text",{x:45,y:py+4,fill:"currentColor","text-anchor":"end","font-size":12},
+        ((maxPower*(4-i)/4)/1000).toFixed(1));
+      shape("text",{x:872,y:py+4,fill:"currentColor","text-anchor":"start","font-size":12},
+        (maxForecast*(4-i)/4).toFixed(1));
+    }
+    for(let i=0;i<=4;i++){
+      const ratio=i/4;
+      const tick=new Date(start+(now-start)*ratio);
+      shape("text",{x:x(tick.getTime()),y:264,fill:"currentColor",
+        "text-anchor":i===0?"start":i===4?"end":"middle","font-size":12},
+        tick.toLocaleString(undefined,{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}));
+    }
+    for(const key of Object.keys(labels)){
+      if(!this._historyVisible[key])continue;
+      const points=history[key]||[];
+      if(!points.length)continue;
+      // Break lines across missing observations (>15 minutes for 6/12/24h).
+      let segments=[],segment=[],last=0;
+      const gap=this._historyHours>=168?3*3600000:25*60000;
+      for(const pt of points){
+        if(last&&pt.t-last>gap&&segment.length){segments.push(segment);segment=[];}
+        segment.push(pt);last=pt.t;
+      }
+      if(segment.length)segments.push(segment);
+      for(const seg of segments){
+        const d=seg.map((p,i)=>(i?"L":"M")+x(p.t).toFixed(1)+","+
+          (key==="forecast"?yF(p.y):yP(Math.abs(p.y))).toFixed(1)).join(" ");
+        shape("path",{d,fill:"none",stroke:colors[key],"stroke-width":2.2,
+          "stroke-linejoin":"round","stroke-linecap":"round"});
+      }
+    }
+    add(panel,svg);
+    add(panel,el("div","historyFoot",
+      "Left scale: kW (solar, house, battery and grid absolute power). Right scale: kWh (forecast outlook). "+
+      "Recorded Home Assistant sensor history only; missing data is not synthesized. "+
+      "Battery/grid direction is shown by the live table, not this magnitude chart."));
+    if(this._historyError)add(panel,el("p","bad",this._historyError));
+    return panel;
+  }
+  async _loadHistory(){
+    if(this._historyPending||!this._hass)return;
+    const ids={
+      solar:SAFE_ENERGY_IDS.solar,home:SAFE_ENERGY_IDS.home,
+      battery:SAFE_ENERGY_IDS.battery,
+      grid:SAFE_ENERGY_IDS.gridImport,forecast:SAFE_ENERGY_IDS.outlook
+    };
+    const idList=Object.values(ids);
+    const start=new Date(Date.now()-this._historyHours*3600000);
+    const signature=this._historyHours+"|"+idList.join("|");
+    if(this._historySignature===signature&&this._historyData)return;
+    this._historyPending=true;this._historyError="";
+    try{
+      const query="?filter_entity_id="+encodeURIComponent(idList.join(","))+
+        "&end_time="+encodeURIComponent(new Date().toISOString())+
+        "&minimal_response";
+      const response=await this._hass.callApi("GET",
+        "history/period/"+encodeURIComponent(start.toISOString())+query);
+      const result={solar:[],home:[],battery:[],grid:[],forecast:[]};
+      if(!Array.isArray(response))throw Error("Unexpected Home Assistant history format");
+      for(const series of response){
+        if(!Array.isArray(series))continue;
+        for(const item of series){
+          const key=Object.keys(ids).find(k=>ids[k]===item.entity_id);
+          if(!key)continue;
+          const t=Date.parse(item.last_changed||item.last_updated||"");
+          const y=Number(item.state);
+          if(Number.isFinite(t)&&Number.isFinite(y))result[key].push({t,y});
+        }
+      }
+      for(const key of Object.keys(result))result[key].sort((a,b)=>a.t-b.t);
+      this._historyData=result;this._historySignature=signature;
+    }catch(err){
+      this._historyData={solar:[],home:[],battery:[],grid:[],forecast:[]};
+      this._historyError="Recorded history unavailable: "+(err?.message||String(err));
+    }finally{
+      this._historyPending=false;
+      const old=this.shadowRoot?.querySelector(".forecastHistory");
+      if(old)old.replaceWith(this._historyChart());
     }
   }
   getCardSize() {return 7;}
@@ -387,7 +749,10 @@ class SajTOUDynamicCard extends HTMLElement {
     add(energyHeading,el("h3",null,"Live energy"),
       el("div","muted","Solar · Home · Battery · Grid · Forecast"),
       cadence);
-    add(header,energyHeading);
+    const openForecast=el("button","forecastLink","Forecast details ›");
+    openForecast.title="Open detailed solar forecast and system settings inside this dashboard";
+    openForecast.addEventListener("click",()=>this._goPage("forecast"));
+    add(header,energyHeading,openForecast);
     add(panel,header);
     const keys=["solar","home","battery","soc","stored","gridImport",
       "gridExport","outlook","remaining","tomorrow"];
@@ -411,6 +776,17 @@ class SajTOUDynamicCard extends HTMLElement {
     const hr=el("tr");
     for(const title of ["☀️ Solar","🏠 House","🔋 Battery","⚡ Grid","🔮 Forecast"])
       add(hr,el("th",null,title));
+    const forecastHeader=hr.lastElementChild;
+    if(forecastHeader){
+      forecastHeader.title="Open forecast details";
+      forecastHeader.style.cursor="pointer";
+      forecastHeader.tabIndex=0;
+      forecastHeader.setAttribute("role","button");
+      forecastHeader.addEventListener("click",()=>this._goPage("forecast"));
+      forecastHeader.addEventListener("keydown",event=>{
+        if(event.key==="Enter"||event.key===" "){event.preventDefault();this._goPage("forecast");}
+      });
+    }
     add(head,hr);add(table,head);
     const body=el("tbody");
     const r1=el("tr","flowNumbers");
@@ -471,6 +847,15 @@ class SajTOUDynamicCard extends HTMLElement {
     }
     add(panel,graph);
     add(panel,tableWrap);
+    // Keep forecast values in the table clickable as requested.
+    for(const tr of [r1,r2,r3]){
+      const cell=tr.lastElementChild;
+      if(cell){
+        cell.style.cursor="pointer";cell.title="View solar forecast";
+        cell.addEventListener("click",()=>this._goPage("forecast"));
+      }
+    }
+    add(panel,this._historyChart());
     add(panel,el("div","flowFoot",
       "Forecast is an estimate; grid import/export direction is provisional. "+
       "This panel is read-only; TOU control actions are separate."));
@@ -491,6 +876,20 @@ class SajTOUDynamicCard extends HTMLElement {
     // device dropdown when there is only one configured inverter.
     if (!group) {
       add(card,el("p","empty","No SAJ H2 TOU devices found. Check the SAJ TOU control integration and its schedule sensors."));
+      return;
+    }
+    const nav=el("nav","sajNav");
+    nav.setAttribute("aria-label","SAJ dashboard pages");
+    for(const [id,title] of [["control","Energy & controls"],["forecast","Solar forecast"]]){
+      const button=el("button",null,title);
+      button.type="button";
+      if(this._page===id)button.setAttribute("aria-current","page");
+      button.addEventListener("click",()=>this._goPage(id));
+      nav.append(button);
+    }
+    add(card,nav);
+    if(this._page==="forecast"){
+      add(card,this._forecastPage());
       return;
     }
     if(devices.length>1){
