@@ -16,14 +16,14 @@
 
 **Owner requirement:** A complete installation must obtain all needed source exclusively from `userdc-dev/saj-h2-control-enhanced`, with a short copy/paste Docker command. The existing `scripts/install.sh` already downloads one repository archive and installs both `saj_h2_control_enhanced` and bundled `saj_h2_safe` (monitor only if missing) by default. The old text describing `--with-safe-monitor` and fetching a second repo was inaccurate and has been superseded.
 
-**Copy/paste example for the recorded host:**
+**Public-facing generic example (replace the configuration path and container name before running):**
 ```bash
 curl -fL https://raw.githubusercontent.com/userdc-dev/saj-h2-control-enhanced/main/scripts/install.sh -o /tmp/install-saj-h2.sh &&
-bash /tmp/install-saj-h2.sh /home/kamrui/compose-files/homeassistant/config &&
+bash /tmp/install-saj-h2.sh /home/USER/compose-files/homeassistant/config &&
 docker restart homeassistant
 ```
 
-This command is host-specific, not portable to HA OS or arbitrary Docker container names. The monitor retains its own domain/config entry for compatibility. **HACS-only controller installation does not presently deploy `bundled_components/saj_h2_safe`**; never claim it does. Do not auto-write Modbus, change existing monitor entity IDs or overwrite an already installed monitor. Treat this packaging/docs fix as non-runtime: no inverter-control code was changed and no new hardware verification was performed. The single authoritative user guide is [docs/INSTALLATION.md](docs/INSTALLATION.md).
+`/home/USER/compose-files/homeassistant/config` is a placeholder, not an automatic discovery mechanism; other Docker layouts may have a different path entirely. For the recorded owner's host, replace it with `/home/kamrui/compose-files/homeassistant/config` (and use `homeassistant` as its known container name). This Docker command is not portable to HA OS or arbitrary container names. The monitor retains its own domain/config entry for compatibility. **HACS-only controller installation does not presently deploy `bundled_components/saj_h2_safe`**; never claim it does. Do not auto-write Modbus, change existing monitor entity IDs or overwrite an already installed monitor. Treat this packaging/docs fix as non-runtime: no inverter-control code was changed and no new hardware verification was performed. The single authoritative user guide is [docs/INSTALLATION.md](docs/INSTALLATION.md).
 
 ## 1. Goal, scope, and user requirements
 
