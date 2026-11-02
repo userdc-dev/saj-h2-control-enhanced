@@ -4,6 +4,12 @@ Everything needed is hosted in **this GitHub repository**: the SAJ H2 Control En
 
 The original monitor remains its own Home Assistant integration domain (`saj_h2_safe`) to **preserve existing entity identities, config entries, dashboard references and historical data**. Keeping that domain is an internal compatibility detail, not an external download requirement.
 
+## v0.5.19 solar forecast learning
+
+Solar forecast now includes **Forecast learning & accuracy**. After updating, Home Assistant may scan its **existing hourly long-term statistics** automatically and approximately weekly. You can also choose a **30-day, 90-day, six-month or twelve-month history window** and select **Analyse past readings**. This calibrates read-only forecasts only; it does not adjust the inverter or affect existing schedules, cost settings, Historic Data or Energy sensors.
+
+*Availability matters:* Home Assistant can't reconstruct months before the SAJ solar and battery SOC sensors started recording. A recently installed monitor may initially report no qualifying history. Previous-day forecast accuracy begins accumulating **from the time v0.5.19 starts saving genuine forecasts**, not retroactively. For details and backtest limitations see [Solar forecast learning](SOLAR_FORECAST_LEARNING.md).
+
 ## 1. Easiest installation: one copy/paste block (Linux / Docker)
 
 SSH into the machine running Home Assistant, **replace `/home/USER/compose-files/homeassistant/config` with your real Home Assistant configuration directory**, then run:
