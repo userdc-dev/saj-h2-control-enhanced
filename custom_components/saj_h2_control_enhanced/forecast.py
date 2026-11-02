@@ -136,8 +136,8 @@ class SajEditableForecast(DataUpdateCoordinator):
             self._sample_power=None
 
     def _learning_source(self):
-        # Listener receives read-only SAJ Safe Monitor updates, when attached.
-        return (getattr(self,"_live_monitor",None) or object()).data or {} if getattr(self,"_live_monitor",None) is not None else {}
+        monitor=getattr(self,"_live_monitor",None)
+        return (monitor.data or {}) if monitor is not None else {}
 
     def _finalize_learning(self,end_epoch):
         reference=self._forecast_hours.get(end_epoch)
