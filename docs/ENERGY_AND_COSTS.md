@@ -14,6 +14,9 @@
 |---|---|---|
 | Electricity grid → Grid consumption | **Grid energy imported • estimated** | Total-increasing **kWh**, integrated only when the HA monitor is running; grid polarity *unverified* |
 | Electricity grid → Return to grid | **Grid energy exported • estimated** | Total-increasing **kWh**; same provisional polarity/coverage |
+| Electricity grid → Type of power measurement → **Standard** | **Grid power • signed (import + / export −)** | Instantaneous **W**, single signed power source; use only after verifying polarity |
+| Electricity grid → Type of power measurement → **Two sensors** → Power imported from grid | **Power imported from grid • provisional** | Instantaneous **W**, import-only positive readings |
+| Electricity grid → Type of power measurement → **Two sensors** → Power exported to grid | **Power exported to grid • provisional** | Instantaneous **W**, export-only positive readings |
 | Solar panels → Solar production energy | **Solar production energy • total** | Native SAJ lifetime total **kWh**, not a power sample |
 | Solar panels → Solar production power | **Solar production power** | Current **W**; `device_class: power`, `state_class: measurement` |
 | Solar production forecast | **Editable solar forecast** | PV **kWh** forecast on Solar forecast tab; **not** a measured cumulative energy counter; don't select as the production meter |
@@ -26,7 +29,9 @@
 
 In some HA versions Energy asks for just energy, in others you can also choose corresponding power measurements. Only the suitable sensors appear in each selector. Home Assistant requires energy kWh sensors with `device_class=energy` and `state_class=total` or `total_increasing`, power W sensors with `device_class=power` and `state_class=measurement`, and SOC as a battery percent measurement.
 
-**4. Wait for Recorder and statistics.** New energy entities do not retroactively recreate past totals. If a sensor is not listed, verify **Settings → System → Repairs → Statistics** (or **Developer tools → Statistics** depending on HA version), available entity state, statistics compatibility and Recorder inclusion. Do not add the same original meter and its duplicate alias to Energy together: this would double-count energy.
+**Power measurement selector:** Home Assistant's Energy UI offers **No power sensor**, **Standard**, **Inverted** and **Two sensors**. Recommended choices for the current provisional SAJ convention: (a) **Standard** with the new **Grid power • signed (import + / export −)** sensor, or (b) **Two sensors** with the dedicated **Power imported from grid** and **Power exported to grid** aliases. **Inverted** is ONLY for a confirmed reverse-polarity signed sensor; do not select it speculatively. The two-sensor option uses non-negative import/export watts and is often easier to interpret. Do not configure both options simultaneously. In all cases, validate readings against your actual utility meter; the integration cannot certify the grid polarity.
+
+**4. Wait for Recorder and statistics.** New energy entities do not retroactively recreate past totals. A power sensor is a recorded **W measurement**, not a cumulative kWh total. The new aliases have `device_class: power` and `state_class: measurement`; HA must record their numerical states for at least one 5-minute statistics cycle before the **Select a statistic** dropdown can use them. If a sensor is not listed, verify **Settings → System → Repairs → Statistics** (or **Developer tools → Statistics** depending on HA version), available entity state, statistics compatibility and Recorder inclusion. Do not add the same original meter and its duplicate alias to Energy together: this would double-count energy.
 
 ### Critical distinction: grid estimates vs electricity meters
 
@@ -51,6 +56,8 @@ Open **Costs & savings** inside **SAJ H2 Control**. You can configure:
 ### Time-aware monetary accounting, not flat-rate multiplication
 
 Electricity imports and exports are priced **per recorded short interval** using the matching local wall-clock window, weekday and tax treatment. Intervals are split across minute/window boundaries, midnight and daylight-saving changes. A tariff change applies prospectively; previously accrued monetary costs **are not recomputed** at the new rates. Recorded costs and energy counters persist across restarts.
+
+**Full fixed daily supply charge:** This is posted **once per local calendar day** after a user has configured the tariff and accounting is running, independent of solar/grid telemetry coverage (e.g. a $1.49/day charge shows as $1.49 today even after only 20 minutes of data). Month-to-date counts each day charged; it does not assume that offline, untracked past days were billed. A tariff change during a day does not charge the supply fee twice; the rate for subsequent new days applies from the next tracked date. GST/extra levies are included according to the user's selected supply flags. Existing v0.5.16 current-day prorated supply charges are reconciled to the full day once, not doubled. This is still an estimated bill, not an exact retailer invoice.
 
 Daily/month figures show **partial measured coverage** separately from **tariff-priced coverage**. Per-category kWh and monetary breakdowns help diagnose unexpectedly high/low costs. Missing past data is not backfilled or invented.
 
