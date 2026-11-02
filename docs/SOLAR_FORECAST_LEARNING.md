@@ -22,7 +22,7 @@ For each potential historical hour, it:
 
 ### 2. Only deploy season/time-of-day corrections that pass a backtest
 
-The model distinguishes **summer, autumn, winter and spring** using the property's latitude (Southern Hemisphere seasons apply automatically in Adelaide). Qualified historical hours are divided **chronologically** into the earlier ~70% used to learn, and the later ~30% **unseen holdout** used to check whether that learning worked. At least 20 training hours and 8 holdout hours are required. Hour-of-day bins require several matching samples; sparse bins fall back to the original forecast.
+The model distinguishes **summer, autumn, winter and spring** using the property's latitude (Southern Hemisphere seasons apply automatically in Adelaide). Qualified historical hours are divided **chronologically by whole local calendar dates** into the earlier ~70% used to learn, and the later ~30% **unseen days** used to check whether that learning worked. At least 20 training hours and 8 holdout hours are required. Hour-of-day bins require several matching samples; sparse bins fall back to the original forecast.
 
 Corrections are bounded to **65%–115%** and dampened toward the original physical model. The historical calibration is **only deployed if its held-out mean absolute error (MAE) improves by at least 2%**, and otherwise it is held back. The model retains the existing cautious live clear-sky learning as a fallback and blends it with validated seasonal factors **without multiplying the two corrections**.
 
