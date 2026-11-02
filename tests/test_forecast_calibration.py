@@ -97,7 +97,7 @@ class ForecastLearningTests(unittest.TestCase):
         target=datetime(2026,10,20,tzinfo=TZ)
         records=[]
         for hour in range(7,19):
-            epoch=int(target.replace(hour=hour,minute=0).timestamp())
+            epoch=int(target.replace(hour=hour,minute=30).timestamp())
             records.append({"start":epoch,"mean":1000.0})
         predictions=[
             {"issued_at":"2026-10-19T09:00:00+00:00",
@@ -121,7 +121,7 @@ class ForecastLearningTests(unittest.TestCase):
     def test_missing_daytime_recording_wont_produce_false_accuracy(self):
         target=datetime(2026,10,20,tzinfo=TZ)
         rows=[
-            {"start":int(target.replace(hour=h).timestamp()),"mean":1000}
+            {"start":int(target.replace(hour=h,minute=30).timestamp()),"mean":1000}
             for h in range(12,15)
         ]
         preds=[{"issued_at":"2026-10-19T03:00:00+00:00",
