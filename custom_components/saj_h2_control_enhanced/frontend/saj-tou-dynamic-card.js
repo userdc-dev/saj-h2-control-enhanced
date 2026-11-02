@@ -273,6 +273,7 @@ const CSS = [
   ".tariffTaxGroup{display:flex;flex-direction:column;align-items:flex-start;gap:7px}",
   ".tariffActions{display:flex;flex-wrap:wrap;gap:10px;margin:20px 0}",
   ".costBandLine{padding-left:9px;border-left:2px solid var(--primary-color,#16b9b1);font-variant-numeric:tabular-nums}",
+  ".tariffActive{font-size:12px;font-weight:600;padding:11px 12px;border:1px solid var(--divider-color,#444);border-radius:10px;line-height:1.7;color:var(--primary-text-color,#fff);background:rgba(40,170,190,.045)}",
   "@media(max-width:650px){.tariffSubsection{padding:11px}.tariffCategory{padding:9px}.tariffWindow{padding:9px}.tariffDays{gap:5px}.tariffDay{padding:6px}}",
     ".forecastHistory{border:1px solid var(--divider-color,#555);padding:14px;border-radius:12px;margin-top:16px}",
   ".historyHead{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}",
@@ -514,6 +515,15 @@ class SajTOUDynamicCard extends HTMLElement {
         "Energy accounting is unavailable. Configure SAJ H2 Safe Monitor using the same inverter IP, then reload this integration. No tariff or grid energy is being guessed."));
       return section;
     }
+    const active=state.attributes.current_tariff;
+    if(active?.import && active?.export){
+      add(section,el("p","tariffActive",
+        "Active now · Import: "+active.import.name+" ("+
+        this._currency(active.import.rate)+"/kWh) · Export: "+
+        active.export.name+" ("+this._currency(active.export.rate)+"/kWh)"+
+        (active.export.high_window&&active.export.id!=="high"?
+          " · special high-FiT origin not verified":"")));
+    }
     if(!settings.configured)
       add(section,el("div","costNotice",
         "Example prices are not your tariff. Open Costs & savings to configure peak, off-peak, solar sponge, export FiT windows and GST."));
@@ -592,6 +602,15 @@ class SajTOUDynamicCard extends HTMLElement {
     }
     const data=state.attributes;
     const pricing=data.pricing||{};
+    const active=data.current_tariff;
+    if(active?.import && active?.export){
+      add(root,el("p","tariffActive",
+        "Current import · "+active.import.name+" at "+
+        this._currency(active.import.rate)+"/kWh  · Current export · "+
+        active.export.name+" at "+this._currency(active.export.rate)+"/kWh"+
+        (active.export.high_window&&active.export.id!=="high"?
+          " (special high-FiT window: eligibility unverified)":"")));
+    }
     const isTOU=Boolean(pricing.tariff_profile?.configured);
     if(!isTOU){
       add(root,el("p","costNotice",
@@ -678,7 +697,7 @@ class SajTOUDynamicCard extends HTMLElement {
       el("p","muted",
         "Configure your electricity plan by local weekday and time. "+
         "Each import rate can have several separate periods, including morning and evening peaks. "+
-        "Overnight windows (e.g. 21:00–07:00) automatically cross midnight. "+
+        "Overnight windows (e.g. 21:00–07:00) automatically cross midnight; selected weekdays mean the day the window STARTS. "+
         "All rates can be positive or negative."));
     const field=(label,value,onChange,{step="0.001",min="-100",max="100",type="number"}={})=>{
       const holder=el("label","tariffField");
