@@ -39,5 +39,6 @@ jobs:
           python -m unittest discover -s tests -p 'test_tariffs.py'
           python -m unittest discover -s tests -p 'test_tariff_accounting.py'
           python -m unittest discover -s tests -p 'test_vpp_quick_preview.py'
+          python -m unittest discover -s tests -p 'test_vpp_safety_supervisor.py'
       - name: Verify zero-YAML installer syntax
         run: bash -n scripts/install.sh
