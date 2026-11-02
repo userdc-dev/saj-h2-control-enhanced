@@ -2775,12 +2775,16 @@ class SajTOUDynamicCard extends HTMLElement {
     const last=e.operating_mode?.attributes?.last_verified_read;
     const age=last?(Date.now()-new Date(last).getTime())/1000:Infinity;
     const draft=this._drafts.get(group.id);
-    const canReturn=mode===1 && Number.isFinite(age) && age>=0 && age<=180 &&
+    const chargeMask=e.charge_count?.attributes?.slot_enable_mask;
+    const dischargeMask=e.discharge_count?.attributes?.slot_enable_mask;
+    const canReturn=mode===1 && roles.every(r=>isValid(e[r])) &&
+      Number.isFinite(age) && age>=0 && age<=180 &&
       [0,1].includes(e.outside_schedule?.attributes?.raw_fallback_code) &&
-      Number.isInteger(e.charge_count?.attributes?.slot_enable_mask) &&
-      Number.isInteger(e.discharge_count?.attributes?.slot_enable_mask) &&
+      Number.isInteger(chargeMask)&&chargeMask>=0&&chargeMask<=127 &&
+      Number.isInteger(dischargeMask)&&dischargeMask>=0&&dischargeMask<=127 &&
       !draft?.changed && !this._modeBusy && !this._fallbackBusy &&
-      !this._scheduleWriteBusy && !this._vppPreviewBusy;
+      !this._scheduleWriteBusy && !this._vppPreviewBusy &&
+      !this._refreshBusy;
     const self=el("button","vppReturnButton","Return to Self-consumption");
     self.type="button";
     self.disabled=mode===0 || !canReturn;
