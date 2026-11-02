@@ -134,7 +134,7 @@ def eligible_samples(power_stats, soc_stats, groups, efficiency,
         if not 0.45<=ratio<=1.55:
             summary["excluded_outliers"]+=1
             continue
-        local=datetime.fromtimestamp(epoch,timezone.utc).astimezone(tz)
+        local=datetime.fromtimestamp(epoch+1800,timezone.utc).astimezone(tz)
         samples.append({"epoch":epoch,"date":local.date().isoformat(),
                         "month":local.month,"season":season(local.month,latitude),
                         "hour":local.hour,"base":expected,"actual":observed,
@@ -233,7 +233,7 @@ def evaluate_issued_forecasts(predictions,power_stats,tz,now=None):
     actual_map=stats_by_hour(power_stats)
     days=defaultdict(dict)
     for epoch,watts in actual_map.items():
-        local=datetime.fromtimestamp(epoch,timezone.utc).astimezone(tz)
+        local=datetime.fromtimestamp(epoch+1800,timezone.utc).astimezone(tz)
         if 7<=local.hour<=18:
             days[local.date().isoformat()][local.hour]=watts
     results=[]
