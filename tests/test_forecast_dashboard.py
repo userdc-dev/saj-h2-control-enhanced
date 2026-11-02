@@ -52,7 +52,7 @@ class ForecastDashboardTests(unittest.TestCase):
             '_loadForecastHistory',
             'Date.now()-this._forecastHistoryFetchedAt',
             'missingSeconds', 'actualChunks',
-            '"forecastSvg"', '"forecastTooltip"',
+            '"historySvg forecastSvg"', '"historyTooltip forecastTooltip"',
             '"forecastHourly"',
         ):
             self.assertIn(token,ui)
