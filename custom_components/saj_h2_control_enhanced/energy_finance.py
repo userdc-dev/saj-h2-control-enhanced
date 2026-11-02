@@ -182,7 +182,7 @@ def snapshot_costs(totals,pricing,now,tz):
         else:
             # Existing v0.5.15 installation has only flat rates. Preserve
             # legacy calculations until the new profile is configured.
-            supply=seconds/86400*pricing["daily_supply"]
+            supply=row.get("legacy_supply_cost",0.0) if pricing.get("configured") else 0.0
             result[kind]={
                 **common,
                 "import_cost":_money(imp*pricing["import_rate"]),
@@ -326,9 +326,25 @@ class SajEnergyAccounting(DataUpdateCoordinator):
         """
         p=pricing_for(self.entry)
         profile=p.get("tariff_profile") or {}
-        if not profile.get("configured"):
-            return False
         local=when.astimezone(self.tz)
+        if not profile.get("configured"):
+            # Old flat-rate entries still deserve the *whole* daily fixed
+            # charge, even without meter readings. Keep this legacy charge
+            # separately to avoid changing or duplicating TOU ledgers.
+            if not p.get("configured"):
+                return False
+            day,month=self._periods(local)
+            key=local.date().isoformat()
+            charged=month.setdefault("legacy_supply_charged_dates",{})
+            if key in charged:
+                day.setdefault("legacy_supply_cost",charged[key])
+                return False
+            amount=float(p["daily_supply"])
+            charged[key]=amount
+            day.setdefault("legacy_supply_charged_dates",{})[key]=amount
+            for row in (day,month):
+                row["legacy_supply_cost"]=row.get("legacy_supply_cost",0.0)+amount
+            return True
         day_key=local.date().isoformat()
         day,month=self._periods(local)
         month_ledger=month.setdefault("tariff",_new_tariff_ledger())
