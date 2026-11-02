@@ -2,6 +2,10 @@
 
 This feature is **read-only electricity cost estimation** and does not command the inverter. All software needed is included in **this GitHub repository**. The original SAJ H2 Safe Monitor and the existing TOU/7+7 inverter-control functions are preserved.
 
+## Cleaner editing interface (v0.5.18)
+
+The Costs & savings landing page now shows the main daily/monthly estimate and qualified self-supply benefit first. Open **Cost breakdown** for granular imports, exports, FiT and fixed daily supply fee. Open **Edit electricity tariffs** for the complete existing multi-window tariff editor; after saving, the editor closes automatically. First-time users with no saved tariff see the editor open so they can configure their plan. It remains open through interactive edits rather than resetting focus every ten seconds. The **Home Assistant Energy · Sensor IDs & copy** reference is a separate compact, closed-by-default section at the bottom. The actual tariff engine and your entered rates are unchanged by these layout updates.
+
 ## Set up your electricity plan
 
 Open **SAJ TOU Control → Costs & savings → Your time-of-use electricity plan**. The default values are illustrative examples — **not your retailer contract**. You must review and save the correct numbers before trusting dollar estimates.
