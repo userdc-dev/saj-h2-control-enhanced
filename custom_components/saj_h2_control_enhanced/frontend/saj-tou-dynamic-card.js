@@ -143,7 +143,6 @@ const CSS = [
   ".flowDailyLine{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:5px 0;font-size:12px;line-height:1.4}",
   ".flowDailyLine b{font-variant-numeric:tabular-nums;white-space:nowrap}",
   ".flowDailyName{font-size:11px;color:var(--secondary-text-color,#aaa);text-align:left}",
-  ".flowDailySource{display:block;font-size:10px;line-height:1.35;margin-top:6px;color:var(--secondary-text-color,#999)}",
 
   ".flowGraph{gap:14px;margin:18px 0 8px}.flowGraphTrack{height:9px}",
   ".socFlow{margin-top:14px;padding-top:12px;border-top:1px solid var(--divider-color,#45484c)}",
@@ -2226,10 +2225,7 @@ class SajTOUDynamicCard extends HTMLElement {
         add(item,el("b",null,fmtTodayKwh(value)));
         td.append(item);
       }
-      if(note){
-        td.title=note;
-        add(td,el("small","flowDailySource",note));
-      }
+      if(note)td.title=note;
       return td;
     };
     add(totalsRow,
@@ -2285,7 +2281,7 @@ class SajTOUDynamicCard extends HTMLElement {
     add(panel,graph);
     add(panel,tableWrap);
     // Keep forecast values in the table clickable as requested.
-    for(const tr of [r1,r2,r3]){
+    for(const tr of [r1,r2,r3,totalsRow]){
       const cell=tr.lastElementChild;
       if(cell){
         cell.style.cursor="pointer";cell.title="View solar forecast";
@@ -2294,7 +2290,8 @@ class SajTOUDynamicCard extends HTMLElement {
     }
     add(panel,this._historyChart());
     add(panel,el("div","flowFoot",
-      "Forecast is an estimate; grid import/export direction is provisional. "+
+      "Today kWh: inverter daily counters; grid kWh is a partial-coverage power-integrated estimate. "+
+      "Forecast by now is modeled, not measured. Grid import/export direction is provisional. "+
       "This panel is read-only; TOU control actions are separate."+
       (custom?" Forecast values use your saved solar layout.":"")));
     return panel;
