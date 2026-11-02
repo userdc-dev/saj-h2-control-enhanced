@@ -9,7 +9,7 @@ uplift, not silently assumed earned.
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, time
 import math
 import re
 
@@ -235,7 +235,15 @@ def priced_slice(imp_kwh,exp_kwh,seconds,profile,when):
     imp_band,exp_band=choose_rates(profile,when)
     imp_base=imp_kwh*imp_band["rate"]
     exp_base=exp_kwh*exp_band["rate"]
-    supply_base=seconds/86400*profile["daily_supply"]
+    # A supply fee is per local calendar day, which can be 23/25 hours at
+    # daylight-saving transitions. Prorate by that day's actual UTC length.
+    zone=when.tzinfo
+    midnight=datetime.combine(when.date(),time.min,tzinfo=zone)
+    next_midnight=datetime.combine(
+        when.date()+timedelta(days=1),time.min,tzinfo=zone)
+    day_seconds=(next_midnight.astimezone(timezone.utc)-
+                 midnight.astimezone(timezone.utc)).total_seconds()
+    supply_base=seconds/day_seconds*profile["daily_supply"]
     import_tax=tax_adjustment(imp_base,profile,"import")
     export_tax=tax_adjustment(exp_base,profile,"export")
     supply_tax=tax_adjustment(supply_base,profile,"supply")
