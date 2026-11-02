@@ -536,6 +536,8 @@ class SajTOUDynamicCard extends HTMLElement {
       ["Month · estimated net",data.month?.net_cost,"Partially recorded this month"],
       ["Today · self-supply & export value",data.today?.self_supply_estimated_benefit,
        "Illustrative combined benefit; solar and battery cannot be separated reliably"],
+      ["Month · self-supply & export value",data.month?.self_supply_estimated_benefit,
+       "Combined partial-period benefit; not an auditable bill saving"],
       ["Today · battery discharge potential",data.today?.battery_discharge_illustrative_value,
        "Gross illustration only; NOT additional savings to add to the combined benefit"]
     ];
