@@ -1,3 +1,13 @@
+## v0.5.16 — Full signed time-of-use tariff schedules, special FiT and taxes (2026-11-02)
+
+- Replaced the single flat-rate editor with editable multi-window import pricing: up to 12 user-defined rate categories (Peak, Off-peak, Solar sponge and additional), up to 24 windows per category, weekday selection, overnight wrapping, and a priced fallback for uncovered hours. Overlapping import windows are rejected.
+- Added independent standard FiT windows, special high/battery FiT windows and separate fallback export price, all signed. Users must explicitly confirm that high FiT applies to all exports; battery-only/unverified eligibility uses conservative standard credit and shows potential high-FiT adjustment separately.
+- Added GST-inclusive or GST-exclusive calculation, individual tax application flags for import/export/supply, user-defined signed additional tax/levy or rebate percentage, and negative or positive daily supply charge.
+- Corrected billing model: interval-level, time-zone-aware pricing as recorded, split at minute/hour/night and local DST boundaries, 23/25-hour day supply-charge proration, unrounded stored running costs, separate coverage counters, per-band kWh/amount breakdown. Changes apply only to future observations; older monetary totals are never silently repriced.
+- Added current active local import/export rate display on the Costs & savings tab and summary. Preserved original Home Assistant Energy aliases, existing estimated lifetime counters, TOU controls, live historical graph and solar forecast calibration.
+- Added [Time-of-use tariff guide](docs/TIME_OF_USE_TARIFFS.md), safety notes, and offline regression tests for negative pricing, tax, weekend/overnight overlaps, interval splitting and DST.
+- **Limit:** grid polarity and battery export origin remain unverified; estimates do not reproduce retailer settlement bills. No live AEMO feed, no automatic battery dispatch, no inverter writes introduced.
+
 ## v0.5.15 — Home Assistant Energy, signed electricity costs and measured forecast learning (2026-11-02)
 
 - Added new read-only, clearly named HA Energy compatible solar production energy/power, battery charging/discharging energy, battery SOC/power and home energy/power aliases with correct device classes and long-term statistics state classes.
