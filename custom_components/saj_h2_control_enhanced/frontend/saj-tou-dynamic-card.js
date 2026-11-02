@@ -580,8 +580,9 @@ class SajTOUDynamicCard extends HTMLElement {
     const form=this._costForm;
     const pane=el("section","costSettings");
     add(pane,el("h3",null,"Electricity price settings"));
+    const currency=p.currency||this._hass?.config?.currency||"AUD";
     add(pane,el("p","muted",
-      "Static rates in AUD. Enter a positive import rate when you PAY for grid energy; negative if you are PAID to import. "+
+      "Static rates in "+currency+". Enter a positive import rate when you PAY for grid energy; negative if you are PAID to import. "+
       "Positive export rate means the retailer pays you; negative means you pay a fee to export. Signed daily supply charges are also supported."));
     const inputs=el("div","costInputs");
     const field=(label,key,step)=>{
@@ -602,9 +603,9 @@ class SajTOUDynamicCard extends HTMLElement {
       return holder;
     };
     add(inputs,
-      field("Grid import cost (AUD/kWh)","import_rate",0.001),
-      field("Grid export payment (AUD/kWh)","export_rate",0.001),
-      field("Daily supply charge (AUD/day)","daily_supply",0.01));
+      field("Grid import cost ("+currency+"/kWh)","import_rate",0.001),
+      field("Grid export payment ("+currency+"/kWh)","export_rate",0.001),
+      field("Daily supply charge ("+currency+"/day)","daily_supply",0.01));
     add(pane,inputs);
     const save=el("button","primaryAction",
       this._costSaving?"Saving…":"Save electricity prices");
@@ -733,6 +734,17 @@ class SajTOUDynamicCard extends HTMLElement {
       "Forecast updated: "+formatLocalTime(data.updated)));
     add(section,el("p","muted",
       "PV-side energy forecast. The AC inverter limit does not necessarily cap total PV production while charging the battery."));
+    const learning=data.learning||{};
+    const learnCard=el("section","forecastSettings");
+    add(learnCard,el("h3",null,"Forecast self-learning"),
+      el("p","muted",(learning.status||"Calibration pending")+" · "+
+        (learning.clear_sky_hours??0)+" eligible clear-sky hours recorded"),
+      el("p","historyFoot",
+        "The model gradually adjusts estimates from observed solar power. "+
+        "Only clear hours with at least 45 minutes of reliable readings and battery SOC below 97% qualify. "+
+        "Correction factors are capped at 65%–115% and saved across restarts. "+
+        "Past days before this feature was enabled are not automatically backfilled."));
+    add(section,learnCard);
     const daily=Array.isArray(data.daily)?data.daily:[];
     const heading=el("h3",null,"Next seven days");add(section,heading);
     const days=el("div","forecastDays");
