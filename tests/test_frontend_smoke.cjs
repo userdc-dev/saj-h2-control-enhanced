@@ -238,7 +238,7 @@ async function main(){
   // Regression: exported power is negative on the purple graph even if
   // Recorder has NO matching event from the zero-valued import sensor.
   // Hover must display that exact export sample, not "no nearby reading".
-  const hoverTarget=Date.now()-65000;
+  const hoverTarget=Math.round((Date.now()-65000)/30000)*30000;
   const makeSample=(w,t=hoverTarget)=>({t,y:w});
   const probeGrid=(imports,exports,offsetMs=0)=>{
     card._historyData={
@@ -255,7 +255,7 @@ async function main(){
       svg:plot};
   };
   const exportOnly=probeGrid([],[
-    makeSample(6700,hoverTarget-20000),makeSample(6760)
+    makeSample(6700,hoverTarget-85000),makeSample(6760)
   ]);
   assert.match(exportOnly.text,/Grid ±: -6\.76 kW · exporting/,
     "grid tooltip must show negative export when import has no nearby sample");
@@ -286,6 +286,54 @@ async function main(){
 
   card._historyHours=24;
   card._historyData=null;
+  // VPP preview is deliberately read-only. The "Return to
+  // Self-consumption" button reuses an existing guarded mode-control path.
+  const device={
+    id:"saj-test-entry",
+    entities:{
+      operating_mode:{attributes:{
+        raw_mode_code:1,last_verified_read:new Date().toISOString()
+      }},
+      outside_schedule:{attributes:{raw_fallback_code:1}},
+      charge_count:{attributes:{slot_enable_mask:0}},
+      discharge_count:{attributes:{slot_enable_mask:0}}
+    }
+  };
+  const vpp=card._vppQuickActions(device);
+  assert.ok(vpp.textContent.includes("VPP quick actions"));
+  assert.ok(vpp.textContent.includes("Preview max charge"));
+  assert.ok(vpp.textContent.includes("Preview max discharge"));
+  assert.ok(vpp.textContent.includes("Return to Self-consumption"));
+  assert.ok(vpp.textContent.includes("read-only previews"));
+  const buttons=findAll(vpp,"button");
+  assert.equal(buttons.length,3,"two dry-run previews and a safe mode button");
+  assert.ok(buttons[0].listeners.click&&buttons[1].listeners.click);
+  const ws=[];
+  card._hass.callWS=async payload=>{
+    ws.push(payload);
+    return {response:{
+      status:"VPP_PREFLIGHT_ONLY",write_sent:false,
+      live_activation_supported:false,can_start:false,
+      preflight_passed:false,direction:"charge",
+      duration_minutes:10,blockers:["Weekly recurrence requires a watchdog"],
+      warnings:[],planned_start_local:"2026-11-02T17:35:00+10:30",
+      planned_end_local:"2026-11-02T17:45:00+10:30",
+      proposed_slot:1,requested_power_percent_raw:100,
+      existing_mode:"Time-of-use"
+    }};
+  };
+  await buttons[0].listeners.click();
+  assert.equal(ws.length,1);
+  assert.equal(ws[0].service,"preview_vpp_dispatch");
+  assert.equal(ws[0].service_data.direction,"charge");
+  assert.equal(ws[0].service_data.duration_minutes,10);
+  assert.ok(card._vppPreviewText.includes("No inverter writes sent"));
+  assert.ok(!ws.some(r=>r.service==="apply_schedules"||
+    r.service==="supervised_tou_pilot"),
+    "preview buttons must never send inverter writes");
+  const safeModeButton=buttons[2];
+  assert.equal(safeModeButton.disabled,false,
+    "self-consumption mode button uses verified state and remains available");
   const costs=card._costPage();
   assert.equal(find(costs,"costEditorShell").open,false,
     "already configured tariff editor should be folded away");
