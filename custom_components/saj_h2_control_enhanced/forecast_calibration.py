@@ -267,8 +267,25 @@ def evaluate_issued_forecasts(predictions,power_stats,tz,now=None):
                         "daytime_hours":len(hours)})
         seen_dates.add(day)
     results=results[-45:]
+    prior,recent=[],[]
+    if len(results)>=10:
+        prior=results[-10:-5]
+        recent=results[-5:]
+    prior_mae=mean(r["absolute_error_kwh"] for r in prior) if prior else None
+    recent_mae=mean(r["absolute_error_kwh"] for r in recent) if recent else None
+    trend_percent=((prior_mae-recent_mae)/prior_mae*100
+                   if prior_mae and recent_mae is not None else None)
     return {
         "days_scored":len(results),
+        "previous_five_mae_kwh":round(prior_mae,2) if prior_mae is not None else None,
+        "recent_five_mae_kwh":round(recent_mae,2) if recent_mae is not None else None,
+        "recent_vs_previous_percent":round(trend_percent,1) if trend_percent is not None else None,
+        "trend":(
+            "Improving (indicative)" if trend_percent is not None and trend_percent>=5 else
+            "Worsening (indicative)" if trend_percent is not None and trend_percent<=-5 else
+            "Similar (indicative)" if trend_percent is not None else
+            "Waiting for 10 scored days"
+        ),
         "mae_kwh":round(mean(r["absolute_error_kwh"] for r in results),2)
                    if results else None,
         "recent":results[-7:],
