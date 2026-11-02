@@ -470,7 +470,7 @@ async def async_setup(hass: HomeAssistant, config):
         DOMAIN, "preview_vpp_dispatch", preview_vpp_dispatch,
         schema=vol.Schema({
             vol.Required("direction"): vol.In(("charge", "discharge")),
-            vol.Required("duration_minutes"): vol.In((5, 10, 60)),
+            vol.Required("duration_minutes"): vol.All(vol.Coerce(int), vol.In((5, 10, 60))),
             vol.Optional("entry_id"): str,
         }),
         supports_response=SupportsResponse.ONLY,
