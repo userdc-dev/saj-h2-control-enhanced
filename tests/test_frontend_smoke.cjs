@@ -296,7 +296,10 @@ async function main(){
       }},
       outside_schedule:{attributes:{raw_fallback_code:1}},
       charge_count:{attributes:{slot_enable_mask:0}},
-      discharge_count:{attributes:{slot_enable_mask:0}}
+      discharge_count:{attributes:{slot_enable_mask:0}},
+      charge_schedules:{state:"0",attributes:{schedules:[]}},
+      discharge_schedules:{state:"0",attributes:{schedules:[]}},
+      sync_status:{state:"Verified",attributes:{}}
     }
   };
   const vpp=card._vppQuickActions(device);
