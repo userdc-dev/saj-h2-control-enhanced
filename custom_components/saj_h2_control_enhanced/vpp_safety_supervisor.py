@@ -337,6 +337,11 @@ class VPPSafetySupervisor:
         async with self._lock:
             if self.record["status"] not in ("review_required", "rehearsal_interrupted"):
                 raise SupervisorError("No interrupted or unverified rehearsal to acknowledge")
+            if self.record.get("baseline_check") != "unchanged":
+                raise SupervisorError(
+                    "Re-read and verify the FULL saved TOU baseline before "
+                    "clearing this recovery warning"
+                )
             now = self._now()
             await self._commit(self._transition(
                 "idle", "user_acknowledged_read_only_recovery", now,
