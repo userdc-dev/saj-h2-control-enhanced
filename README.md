@@ -1,6 +1,6 @@
 # SAJ H2 Control Enhanced — Home Assistant
 
-**Independent, actively developed battery controller for SAJ H2 with live operating mode, editable TOU schedules, outside-window fallback, and an optional read-only energy overview.**
+**One-repository Home Assistant package for SAJ H2 control and bundled read-only energy monitoring, including live operating mode, editable TOU schedules, outside-window fallback and energy overview.**
 
 > **New developer / AI assistant:** [READ THE COMPLETE DEVELOPER_HANDOFF.md FIRST](DEVELOPER_HANDOFF.md). The handover includes exact inverter registers, code architecture, real-vs-simulated testing evidence, safety gates, recovery steps, and outstanding requirements. The historical chronology is preserved in [the archive](docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md).
 >
@@ -15,14 +15,14 @@
 - Uses **Save schedule changes to inverter** with internal validation and **one confirmation popup**; each changed Modbus word is verified. Multiple writes are not atomic; an interruption could leave partial settings.
 - Supports **Outside TOU windows: Self-consumption or Standby** through a dark, accessible in-card menu (avoiding white native popup on Windows/Brave). Selecting Standby displays one warning popup. The new fallback write has been offline-tested but has **not** been independently verified in a completed field test.
 - Offers **Split overnight into two schedules** in the UI because elekeeper does not support a single schedule crossing midnight.
-- Includes a polished **Live energy flow** inside the TOU dashboard, based on existing read-only SAJ Safe Monitor entities: Solar, House, Battery, Grid and Forecast table; relative power bars; battery SOC and estimated stored energy. This visualization is read-only and must not modify the monitoring integration.
+- Includes a polished **Live energy flow** inside the TOU dashboard, based on the read-only SAJ Safe Monitor included in this repository: Solar, House, Battery, Grid and Forecast table; relative power bars; battery SOC and estimated stored energy. This visualization is read-only and must not modify the monitoring integration.
 - Provides a **Refresh / reload data** action next to Last verified; it requests fresh read-only TOU settings, Safe Monitor live data and forecast data without any Modbus writes. The **Inverter controls** header shows both actual live settings (Operating + Outside TOU). Charging and discharging cards use compact headers with Add actions, and warnings appear only where needed. Auto-creates a **separate SAJ TOU Control** sidebar dashboard with the native page title **SAJ H2 Control**. Existing integration-generated dashboards receive a safe title-only migration; customized dashboard layouts are never overwritten. With multiple inverters, the device switcher appears immediately below the native Home Assistant header.
 
 The integration is **not** a completed universal inverter controller: forced timed charging/discharging, OCPP, HVAC, and automatic tariff optimisation remain future work. Inferred Saturday/Sunday individual bits and some schedule-write combinations still need additional field verification.
 
 ## Non-negotiable boundaries
 
-- Do not modify the separate [SAJ H2 Safe Enhanced](https://github.com/userdc-dev/saj-h2-safe-enhanced) monitor or the owner's existing **SAJ Energy** dashboard.
+- Preserve an already installed `saj_h2_safe` monitor and the owner's existing **SAJ Energy** dashboard. The bundled monitor code is kept in this repository; do not overwrite an existing monitor during an upgrade.
 - Modbus operating modes **2** (Backup) and **3** (Off-grid/Passive) remain blocked. No writing battery protections, reserve SOC, inverter export limits, off-grid settings, or BMS registers.
 - No startup/background/automated writes. Always require an explicit user action. Standby must have a clear confirmation popup.
 - Do not automatically retry or rollback an uncertain/partially committed multi-register write.
@@ -43,29 +43,35 @@ The integration is **not** a completed universal inverter controller: forced tim
 
 Core TOU registers: charge mask `0x3604`, discharge mask `0x3605`, charge slots `0x3606–0x361A`, discharge slots `0x361B–0x362F`, mode `0x3647`, outside fallback `0x365F`. See the [full handover](DEVELOPER_HANDOFF.md#4-authoritative-modbus-tou-layout-and-encodings) for bytes, masks, examples and provenance.
 
-## Installation from GitHub — no YAML changes
+## Install or update — one GitHub repository, no YAML
 
-**Complete step-by-step guide:** [docs/INSTALLATION.md](docs/INSTALLATION.md).
+**Full beginner-friendly guide:** [Installation and upgrades](docs/INSTALLATION.md).
 
-The repository includes the config-flow setup, all Python code, bundled JavaScript card, automatic dashboard creation and a [`hacs.json`](hacs.json) manifest. **You do not edit `configuration.yaml`, Lovelace YAML or JavaScript resources.**
+All required control code, the separate read-only monitoring *component*, the dashboard card and the installer are contained **in this repository**. You do **not** need to download a second GitHub repository, modify `configuration.yaml`, register a JavaScript resource or paste dashboard YAML.
 
-**UI installation:** In HACS / Home Assistant Marketplace (as supported by your version), add this GitHub URL as a **custom Integration repository**, install and restart HA. Then use **Settings → Devices & services → Add integration → SAJ H2 Control Enhanced**. Select an existing Safe Monitor entry or enter the SAJ inverter's Modbus IP and port. The **SAJ TOU Control** sidebar and **SAJ H2 Control** dashboard are created automatically. If only one inverter is configured the card hides the device selector; multiple configured inverters get a chooser.
+### Recommended: one copy/paste command (Linux / Docker host)
 
-**Command-line installation or update:** From a downloaded/checked-out copy of this GitHub repository, run:
+Run these commands in an SSH terminal on the Home Assistant host. **This example config path and Docker container name belong to the original installation; replace them for a different system.**
 
-~~~bash
-bash scripts/install.sh /path/to/homeassistant/config
-~~~
+```bash
+curl -fL https://raw.githubusercontent.com/userdc-dev/saj-h2-control-enhanced/main/scripts/install.sh -o /tmp/install-saj-h2.sh &&
+bash /tmp/install-saj-h2.sh /home/kamrui/compose-files/homeassistant/config &&
+docker restart homeassistant
+```
 
-To additionally install the independent **SAJ H2 Safe Enhanced** read-only component **only when missing**, run:
+The installer downloads **only this repository**, installs/updates the controller, and also installs its **bundled read-only Safe Monitor if not already installed**. It preserves any pre-existing monitor directory instead of overwriting it, and backs up existing controller code. You do **not** need an extra `--with-safe-monitor` flag (that old documentation was incorrect).
 
-~~~bash
-bash scripts/install.sh /path/to/homeassistant/config --with-safe-monitor
-~~~
+After restart, go to **Settings → Devices & services → Add integration**. Configure **SAJ H2 Safe Monitor** (if not already configured) with your inverter IP and port 502; configure **SAJ H2 Control Enhanced** using that same monitor entry or its IP. These are two Home Assistant configuration entries, but **both are supplied by this single GitHub repository**. Existing configured entries remain in place on update. The controller creates the **SAJ TOU Control** sidebar dashboard automatically.
 
-The optional safe monitor provides Live energy/forecast sensors; **it is separate by design** and is never overwritten by the installer. Restart HA normally and complete its config flow separately. An existing monitor continues working untouched. The script backs up existing TOU integration code outside `custom_components/`, so HA does not see duplicate integration folders. Backing up code **does not undo inverter schedule/mode changes**. A downloadable branch archive from `main` can change over time; review a release commit when reproducibility matters.
+### HACS / Marketplace
 
-For HA OS installations without direct access to the configuration filesystem, use HACS / Marketplace. See [docs/INSTALLATION.md](docs/INSTALLATION.md) for screenshots/navigation, first-run checks, and troubleshooting.
+You can add `https://github.com/userdc-dev/saj-h2-control-enhanced` as a custom **Integration** repository and install the controller through HACS, then restart Home Assistant. **Important limitation:** HACS normally installs only the directory `custom_components/saj_h2_control_enhanced`, not the repository's separately bundled `bundled_components/saj_h2_safe`. Thus, HACS alone is **not** presently the full two-component install on a new system. If you want the complete Live energy overview and do not already have Safe Monitor, use the one-command installer above instead; no other repository is needed. The TOU controls work without the monitor, while Live energy measurements will be unavailable.
+
+For Home Assistant OS installations without host filesystem access, the controller can still be installed via HACS, but the full bundled monitor requires an accessible supported file-management/install route. We do not claim HACS automatically installs both components.
+
+### Safety and updates
+
+The installer itself sends **no Modbus writes** and never changes saved inverter schedules, Home Assistant entities, or dashboards. TOU writes still require explicit user interaction, preflight checking and readback verification. Restart HA after updating. An existing Safe Monitor's files are not overwritten; this preserves user modifications but can also mean an older monitor version remains installed. Script backups of code do **not** undo settings previously written to the inverter.
 
 ## Testing and evidence
 
