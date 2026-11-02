@@ -226,6 +226,14 @@ const CSS = [
   ".forecastStat{border:1px solid var(--divider-color,#555);border-radius:10px;padding:12px;background:var(--secondary-background-color,transparent)}",
   ".forecastStat b{display:block;font-size:19px;margin-top:7px}",
   ".forecastDays{display:grid;gap:9px;margin:12px 0 18px}",
+  ".forecastDay{border-radius:6px;padding:6px;cursor:crosshair}",
+  ".forecastDay:focus-visible,.forecastDay:hover{background:rgba(128,128,128,.08);outline:1px solid var(--divider-color,#666)}",
+  ".forecastBarTooltip{min-height:26px;font-size:12px;color:var(--secondary-text-color,#bdbdbd);margin:4px 2px 12px;line-height:1.5;font-variant-numeric:tabular-nums}",
+  ".forecastHourly,.forecastSettingsShell{border:1px solid var(--divider-color,#444);border-radius:11px;margin:14px 0;overflow:hidden}",
+  ".forecastHourly > .forecastDays,.forecastHourly > .forecastBarTooltip{margin:12px 15px}",
+  ".forecastSettingsShell > .forecastSettings{border:0;margin:0}",
+  ".forecastSvg{max-height:310px;touch-action:pan-y;cursor:crosshair}",
+
   ".forecastDay{display:grid;grid-template-columns:minmax(75px,120px) 1fr 90px;align-items:center;gap:8px;font-size:12px}",
   ".forecastTrack{height:12px;border-radius:8px;background:var(--divider-color,#444);overflow:hidden}",
   ".forecastFill{height:100%;background:var(--primary-color,#16b9b1);border-radius:8px}",
@@ -455,6 +463,7 @@ class SajTOUDynamicCard extends HTMLElement {
     this._costMessage = "";
     this._costError = false;
     this._forecastForm = null;
+    this._forecastEditorOpen = null;
     this._forecastSaving = false;
     this._forecastMessage = "";
     this._forecastError = false;
@@ -1207,6 +1216,8 @@ class SajTOUDynamicCard extends HTMLElement {
     const daily=Array.isArray(data.daily)?data.daily:[];
     const heading=el("h3",null,"Next seven days");add(section,heading);
     const days=el("div","forecastDays");
+    const dayTooltip=el("div","forecastBarTooltip");
+    dayTooltip.textContent="Hover, tap or focus a day for its predicted solar energy.";
     const max=Math.max(1,...daily.map(d=>Number(d.kwh)||0));
     for(const day of daily){
       const row=el("div","forecastDay");
@@ -1219,16 +1230,23 @@ class SajTOUDynamicCard extends HTMLElement {
       track.append(fill);
       add(row,el("span",null,name),track,
         el("strong",null,fmtEnergy(Number(day.kwh)||0)));
+      this._bindForecastBar(row,dayTooltip,
+        "Forecast for "+name+": "+(Number(day.kwh)||0).toFixed(2)+" kWh"+
+        " · estimate, not measured production");
       days.append(row);
     }
     if(!daily.length)add(days,el("p","muted","Forecast pending weather service response."));
-    add(section,days);
+    add(section,days,dayTooltip);
     const hourly=Array.isArray(data.hourly_today)?data.hourly_today:[];
     add(section,el("h3",null,"Actual vs projected · Today"));
     add(section,this._actualProjectedChart(hourly));
-    add(section,el("h3",null,"Today · hourly PV forecast"));
+    const hoursDetail=el("details","forecastHourly");
+    add(hoursDetail,el("summary","costDetailsSummary",
+      "Hourly forecast · "+hourly.length+" time slots (hover for readings)"));
     if(hourly.length){
       const plot=el("div","forecastDays");
+      const hourlyTooltip=el("div","forecastBarTooltip");
+      hourlyTooltip.textContent="Hover, tap or focus a period to inspect forecast and cloud cover.";
       const peak=Math.max(1,...hourly.map(h=>Number(h.kwh)||0));
       for(const h of hourly){
         const row=el("div","forecastDay");
@@ -1238,15 +1256,28 @@ class SajTOUDynamicCard extends HTMLElement {
         track.append(fill);
         add(row,el("span",null,h.hour),track,
           el("span",null,(Number(h.kwh)||0).toFixed(2)+" kWh"));
+        this._bindForecastBar(row,hourlyTooltip,
+          "Forecast for "+h.hour+"–next hour: "+
+          (Number(h.kwh)||0).toFixed(2)+" kWh"+
+          (typeof h.cloud==="number"?" · Cloud cover "+h.cloud+"%":""));
         plot.append(row);
       }
-      add(section,plot);
-    }else add(section,el("p","muted","Hourly weather forecast is unavailable."));
+      add(hoursDetail,plot,hourlyTooltip);
+    }else add(hoursDetail,el("p","muted","Hourly weather forecast is unavailable."));
+    add(section,hoursDetail);
     const settings=this._forecastSettings();
+    if(this._forecastEditorOpen===null)this._forecastEditorOpen=!settings.configured;
     if(!this._forecastForm)this._forecastForm={
       groups:settings.groups.map(g=>({...g})),
       efficiency:settings.efficiency,ac_limit_kw:settings.ac_limit_kw
     };
+    const settingsShell=el("details","forecastSettingsShell");
+    settingsShell.open=Boolean(this._forecastEditorOpen);
+    settingsShell.addEventListener("toggle",()=>{
+      this._forecastEditorOpen=settingsShell.open;
+    });
+    add(settingsShell,el("summary","costDetailsSummary",
+      "Solar system settings · Panel groups, orientations & efficiency"));
     const wrapper=el("section","forecastSettings");
     add(wrapper,el("h3",null,"Your solar system settings"));
     if(!settings.configured)add(wrapper,el("p","forecastNotice",
@@ -1308,7 +1339,8 @@ class SajTOUDynamicCard extends HTMLElement {
       this._forecastError?"bad":"okay",this._forecastMessage));
     add(wrapper,el("p","historyFoot",
       "Only the forecast model is changed. No inverter operating mode, battery setting or schedule is modified."));
-    add(section,wrapper);
+    add(settingsShell,wrapper);
+    add(section,settingsShell);
     return section;
   }
   async _saveForecastSettings(){
@@ -1339,6 +1371,7 @@ class SajTOUDynamicCard extends HTMLElement {
         "Settings saved. Weather service unavailable; retry with refresh later.":
         "Settings saved. Forecast recalculated from your panel layout.";
       this._forecastError=false;this._forecastForm=null;
+      this._forecastEditorOpen=false;
     }catch(err){
       this._forecastError=true;
       this._forecastMessage="Forecast settings not saved: "+(err?.message||String(err));
