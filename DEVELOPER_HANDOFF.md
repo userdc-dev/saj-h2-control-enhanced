@@ -1,3 +1,7 @@
+## v0.5.14 — Historic Data inspection
+
+The Historic Data SVG chart supports pointer hover, touch tap and keyboard left/right stepping; a crosshair and per-series value panel report *nearest actual Home Assistant recorder sample*. Selection snaps at 5 minutes for 6–24 h, 10 minutes for 48 h and 30 minutes for 7 days; no interpolation or fabricated values are returned. If no sample lies within half a step, show a dash. Grid numbers combine import/export streams only when both nearby readings exist. The chart's original plotted paths, control services and underlying HA data storage remain unchanged. Real browser and device checks still needed.
+
 # Developer handover — SAJ H2 Control Enhanced
 
 **Canonical current guide; updated 2026-11-02, Australia/Adelaide.** Read this before changing any code, dashboard, or Modbus control. **Current version at the time of this handover: 0.5.11.** The project was previously design-only, but now has a deployed Home Assistant control integration with working mode controls, schedule editing code, new fallback control, and read-only energy graphics/table within the TOU dashboard. **Not every writable feature has been proven on the owner's actual inverter.**
