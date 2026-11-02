@@ -2846,6 +2846,15 @@ class SajTOUDynamicCard extends HTMLElement {
         "% · "+report.planned_start_local+" to "+report.planned_end_local+
         " · spare slot "+(report.proposed_slot??"none")+
         " · inverter mode "+report.existing_mode));
+      if(Number.isFinite(report.battery_soc_percent)){
+        add(details,el("p","muted",
+          "Battery SOC: "+report.battery_soc_percent.toFixed(2)+
+          "% · fresh double-read from inverter"));
+      }else if(report.battery_soc_verification_note){
+        add(details,el("p","bad",
+          "Battery SOC could not be verified: "+
+          report.battery_soc_verification_note));
+      }
       for(const blocker of report.blockers||[])
         add(details,el("p","muted","Blocked: "+blocker));
       for(const warning of report.warnings||[])
