@@ -253,6 +253,8 @@ const CSS = [
   ".summaryState{display:flex;align-items:baseline;gap:7px;padding:7px 10px;border:1px solid var(--divider-color,#43484c);border-radius:10px;background:rgba(128,128,128,.045);font-size:12px;line-height:1.3;white-space:nowrap}",
   ".sajNav{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px;border-bottom:1px solid var(--divider-color,#555);padding-bottom:10px}",
   ".sajNav button[aria-current=page]{border-color:var(--primary-color,#16b9b1);color:var(--primary-text-color,#fff);font-weight:700}",
+  "@media(max-width:600px){.sajNav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.sajNav button{min-height:42px;padding:9px 6px;white-space:normal;line-height:1.3;text-align:center}}",
+  ".energyReadOnlyNote{font-size:12px;color:var(--secondary-text-color,#aaa);white-space:nowrap}",
   ".forecastLink{color:var(--primary-color,#39bace);background:transparent;border:0;text-decoration:underline;cursor:pointer;font:inherit;padding:2px}",
   ".forecastHeader{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin:10px 0 14px}",
   ".forecastStats{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;margin:12px 0}",
@@ -2425,6 +2427,10 @@ class SajTOUDynamicCard extends HTMLElement {
     const statusIndicator=el("span",good?"readbackOk":"readbackBad",
       good?"● Connected to inverter":"● Readback unavailable");
     const right=el("div","readbackRight");
+    if(this._page==="energy"){
+      // A visibly read-only tab, not a combined monitor/control surface.
+      add(right,el("span","energyReadOnlyNote","Monitoring · read-only"));
+    }
     add(right,el("span","muted",
       "Last verified: "+formatLocalTime(e.sync_status?.attributes.last_verified_read)));
     const reload=el("button","readbackRefresh",
