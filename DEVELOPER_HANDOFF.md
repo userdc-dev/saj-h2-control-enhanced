@@ -1,6 +1,6 @@
 # Developer handover — SAJ H2 Control Enhanced
 
-**Canonical current guide; updated 2026-11-02, Australia/Adelaide.** Read this before changing any code, dashboard, or Modbus control. **Current version at the time of this handover: 0.5.21.** The project was previously design-only, but now has a deployed Home Assistant control integration with working mode controls, schedule editing code, new fallback control, and read-only energy graphics/table within the TOU dashboard. **Not every writable feature has been proven on the owner's actual inverter.**
+**Canonical current guide; updated 2026-11-02, Australia/Adelaide.** Read this before changing any code, dashboard, or Modbus control. **Current version at the time of this handover: 0.5.22.** The project was previously design-only, but now has a deployed Home Assistant control integration with working mode controls, schedule editing code, new fallback control, and read-only energy graphics/table within the TOU dashboard. **Not every writable feature has been proven on the owner's actual inverter.**
 
 **Repository:** https://github.com/userdc-dev/saj-h2-control-enhanced  
 **Older full development diary:** [docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md](docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md) (57 KB historical archive; early claims of “planning-only” are OBSOLETE)  
@@ -11,6 +11,18 @@
 > The owner wants this file to be detailed enough that a human developer or future assistant with **only this repo and these notes** understands the purpose, chronology, code, register mapping, tests, successful live observations, unresolved issues, installation, safety constraints, and next actions. Do not delete or hollow out this handover. Keep it current whenever changing actual features.
 >
 > **Brand spelling preference:** call the SAJ mobile application **elekeeper** (lowercase) in all new messages and UI. Older archive entries may use the old capitalization.
+
+## v0.5.22 — Staged VPP quick-action preview (2026-11-02)
+
+**User request:** Offer one-tap max battery charge/discharge for 5min, 10min and 1h, with automatic TOU mode and 7+7 schedule handling; quick self-consumption button; solar curtailment later only after rigorous research and inverter tests.
+
+**Critical safety discovery:** Existing `schedule_transaction.execute_plan` makes **non-atomic, verified sequential Modbus writes with no automatic rollback on uncertainty**. TOU schedule slots recur weekly. A true timed five-minute "one-shot" could persist and repeat next week after HA/network restart, inverter outage, elekeeper change or partial write. Current readback supports a directly paired raw 100 discharge, **not direct evidence of raw 100 charging**. Therefore v0.5.22 adds preview functionality ONLY for timed charge/discharge; **do not claim it can start charging/discharging at max**. The existing self-consumption mode action IS live with the existing explicit confirmation, fresh readback checks, lock and single guarded write.
+
+**Implementation:** `vpp_quick_preview.py` is an importable pure no-write planner, validating 5/10/60 duration, future time, supported weekday bits, non-overnight/DST, free dedicated slot, conflict with enabled charge or discharge slots, outside TOU self-consumption, fresh SOC and conservative reserve margins. `__init__.py` registers `preview_vpp_dispatch` `SupportsResponse.ONLY` service, using existing global `pilot_lock` and `schedule_transaction.read_full` (double Modbus read), returning `write_sent=false`, `can_start=false`, proposed local schedule time and explicit blockers. No new writes, no timers, no automatic restoration and no tariff-triggered commands.
+
+**Dashboard:** `_vppQuickActions(group)` on control page has duration selector (5/10/60), **Preview max charge/discharge** and **Return to Self-consumption** via existing `_requestMode(group,0,"supervised_self_consumption_pilot")` (the same verified path as original operating-mode controls). VPP panels state clearly that previews are read-only. `_previewVpp` rejects unexpected write/authorization responses. No duplicate cards or other repo needed. Mock-browser and pure planner tests under `tests/test_frontend_smoke.cjs` and `tests/test_vpp_quick_preview.py`. CI test and developer details in [docs/VPP_QUICK_ACTIONS.md](docs/VPP_QUICK_ACTIONS.md).
+
+**Future live activation gates:** confirm max charging/hardware limits, ensure schedules cannot repeat weekly, add durable crash-safe intent/status journal + recovery with explicit manual failure alerts, lock conflicting operations, compare-and-swap restoration, user-authorized cancel and emergency self-consumption, full on-inverter test including HA offline and DST/weekend. Do **not** implement PV curtailment by guessing Modbus registers; panel export limit and MPPT curtailment may differ.
 
 ## v0.5.21 — Historic Data grid hover shows missing despite visible export (2026-11-02)
 
