@@ -40,6 +40,42 @@ class ForecastDashboardTests(unittest.TestCase):
         self.assertIn('svg.addEventListener("keydown"', ui)
         self.assertNotIn('"Live energy · history"', ui)
 
+    def test_every_graph_has_live_inspection_and_missing_data_is_honest(self):
+        ui=(CONTROL / "frontend" / "saj-tou-dynamic-card.js").read_text()
+        for token in (
+            "_historyChart()", "_actualProjectedChart(hourly)",
+            'svg.addEventListener("pointermove"',
+            'svg.addEventListener("pointerdown"',
+            'svg.addEventListener("keydown"',
+            '_bindForecastBar(row,dayTooltip',
+            '_bindForecastBar(row,hourlyTooltip',
+            '_loadForecastHistory',
+            'Date.now()-this._forecastHistoryFetchedAt',
+            'missingSeconds', 'actualChunks',
+            '"forecastSvg"', '"forecastTooltip"',
+            '"forecastHourly"',
+        ):
+            self.assertIn(token,ui)
+        self.assertIn("Gaps in actual readings are shown as breaks",ui)
+
+    def test_sensor_copy_guide_is_selectable_and_compact(self):
+        ui=(CONTROL / "frontend" / "saj-tou-dynamic-card.js").read_text()
+        for token in (
+            '_copyEntityId(value,button)', 'navigator.clipboard.writeText(value)',
+            'input.select()', 'field.readOnly=true',
+            'field.addEventListener("click",()=>field.select())',
+            'el("details","energyGuide energyGuideCompact")',
+            'el("div","guideGrid")',
+            'sensor?.attributes?.friendly_name',
+            '["Energy charged · kWh","battery_charged_energy"]',
+            '["Energy discharged · kWh","battery_discharged_energy"]',
+            '"grid_import_power"', '"grid_export_power"',
+            'el("details","costEditorShell")',
+            'el("details","costBreakdown")',
+        ):
+            self.assertIn(token,ui)
+        self.assertNotIn('window.open(',ui)
+
     def test_forecast_service_is_separate_from_inverter_writes(self):
         source = (CONTROL / "__init__.py").read_text()
         self.assertIn('"save_forecast_settings"', source)
