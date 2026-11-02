@@ -139,6 +139,28 @@ class TariffTests(unittest.TestCase):
         q=T.priced_slice(10,5,3600,p,local("2026-11-02T13:00"))
         self.assertAlmostEqual(q["net_cost"],-2.04-(-.51)+1.02/24)
 
+    def test_negative_extra_levy_is_rebate(self):
+        p=deepcopy(self.profile)
+        p["gst_mode"]="included"
+        p["other_tax_percent"]=-5
+        p["export_high_windows"]=[]
+        p=T.validate_profile(p)
+        quote=T.priced_slice(1,0,60,p,local("2026-11-02T09:30"))
+        self.assertAlmostEqual(quote["import_cost"],.35*.95)
+        self.assertAlmostEqual(quote["supply_cost"],1.0*.95/1440)
+
+    def test_dst_supply_charges_are_per_actual_calendar_day(self):
+        p=deepcopy(self.profile)
+        p["daily_supply"]=23.0
+        p["other_tax_percent"]=0
+        p["gst_mode"]="included"
+        # Start of daylight saving in Adelaide: Sunday 2026-10-04 is 23h.
+        quote=T.priced_slice(0,0,3600,p,local("2026-10-04T12:00"))
+        self.assertAlmostEqual(quote["supply_cost"],1.0)
+        # A normal 24-hour day prices the same one-hour sample at 23/24.
+        normal=T.priced_slice(0,0,3600,p,local("2026-10-05T12:00"))
+        self.assertAlmostEqual(normal["supply_cost"],23/24)
+
     def test_split_interval_at_peak_boundary(self):
         p=deepcopy(self.profile)
         p["configured"]=True
