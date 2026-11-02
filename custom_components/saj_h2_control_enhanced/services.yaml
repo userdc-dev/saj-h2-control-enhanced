@@ -1,3 +1,41 @@
+preview_vpp_dispatch:
+  name: Preview VPP quick charge/discharge (READ ONLY)
+  description: >-
+    Inspect fresh double-verified TOU settings and a proposed 5-, 10- or
+    60-minute dispatch at requested raw 100% power. Checks available slots,
+    schedule overlaps, battery SOC, supported weekdays, midnight and outside
+    TOU fallback. Read-only: NO inverter writes, NO timers, NO live dispatch.
+    Because TOU periods repeat weekly, live actions require a separate tested
+    persistent restoration watchdog and verified inverter/BMS limits.
+  fields:
+    direction:
+      name: Proposed direction
+      required: true
+      selector:
+        select:
+          options:
+            - label: Charge battery
+              value: charge
+            - label: Discharge battery
+              value: discharge
+    duration_minutes:
+      name: Proposed duration
+      required: true
+      selector:
+        select:
+          options:
+            - label: 5 minutes
+              value: 5
+            - label: 10 minutes
+              value: 10
+            - label: 1 hour
+              value: 60
+    entry_id:
+      name: Optional control integration entry ID
+      required: false
+      selector:
+        text:
+
 preview_mode_change:
   name: Preview inverter operating mode change
   description: >-
