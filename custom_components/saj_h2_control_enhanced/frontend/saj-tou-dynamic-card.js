@@ -250,6 +250,30 @@ const CSS = [
   ".energyGuide li{margin-bottom:9px;line-height:1.5;font-size:12px}",
   ".energyEntity{font-size:11px;color:var(--secondary-text-color,#bbb);overflow-wrap:anywhere;display:block}",
   ".costNotice{padding:10px 12px;border-left:3px solid var(--warning-color,#d6ae57);background:rgba(128,128,128,.035);border-radius:0 7px 7px 0;font-size:12px;line-height:1.65;margin:12px 0}",
+  ".costPage .costDetail{margin:16px 0 20px}",
+  ".costPage .costSettings h3{font-size:17px}",
+  ".tariffSubsection{border:1px solid var(--divider-color,#424750);border-radius:12px;padding:15px;margin:18px 0;background:rgba(125,125,125,.025)}",
+  ".tariffSubsection h3{margin-bottom:9px}.tariffSubsection .muted{line-height:1.6}",
+  ".tariffCategory{border:1px solid var(--divider-color,#444);border-radius:11px;padding:13px;margin:14px 0}",
+  ".tariffCategoryHead{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}",
+  ".tariffWindow{padding:11px;border:1px solid var(--divider-color,#41454b);border-radius:10px;margin:10px 0;background:rgba(110,110,110,.025)}",
+  ".tariffWindowTimes{display:flex;align-items:flex-end;flex-wrap:wrap;gap:10px}",
+  ".tariffWindowTimes .tariffField{min-width:130px;flex:1}",
+  ".tariffWindowTimes input{min-height:42px}",
+  ".tariffField{display:flex;flex-direction:column;gap:7px;font-size:12px;min-width:0}",
+  ".tariffField input,.tariffField select{width:100%;box-sizing:border-box;min-height:42px}",
+  ".tariffDays{display:flex;gap:7px;flex-wrap:wrap;margin:13px 0 9px}",
+  ".tariffDay{display:inline-flex;align-items:center;gap:6px;font-size:12px;border:1px solid var(--divider-color,#45484c);border-radius:9px;padding:7px 9px;cursor:pointer}",
+  ".tariffDay input{margin:0;accent-color:var(--primary-color,#16b9b1)}",
+  ".tariffPresets{display:flex;gap:6px;flex-wrap:wrap}",
+  ".tariffPresets button{font-size:11px;padding:6px 9px}",
+  ".tariffAdd{font-size:12px;padding:9px 12px;font-weight:600}",
+  ".tariffRemove{font-size:11px;padding:8px 10px;white-space:nowrap}",
+  ".tariffTaxGroups{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:15px;margin:14px 0}",
+  ".tariffTaxGroup{display:flex;flex-direction:column;align-items:flex-start;gap:7px}",
+  ".tariffActions{display:flex;flex-wrap:wrap;gap:10px;margin:20px 0}",
+  ".costBandLine{padding-left:9px;border-left:2px solid var(--primary-color,#16b9b1);font-variant-numeric:tabular-nums}",
+  "@media(max-width:650px){.tariffSubsection{padding:11px}.tariffCategory{padding:9px}.tariffWindow{padding:9px}.tariffDays{gap:5px}.tariffDay{padding:6px}}",
     ".forecastHistory{border:1px solid var(--divider-color,#555);padding:14px;border-radius:12px;margin-top:16px}",
   ".historyHead{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}",
   ".historyLegend{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}",
@@ -514,144 +538,413 @@ class SajTOUDynamicCard extends HTMLElement {
       "Signed rates are supported. Values are not a replacement for your retailer's bill."));
     return section;
   }
+  _tariffDefault(legacy){
+    const every=[0,1,2,3,4,5,6];
+    return {
+      version:1,configured:false,currency:legacy.currency||"AUD",
+      default_import_rate:Number(legacy.import_rate??0.35),
+      import_bands:[
+        {id:"peak",name:"Peak",rate:0.52,windows:[
+          {start:"07:00",end:"09:00",days:[...every]},
+          {start:"17:00",end:"21:00",days:[...every]}]},
+        {id:"offpeak",name:"Off-peak",rate:0.24,windows:[
+          {start:"21:00",end:"07:00",days:[...every]}]},
+        {id:"sponge",name:"Solar sponge",rate:0.12,windows:[
+          {start:"10:00",end:"15:00",days:[...every]}]}
+      ],
+      export_standard_rate:Number(legacy.export_rate??0.05),
+      export_high_rate:0.25,
+      export_high_windows:[{start:"17:00",end:"21:00",days:[...every]}],
+      high_fit_eligibility:"battery_only_unverified",
+      daily_supply:Number(legacy.daily_supply??1),
+      gst_percent:10,gst_mode:"included",
+      gst_on_import:true,gst_on_export:false,gst_on_supply:true,
+      other_tax_percent:0,
+      other_tax_on_import:true,other_tax_on_export:false,
+      other_tax_on_supply:true
+    };
+  }
+  _refreshTariffEditor(){
+    const old=this.shadowRoot?.querySelector(".costPage");
+    if(old)old.replaceWith(this._costPage());
+    else this.render();
+  }
+  _costText(label,kind,row){
+    const stat=el("div","costStat");
+    add(stat,el("span","muted",label),
+      el("strong",null,typeof row?.[kind]==="number"?
+        this._currency(row[kind]):"—"));
+    return stat;
+  }
   _costPage(){
-    const root=el("section");
+    const root=el("section","costPage");
     const header=el("div","forecastHeader");
     add(header,el("h2",null,"Costs & savings"),
-      el("span","muted","Static tariffs · read-only estimates"));
+      el("span","muted","Time-of-use prices · estimates from recorded energy"));
     add(root,header);
     const state=this._costState();
     if(!state){
       add(root,el("p","costNotice",
-        "The read-only SAJ H2 Safe Monitor must be installed, configured and running on the same inverter before cost and energy records appear. Settings are not available until then."));
+        "SAJ H2 Safe Monitor must be installed and configured using the same inverter before accounting can be shown. Configure it and reload this controller; no prices or inverter settings will be guessed."));
       return root;
     }
     const data=state.attributes;
-    const p=data.pricing||{};
-    if(!p.configured)add(root,el("p","costNotice",
-      "Prices below are EXAMPLE defaults, not your electricity plan. Please enter your actual import cost, export payment/fee and supply charge before interpreting estimated dollars."));
+    const pricing=data.pricing||{};
+    const isTOU=Boolean(pricing.tariff_profile?.configured);
+    if(!isTOU){
+      add(root,el("p","costNotice",
+        "Time-of-use example schedules are shown below. They are NOT your retailer's rates. "+
+        (pricing.configured?
+          "Your previous flat rate is still in use until you save a tariff schedule. ":
+          "No actual electricity prices have been confirmed yet. ")+
+        "Check your bill or plan factsheet, set every applicable time window and tax rule, then save."));
+    }else{
+      add(root,el("p","muted",
+        "Rates apply when electricity is measured, not retroactively. "+
+        "Changing a tariff preserves already accumulated costs and starts a new revision."));
+    }
     const stats=el("div","costStatGrid");
-    const rows=[
-      ["Today · estimated net",data.today?.net_cost,"Partially recorded today"],
-      ["Month · estimated net",data.month?.net_cost,"Partially recorded this month"],
-      ["Today · self-supply & export value",data.today?.self_supply_estimated_benefit,
-       "Illustrative combined benefit; solar and battery cannot be separated reliably"],
-      ["Month · self-supply & export value",data.month?.self_supply_estimated_benefit,
-       "Combined partial-period benefit; not an auditable bill saving"],
-      ["Today · battery discharge potential",data.today?.battery_discharge_illustrative_value,
-       "Gross illustration only; NOT additional savings to add to the combined benefit"]
-    ];
-    for(const [label,value,note] of rows){
-      const stat=el("div","costStat");
-      add(stat,el("span","muted",label),
-        el("strong",null,p.configured?this._currency(value):"—"),
-        el("small",null,note));
-      stats.append(stat);
+    for(const [name,key,row,small] of [
+      ["Today · estimated net","net_cost",data.today,"Covered intervals only"],
+      ["Month · estimated net","net_cost",data.month,"Covered intervals only"],
+      ["Today · self-supply / export benefit","self_supply_estimated_benefit",
+        data.today,"Illustrative combined value, not a verified battery saving"],
+      ["Month · self-supply / export benefit","self_supply_estimated_benefit",
+        data.month,"Illustrative total, not an exact counterfactual"],
+      ["Today · battery discharge value","battery_discharge_illustrative_value",
+        data.today,"Gross potential; overlaps combined benefit"]
+    ]){
+      const item=this._costText(name,key,pricing.configured?row:null);
+      add(item,el("small",null,small));stats.append(item);
     }
     add(root,stats);
-    const details=el("div","costDetail");
-    for(const [label,row] of [["Today (available coverage)",data.today],
-                              ["This month (available coverage)",data.month]]){
-      const box=el("div","pane");
-      add(box,el("h3",null,label));
+    const detail=el("div","costDetail");
+    for(const [heading,row] of [["Today · monitored",data.today],
+                                 ["This month · monitored",data.month]]){
+      const card=el("div","pane");
+      add(card,el("h3",null,heading));
       if(!row){
-        add(box,el("p","muted","Waiting for recorded grid power readings."));
-      }else for(const [k,v,unit] of [
-        ["Grid imported",row.import_kwh,"kWh"],
-        ["Grid exported",row.export_kwh,"kWh"],
-        ["Solar generated (observed intervals)",row.solar_kwh,"kWh"],
-        ["Home use (observed intervals)",row.home_kwh,"kWh"],
-        ["Grid import cost",row.import_cost,"currency"],
-        ["Grid export credit / fee",row.export_credit,"currency"],
-        ["Standing charge (prorated)",row.supply_cost,"currency"]
-      ]){
-        const shown=typeof v==="number"?
-          (unit==="currency"?this._currency(v):v.toFixed(2)+" "+unit):"—";
-        add(box,el("p",null,k+": "+shown));
+        add(card,el("p","muted","No recorded readings for this period yet."));
+      }else{
+        for(const [label,key,unit] of [
+          ["Grid imported","import_kwh","energy"],
+          ["Grid exported","export_kwh","energy"],
+          ["Import charge incl. applicable tax","import_cost","money"],
+          ["Export payment / fee incl. applicable tax","export_credit","money"],
+          ["Supply charge incl. applicable tax","supply_cost","money"],
+          ["Additional tax adjustment (already included)","tax_adjustment","money"],
+          ["High-FiT potential adjustment (not credited)","high_fit_unverified_difference","money"]
+        ]){
+          if(key==="high_fit_unverified_difference"&&
+             typeof row[key]!=="number")continue;
+          const value=row[key];
+          const rendered=typeof value!=="number"?"—":unit==="energy"?
+            value.toFixed(3)+" kWh":this._currency(value);
+          add(card,el("p",null,label+": "+rendered));
+        }
+        add(card,el("p","muted",
+          "Energy coverage: "+(Number(row.coverage_seconds||0)/3600).toFixed(1)+
+          " h · Tariff-priced coverage: "+
+          (Number(row.tariff_coverage_seconds||0)/3600).toFixed(1)+" h"));
+        if(row.label)add(card,el("p","muted",row.label));
+        for(const [heading,key] of [
+          ["Import rate breakdown","import_bands"],
+          ["Export FiT breakdown","export_bands"]
+        ]){
+          const entries=Array.isArray(row[key])?row[key]:[];
+          if(entries.length){
+            add(card,el("h4",null,heading));
+            for(const entry of entries){
+              add(card,el("p","costBandLine",
+                entry.label+": "+(Number(entry.kwh)||0).toFixed(3)+
+                " kWh · "+this._currency(Number(entry.amount)||0)));
+            }
+          }
+        }
       }
-      if(row)add(box,el("p","muted",
-        "Recorded coverage: "+(row.coverage_seconds/3600).toFixed(1)+
-        " hours. No missing past intervals are filled in."));
-      details.append(box);
+      detail.append(card);
     }
-    add(root,details);
-    if(!this._costForm)this._costForm={
-      import_rate:Number(p.import_rate??0.35),
-      export_rate:Number(p.export_rate??0.05),
-      daily_supply:Number(p.daily_supply??1.0)
-    };
-    const form=this._costForm;
-    const pane=el("section","costSettings");
-    add(pane,el("h3",null,"Electricity price settings"));
-    const currency=p.currency||this._hass?.config?.currency||"AUD";
-    add(pane,el("p","muted",
-      "Static rates in "+currency+". Enter a positive import rate when you PAY for grid energy; negative if you are PAID to import. "+
-      "Positive export rate means the retailer pays you; negative means you pay a fee to export. Signed daily supply charges are also supported."));
-    const inputs=el("div","costInputs");
-    const field=(label,key,step)=>{
-      const holder=el("label");
+    add(root,detail);
+    if(!this._costForm){
+      const source=pricing.tariff_profile||this._tariffDefault(pricing);
+      this._costForm=JSON.parse(JSON.stringify(source));
+    }
+    const p=this._costForm;
+    const currency=pricing.currency||this._hass?.config?.currency||"AUD";
+    const editor=el("section","costSettings");
+    add(editor,el("h3",null,"Your time-of-use electricity plan"),
+      el("p","muted",
+        "Configure your electricity plan by local weekday and time. "+
+        "Each import rate can have several separate periods, including morning and evening peaks. "+
+        "Overnight windows (e.g. 21:00–07:00) automatically cross midnight. "+
+        "All rates can be positive or negative."));
+    const field=(label,value,onChange,{step="0.001",min="-100",max="100",type="number"}={})=>{
+      const holder=el("label","tariffField");
       add(holder,el("span",null,label));
       const input=el("input");
-      input.type="number";input.step=String(step);
-      input.min="-100";input.max="100";
-      input.value=String(form[key]);
-      input.setAttribute("aria-label",label);
-      input.addEventListener("focus",()=>this._costEditing=true);
+      input.type=type;
+      if(type==="number"){input.step=step;input.min=min;input.max=max;}
+      input.value=String(value);
       input.addEventListener("input",()=>{
-        const n=Number(input.value);
-        if(input.value!==""&&Number.isFinite(n))form[key]=n;
+        const next=type==="number"?
+          (input.value===""?null:Number(input.value)):input.value;
+        onChange(next);
+        this._costEditing=true;
       });
-      input.addEventListener("blur",()=>this._costEditing=false);
       holder.append(input);
       return holder;
     };
-    add(inputs,
-      field("Grid import cost ("+currency+"/kWh)","import_rate",0.001),
-      field("Grid export payment ("+currency+"/kWh)","export_rate",0.001),
-      field("Daily supply charge ("+currency+"/day)","daily_supply",0.01));
-    add(pane,inputs);
+    const control=(text,onClick,className="")=>{
+      const b=el("button",className,text);
+      b.type="button";
+      b.addEventListener("click",()=>{this._costEditing=true;onClick();});
+      return b;
+    };
+    const daysShort=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+    const windowView=(window,windows,index,label)=>{
+      const container=el("div","tariffWindow");
+      const times=el("div","tariffWindowTimes");
+      add(times,
+        field("From",window.start,v=>window.start=v,{type:"time"}),
+        field("To",window.end,v=>window.end=v,{type:"time"}));
+      const remove=control("Remove time",()=>{
+        windows.splice(index,1);this._refreshTariffEditor();
+      },"tariffRemove");
+      remove.disabled=windows.length<=1;
+      add(times,remove);add(container,times);
+      const days=el("div","tariffDays");
+      days.setAttribute("aria-label",label+" weekdays");
+      daysShort.forEach((day,d)=>{
+        const item=el("label","tariffDay");
+        const check=el("input");
+        check.type="checkbox";check.checked=window.days.includes(d);
+        check.addEventListener("change",()=>{
+          window.days=check.checked?
+            [...new Set([...window.days,d])].sort((a,b)=>a-b):
+            window.days.filter(v=>v!==d);
+          this._costEditing=true;
+        });
+        add(item,check,el("span",null,day));days.append(item);
+      });
+      add(container,days);
+      const quick=el("div","tariffPresets");
+      for(const [title,selected] of [
+        ["Every day",[0,1,2,3,4,5,6]],
+        ["Weekdays",[0,1,2,3,4]],
+        ["Weekend",[5,6]]
+      ]){
+        add(quick,control(title,()=>{
+          window.days=[...selected];this._refreshTariffEditor();
+        }));
+      }
+      add(container,quick);
+      return container;
+    };
+    const imports=el("section","tariffSubsection");
+    add(imports,el("h3",null,"1. Grid import prices"),
+      el("p","muted",
+        "Fallback applies to any local time not covered by a category. "+
+        "Two import categories cannot overlap on the same weekday; overlapping times are rejected on Save."));
+    const fallback=el("div","costInputs");
+    add(fallback,field("Other / fallback ("+currency+"/kWh)",
+      p.default_import_rate,v=>p.default_import_rate=v));
+    add(imports,fallback);
+    p.import_bands.forEach((band,i)=>{
+      const category=el("div","tariffCategory");
+      const head=el("div","tariffCategoryHead");
+      add(head,el("strong",null,"Rate category "+(i+1)),
+        control("Remove category",()=>{
+          p.import_bands.splice(i,1);this._refreshTariffEditor();
+        },"tariffRemove"));
+      add(category,head);
+      const fields=el("div","costInputs");
+      add(fields,
+        field("Category name",band.name,v=>band.name=v,{type:"text"}),
+        field("Import price ("+currency+"/kWh)",band.rate,v=>band.rate=v));
+      add(category,fields);
+      band.windows.forEach((w,j)=>category.append(windowView(
+        w,band.windows,j,band.name+" window "+(j+1))));
+      const addWindow=control("+ Another time window",()=>{
+        if(band.windows.length>=24)return;
+        band.windows.push({start:"12:00",end:"14:00",days:[0,1,2,3,4,5,6]});
+        this._refreshTariffEditor();
+      },"tariffAdd");
+      addWindow.disabled=band.windows.length>=24;
+      add(category,addWindow);imports.append(category);
+    });
+    const addCategory=control("+ Add import rate category",()=>{
+      const existing=new Set(p.import_bands.map(b=>b.id));
+      let i=1;while(existing.has("custom"+i))i++;
+      p.import_bands.push({id:"custom"+i,name:"Extra rate "+i,
+        rate:p.default_import_rate,
+        windows:[{start:"12:00",end:"13:00",days:[0,1,2,3,4,5,6]}]});
+      this._refreshTariffEditor();
+    },"tariffAdd");
+    addCategory.disabled=p.import_bands.length>=12;
+    add(imports,addCategory);
+    add(editor,imports);
+    const exports=el("section","tariffSubsection");
+    add(exports,el("h3",null,"2. Grid exports & battery high FiT"),
+      el("p","muted",
+        "Standard FiT applies whenever a special export window does not qualify. "+
+        "A higher payment intended only for battery exports cannot reliably be distinguished from solar exports with current sensors."));
+    const exportFields=el("div","costInputs");
+    add(exportFields,
+      field("Standard export FiT ("+currency+"/kWh)",
+        p.export_standard_rate,v=>p.export_standard_rate=v),
+      field("Special / battery high FiT ("+currency+"/kWh)",
+        p.export_high_rate,v=>p.export_high_rate=v));
+    add(exports,exportFields);
+    const eligibility=el("label","tariffField");
+    add(eligibility,el("span",null,"Which exports qualify for the high FiT?"));
+    const eligible=el("select");
+    for(const [key,name] of [
+      ["battery_only_unverified",
+        "Battery-only / unverified — use standard FiT; show potential high credit"],
+      ["all_exports",
+        "All exports during the high-FiT window — my retailer confirms this"]
+    ]){
+      const option=el("option",null,name);
+      option.value=key;option.selected=p.high_fit_eligibility===key;
+      eligible.append(option);
+    }
+    eligible.addEventListener("change",()=>{
+      p.high_fit_eligibility=eligible.value;this._costEditing=true;
+    });
+    add(eligibility,eligible,exports);
+    add(exports,el("p","costNotice",
+      "If the higher rate is battery-only, this integration cannot certify the exported source. "+
+      "It conservatively bills at the standard FiT and reports a possible high-FiT adjustment separately. "+
+      "Choose 'All exports' only when your retailer contract explicitly allows it."));
+    const highWindows=el("div","tariffHighWindows");
+    p.export_high_windows.forEach((window,i)=>{
+      highWindows.append(windowView(window,p.export_high_windows,i,"High FiT window "+(i+1)));
+    });
+    if(!p.export_high_windows.length)
+      add(highWindows,el("p","muted","No high-FiT window: all exports use the standard rate."));
+    const addHigh=control("+ Add special FiT window",()=>{
+      p.export_high_windows.push({
+        start:"17:00",end:"21:00",days:[0,1,2,3,4,5,6]
+      });
+      this._refreshTariffEditor();
+    },"tariffAdd");
+    addHigh.disabled=p.export_high_windows.length>=24;
+    add(exports,highWindows,addHigh,el("p","muted",
+      "Export FiT windows can overlap with import windows because they apply to different meter directions."));
+    add(editor,exports);
+    const taxes=el("section","tariffSubsection");
+    add(taxes,el("h3",null,"3. Supply charge, GST & other taxes"));
+    const taxFields=el("div","costInputs");
+    add(taxFields,
+      field("Daily supply charge ("+currency+"/day)",p.daily_supply,v=>p.daily_supply=v),
+      field("GST (%)",p.gst_percent,v=>p.gst_percent=v,
+        {step:"0.1",min:"0",max:"100"}),
+      field("Extra tax / levy (%)",p.other_tax_percent,
+        v=>p.other_tax_percent=v,{step:"0.1",min:"0",max:"100"}));
+    add(taxes,taxFields);
+    const gstMode=el("label","tariffField");
+    add(gstMode,el("span",null,"Are entered prices GST-inclusive?"));
+    const selectGST=el("select");
+    for(const [value,label] of [
+      ["included","GST already included — do not add GST again"],
+      ["exclusive","GST exclusive — add GST on selected charges / credits"]
+    ]){
+      const option=el("option",null,label);
+      option.value=value;option.selected=p.gst_mode===value;
+      selectGST.append(option);
+    }
+    selectGST.addEventListener("change",()=>{
+      p.gst_mode=selectGST.value;this._costEditing=true;
+    });
+    add(gstMode,selectGST,taxes);
+    const taxable=el("div","tariffTaxGroups");
+    for(const [heading,prefix] of [
+      ["GST applied to","gst_on_"],
+      ["Extra tax / levy applied to","other_tax_on_"]
+    ]){
+      const group=el("div","tariffTaxGroup");
+      add(group,el("strong",null,heading));
+      for(const [fieldName,label] of [
+        ["import","Grid import charges"],
+        ["export","Grid export FiT or fee"],
+        ["supply","Daily supply charge"]
+      ]){
+        const k=prefix+fieldName;
+        const holder=el("label","tariffDay");
+        const checkbox=el("input");
+        checkbox.type="checkbox";checkbox.checked=Boolean(p[k]);
+        checkbox.addEventListener("change",()=>{
+          p[k]=checkbox.checked;this._costEditing=true;
+        });
+        add(holder,checkbox,el("span",null,label));group.append(holder);
+      }
+      add(taxable,group);
+    }
+    add(taxes,taxable,el("p","muted",
+      "Defaults assume Australian residential GST is included on import and supply and not applied to ordinary feed-in payments. "+
+      "Confirm your contract and taxation circumstances. Extra tax is added on top; a negative tax-adjusted credit remains possible."));
+    add(editor,taxes);
+    const actionRow=el("div","tariffActions");
     const save=el("button","primaryAction",
-      this._costSaving?"Saving…":"Save electricity prices");
+      this._costSaving?"Validating & saving…":"Save complete electricity tariff");
     save.type="button";save.disabled=this._costSaving;
     save.addEventListener("click",()=>this._saveCostSettings());
-    add(pane,save);
+    const reset=control("Discard unsaved changes",()=>{
+      this._costForm=null;this._costEditing=false;this._costMessage="";
+      this._refreshTariffEditor();
+    });
+    add(actionRow,save,reset);add(editor,actionRow);
     if(this._costMessage)
-      add(pane,el("p",this._costError?"bad":"okay",this._costMessage));
-    add(pane,el("p","historyFoot",
-      "Dynamic tariffs (including future AEMO integration) are not enabled yet. "+
-      "No price changes alter inverter operating modes, TOU schedules or battery controls."));
-    add(root,pane);
-    add(root,el("p","costNotice",
-      "These are estimates, not bill calculations. Grid direction is not yet independently validated. "+
-      "Self-supply value assumes home demand would otherwise be imported at a flat rate. "+
-      "Battery discharge value can overlap solar benefit or represent grid-charged energy; do not add the two figures together. "+
-      "Supply charges count monitored hours, not an assumed full day or full month."));
+      add(editor,el("p",this._costError?"bad":"okay",this._costMessage));
+    add(editor,el("p","historyFoot",
+      "Static TOU rates only; dynamic retailer/AEMO pricing not connected. "+
+      "Tariff saves do not change inverter operating mode, battery or charge schedules. "+
+      "Historic cost entries are not re-priced; a new tariff version applies to future readings."));
+    add(root,editor);
+    add(root,el("div","costNotice",
+      "Estimated grid direction must first be checked against your meter. "+
+      "Today/month figures cover recorded intervals only, and will not exactly match a retailer bill. "+
+      "Battery-discharge potential overlaps self-consumption benefit and does not deduct charging costs."));
     add(root,this._energySetupGuide());
     return root;
   }
   async _saveCostSettings(){
-    const form=this._costForm;
-    if(!form||Object.values(form).some(v=>!Number.isFinite(v)||v< -100||v>100)){
-      this._costMessage="Enter valid signed rates between −100 and +100.";
-      this._costError=true;this.render();return;
+    const profile=this._costForm;
+    if(!profile){this._costMessage="No tariff settings to save.";this._costError=true;return;}
+    const numeric=[
+      profile.default_import_rate,profile.export_standard_rate,
+      profile.export_high_rate,profile.daily_supply,profile.gst_percent,
+      profile.other_tax_percent,...profile.import_bands.map(b=>b.rate)
+    ];
+    if(numeric.some(n=>typeof n!=="number"||!Number.isFinite(n))){
+      this._costMessage="Enter valid numbers in every rate and tax input.";
+      this._costError=true;this._refreshTariffEditor();return;
     }
-    this._costSaving=true;this._costEditing=false;this._costMessage="";
-    this.render();
+    if(!profile.import_bands.every(b=>b.name.trim()&&b.windows.length &&
+       b.windows.every(w=>w.days?.length&&w.start!==w.end)) ||
+       !profile.export_high_windows.every(w=>w.days?.length&&w.start!==w.end)){
+      this._costMessage="Check category names, start/end times and selected weekdays.";
+      this._costError=true;this._refreshTariffEditor();return;
+    }
+    this._costSaving=true;this._costMessage="";this._costError=false;
+    this._refreshTariffEditor();
     try{
-      const data={...form};
+      const data={profile_json:JSON.stringify({...profile,configured:true})};
       if(this._selected&&!this._selected.startsWith("sensor."))
         data.entry_id=this._selected;
-      const answer=await this._hass.callWS({
+      const response=await this._hass.callWS({
         type:"call_service",domain:"saj_h2_control_enhanced",
-        service:"save_cost_settings",service_data:data,return_response:true
+        service:"save_tariff_profile",service_data:data,return_response:true
       });
-      this._costMessage="Rates saved; cost calculations updated. No inverter writes.";
-      this._costError=false;this._costForm=null;
+      this._costForm=null;
+      this._costEditing=false;
+      this._costMessage="Tariff saved. The new schedule applies to future monitored intervals only; previous costs remain unchanged.";
+      this._costError=false;
     }catch(error){
-      this._costMessage="Could not save rates: "+(error?.message||String(error));
+      this._costMessage="Could not save tariff: "+(error?.message||String(error));
       this._costError=true;
     }finally{
-      this._costSaving=false;this.render();
+      this._costSaving=false;this._refreshTariffEditor();
     }
   }
   _energySetupGuide(){
