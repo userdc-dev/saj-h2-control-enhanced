@@ -62,14 +62,14 @@ The integration reuses the configured **read-only SAJ H2 Safe Monitor** and inte
 Net customer cost
   = (imported kWh × active signed import rate + applicable taxes)
   − (exported kWh × eligible signed export FiT + applicable taxes/credits)
-  + (daily supply × fraction of that local calendar day covered + taxes/credits)
+  + (one full fixed daily supply charge for each tracked calendar day + applicable taxes/rebates)
 ```
 
-Positive net cost = estimated expense; negative net cost = estimated credit. A 23-hour or 25-hour daylight-saving day uses its actual local calendar-day length for the supply-charge fraction.
+Positive net cost = estimated expense; negative net cost = estimated credit. **The full daily supply fee applies once each local calendar date even when no power readings are available.** For example, if the configured daily supply is $1.4944 GST-inclusive and monitoring has only covered 15 minutes today, the fixed supply component is still $1.4944, not 15/1440 of it. A 23-hour or 25-hour daylight-saving day still counts as one complete calendar day. A change to supply rates midday does not bill that day again.
 
 The calculator **accrues actual measured-interval cost as readings arrive**. The *current* tariff does not reprice yesterday's electricity or earlier hours if you edit rates; changes start a new rate revision and apply **only to later recorded intervals**. Today's and this month's amounts may cover only part of those periods. The dashboard shows **energy coverage** and **tariff-priced coverage** separately.
 
-The detailed cost page shows import kWh and expense broken down by named category and entered rate, export kWh / credit by FiT category, prorated supply charge, tax adjustments and the net result. Costs persist through Home Assistant restarts, but unrecorded history is **not backfilled**.
+The detailed cost page shows import kWh and expense broken down by named category and entered rate, export kWh / credit by FiT category, full daily fixed supply charges, tax adjustments and the net result. Costs persist through Home Assistant restarts, but unrecorded energy is **not backfilled**. The fixed supply charge counts only calendar days encountered since cost tracking was configured and Home Assistant was running; previous unmonitored days are not silently added as though they were full billing days. Older v0.5.16 partially accrued supply on the current date is topped up to one full charge, not doubled.
 
 ### Savings and value estimates
 
