@@ -1,3 +1,99 @@
+vpp_rehearsal_status:
+  name: VPP safety supervisor status (read-only)
+  description: >-
+    Returns the persistent no-write VPP watchdog journal state and review
+    warnings for a single SAJ inverter. Never commands or restores hardware.
+  fields:
+    entry_id:
+      name: Optional SAJ Control entry ID
+      required: false
+      selector:
+        text:
+
+start_vpp_safety_rehearsal:
+  name: Start VPP safety rehearsal (NO INVERTER WRITES)
+  description: >-
+    Freshly double-read all 7+7 TOU slots, validate the same charge/discharge
+    preflight as Preview, and persist a simulated 5/10/60-minute watchdog
+    session. No charging, discharging, mode switch, slot write or export
+    command is issued. A restart interrupts the rehearsal until the saved
+    full TOU baseline is verified. NOT a live VPP service.
+  fields:
+    direction:
+      name: Simulated direction
+      required: true
+      selector:
+        select:
+          options:
+            - label: Rehearse charging
+              value: charge
+            - label: Rehearse discharging
+              value: discharge
+    duration_minutes:
+      name: Simulated duration
+      required: true
+      selector:
+        select:
+          options:
+            - label: 5 minutes
+              value: 5
+            - label: 10 minutes
+              value: 10
+            - label: 1 hour
+              value: 60
+    confirmation:
+      name: Confirm simulation ONLY
+      description: >-
+        Exactly SIMULATE ONLY - NO INVERTER WRITES. It does not change the
+        inverter, operating mode or scheduled charge/discharge limits.
+      required: true
+      selector:
+        text:
+    entry_id:
+      name: Optional SAJ Control entry ID
+      required: false
+      selector:
+        text:
+
+cancel_vpp_safety_rehearsal:
+  name: Cancel simulated VPP safety rehearsal
+  description: >-
+    Cancel the local test countdown and write a terminal journal entry.
+    This is NOT a live inverter Stop Now action and never sends a Modbus write.
+  fields:
+    entry_id:
+      name: Optional SAJ Control entry ID
+      required: false
+      selector:
+        text:
+
+verify_vpp_safety_baseline:
+  name: Verify full stored TOU baseline (read-only)
+  description: >-
+    Read every charging and discharging schedule register twice and compare
+    the resulting full raw snapshot, operating mode and fallback with the
+    locally saved VPP rehearsal baseline. Mismatch blocks acknowledgement.
+    No automatic restoration, retries or inverter writes.
+  fields:
+    entry_id:
+      name: Optional SAJ Control entry ID
+      required: false
+      selector:
+        text:
+
+acknowledge_vpp_safety_warning:
+  name: Acknowledge VPP rehearsal safety review
+  description: >-
+    Clear an interrupted/failed SIMULATION review only after a current
+    double-read verifies the original full TOU register baseline unchanged.
+    Does not change or restore hardware.
+  fields:
+    entry_id:
+      name: Optional SAJ Control entry ID
+      required: false
+      selector:
+        text:
+
 preview_vpp_dispatch:
   name: Preview VPP quick charge/discharge (READ ONLY)
   description: >-
