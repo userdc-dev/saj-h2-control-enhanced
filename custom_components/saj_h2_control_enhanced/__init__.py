@@ -482,7 +482,7 @@ async def async_setup(hass: HomeAssistant, config):
         opts=dict(selected.options)
         opts.update({
             "import_rate":import_rate,"export_rate":export_rate,
-            "daily_supply":supply,"currency":"AUD",
+            "daily_supply":supply,"currency":hass.config.currency or "AUD",
             "configured":True,
         })
         hass.config_entries.async_update_entry(selected,options=opts)
