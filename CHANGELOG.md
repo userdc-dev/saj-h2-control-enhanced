@@ -1,3 +1,12 @@
+## v0.5.23 — Separate Energy (read-only) and Control dashboard tabs (2026-11-02)
+
+- Replaced combined **Energy & controls** page with four clear tabs, in order: **Energy** (default), **Control**, **Costs & savings**, **Solar forecast**.
+- The **Energy** tab is monitoring-only: existing five-column Live Energy table, Today-so-far kWh totals, hoverable Historic Data, read-only Cost estimates summary and links to forecast/cost details. No operating mode, outside-TOU, TOU schedule editors, VPP previews or schedule Save controls render on Energy.
+- The **Control** tab has the existing compact VPP Quick Actions, verified Self-consumption/TOU and outside-TOU controls, full 7-charge/7-discharge editor, Save and recovery feedback. **No new inverter writes or changes to any existing safety preflight.** Mode confirmation, write lock, readback freshness and VPP read-only limitations are unchanged.
+- Moving between tabs does not reset unsaved schedule edits. Cost, forecast and read-only power updates no longer re-render focused Control editors; the 10-minute history refresh now runs on Energy, not Control. Preserved independent Costs & savings and Solar forecast pages.
+- Added mobile two-column navigation, explicit monitoring/read-only label, and regression tests covering full tab isolation, draft persistence, service-call absence during navigation and editor focus protection.
+- Cache-busted the frontend resource URL to `/saj-h2-tou/v0523/`; existing dashboard configuration and sensor IDs remain intact.
+
 ## v0.5.22 — Wholesale VPP quick-action safety foundation (2026-11-02)
 
 - Added a clean, minimal **VPP quick actions** section on Energy & controls with **5 / 10 / 60 minute** selector, read-only **Preview max charge / discharge** buttons and a confirmed **Return to Self-consumption** button using the existing verified self-consumption mode action.
