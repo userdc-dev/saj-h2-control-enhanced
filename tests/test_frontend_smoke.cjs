@@ -271,6 +271,15 @@ async function main(){
   const idle=probeGrid([makeSample(0)],[]);
   assert.match(idle.text,/Grid ±: 0\.00 kW · no net exchange/,
     "a genuine zero must be distinguished from missing history");
+  const asynchronous=probeGrid(
+    [makeSample(2000,hoverTarget-20000)],
+    [makeSample(6000,hoverTarget)]
+  );
+  assert.match(asynchronous.text,/Grid ±: -6\.00 kW · exporting/,
+    "staggered nonzero sensors must not be subtracted as if simultaneous");
+  const stale=probeGrid([], [makeSample(6300,hoverTarget-3*60000)]);
+  assert.match(stale.text,/Grid ±: — no nearby reading/,
+    "old grid sample outside the nearest-actual tolerance must remain missing");
   const absentGrid=probeGrid([],[]);
   assert.match(absentGrid.text,/Grid ±: — no nearby reading/,
     "only absent import AND export readings should yield a missing-value dash");
