@@ -1,3 +1,13 @@
+## v0.5.24 — Persistent no-write VPP safety supervisor & recovery tests (2026-11-02)
+
+- Added an isolated **safety supervisor** under the existing Control → VPP quick actions panel. Collapsed by default to maintain a clean uncluttered UI; inspect the persistent journal, run a **simulation-only** charge/discharge rehearsal for 5/10/60 minutes, cancel the simulation, compare saved baseline and acknowledge interrupted sessions after exact readback verification.
+- Per-inverter Home Assistant Store persists complete raw 7+7 TOU blocks, mode, fallback, checksum, journal audit, proposed UTC start/end and session metadata. Save-before-state transition, strict schema validation, simulation-only flags and failed-storage safeguards are **fail closed**. No raw register data is sent to the browser status interface.
+- Home Assistant's 20-second safety heartbeat progresses simulated windows. At expiry it double-reads all original TOU registers under the existing command lock; unchanged permits rehearsal completion, while communication failure, partial/stale schedules or external modifications produce **review_required**, not a false success. Restart with a pending rehearsal becomes **rehearsal_interrupted** with a persistent HA notification; no blind resume or automatic writes.
+- Added native services `vpp_rehearsal_status`, `start_vpp_safety_rehearsal`, `cancel_vpp_safety_rehearsal`, `verify_vpp_safety_baseline` and `acknowledge_vpp_safety_warning`. All services are read-only with respect to inverter Modbus; the existing `preview_vpp_dispatch` now reuses the shared double-read helper and command lock with freshness-checked SOC.
+- Added **9 persistent-supervisor tests** covering schedule snapshot, time bounds, restart, baseline verification, failure/unknown state, disk save failure and cancel, plus mock-browser service routing and no-write assertions. All existing controls, read-only Energy tab, cost tariffs and solar forecast are unchanged.
+- **Important:** No real battery maximum charging/discharging, no physical automatic restoration, and no PV curtailment are enabled. TOU windows recur weekly; on-inverter commissioning and a proven fail-safe cancellation method remain mandatory. [VPP safety roadmap](docs/VPP_QUICK_ACTIONS.md).
+- Versioned frontend URL `/saj-h2-tou/v0524/` avoids stale browser app caches.
+
 ## v0.5.23 — Separate Energy (read-only) and Control dashboard tabs (2026-11-02)
 
 - Replaced combined **Energy & controls** page with four clear tabs, in order: **Energy** (default), **Control**, **Costs & savings**, **Solar forecast**.
