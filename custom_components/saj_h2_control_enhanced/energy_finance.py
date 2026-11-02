@@ -172,12 +172,15 @@ class SajEnergyAccounting(DataUpdateCoordinator):
 
     def refresh_snapshot(self):
         data=self.monitor.data or {}
+        pricing=pricing_for(self.entry)
+        if not self.entry.options.get("currency"):
+            pricing["currency"]=self.hass.config.currency or "AUD"
         self.async_set_updated_data({
             **data,
             "accounting":self.totals,
             "costs":snapshot_costs(
-                self.totals,pricing_for(self.entry),datetime.now(timezone.utc),self.tz),
-            "pricing":pricing_for(self.entry),
+                self.totals,pricing,datetime.now(timezone.utc),self.tz),
+            "pricing":pricing,
             "estimated_from_power":True,
             "grid_direction_unverified":True,
         })
