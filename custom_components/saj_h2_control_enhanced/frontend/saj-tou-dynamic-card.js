@@ -862,8 +862,8 @@ class SajTOUDynamicCard extends HTMLElement {
       field("Daily supply charge ("+currency+"/day)",p.daily_supply,v=>p.daily_supply=v),
       field("GST (%)",p.gst_percent,v=>p.gst_percent=v,
         {step:"0.1",min:"0",max:"100"}),
-      field("Extra tax / levy (%)",p.other_tax_percent,
-        v=>p.other_tax_percent=v,{step:"0.1",min:"0",max:"100"}));
+      field("Extra levy (+) or rebate (−) (%)",p.other_tax_percent,
+        v=>p.other_tax_percent=v,{step:"0.1",min:"-100",max:"100"}));
     add(taxes,taxFields);
     const gstMode=el("label","tariffField");
     add(gstMode,el("span",null,"Are entered prices GST-inclusive?"));
@@ -906,7 +906,7 @@ class SajTOUDynamicCard extends HTMLElement {
     }
     add(taxes,taxable,el("p","muted",
       "Defaults assume Australian residential GST is included on import and supply and not applied to ordinary feed-in payments. "+
-      "Confirm your contract and taxation circumstances. Extra tax is added on top; a negative tax-adjusted credit remains possible."));
+      "Confirm your contract and taxation circumstances. Extra levy/rebate is applied on top; enter negative percentages for a rebate. Signed rates and fees remain supported."));
     add(editor,taxes);
     const actionRow=el("div","tariffActions");
     const save=el("button","primaryAction",
