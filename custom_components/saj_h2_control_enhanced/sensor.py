@@ -99,6 +99,7 @@ class SajEditableForecastSensor(CoordinatorEntity, SensorEntity):
     _attr_has_entity_name = True
     _attr_should_poll = False
     _attr_name = "Editable solar forecast"
+    _attr_native_unit_of_measurement = "kWh"
     _attr_icon = "mdi:weather-sunny"
 
     def __init__(self, forecast):
@@ -113,8 +114,9 @@ class SajEditableForecastSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def native_value(self):
-        return ("Ready" if self.coordinator.last_update_success
-                and self.coordinator.data else "Unavailable")
+        if not self.coordinator.last_update_success:
+            return None
+        return (self.coordinator.data or {}).get("today")
 
     @property
     def extra_state_attributes(self):
