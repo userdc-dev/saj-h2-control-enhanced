@@ -119,8 +119,10 @@ def validate_profile(profile):
     for key in ("default_import_rate","export_standard_rate",
                 "export_fallback_rate","export_high_rate","daily_supply"):
         p[key]=_number(p[key],key)
-    for key in ("gst_percent","other_tax_percent"):
-        p[key]=_number(p[key],key,0,100)
+    p["gst_percent"]=_number(p["gst_percent"],"gst_percent",0,100)
+    # Negative optional levy means a percentage-based rebate/discount.
+    p["other_tax_percent"]=_number(p["other_tax_percent"],
+                                    "other_tax_percent",-100,100)
     if p["gst_mode"] not in ("included","exclusive"):
         raise ValueError("GST must be included or added on top")
     if p["high_fit_eligibility"] not in ("all_exports","battery_only_unverified"):
