@@ -1,3 +1,10 @@
+## v0.5.20 — Daily energy totals in Live Energy and short Historic Data window (2026-11-02)
+
+- Added a neat fifth **Today so far** row to the existing five-column read-only Live Energy table: actual inverter **solar generated today**, **house consumed today**, **battery charged and discharged today** (all kWh), measured-period **grid imported and exported estimate** (kWh, direction still provisional), and the **forecast expected by now** (current-day forecast minus remaining estimate, not a meter reading).
+- Uses daily total sensor values when available; distinguishes recorded grid kWh from whole-day inverter counters, and missing data from valid zero. Leaves live W readings, bar graph and clickable Forecast cells intact. No extra new integration, database tables or Modbus operations.
+- Added **10 minutes** as the first Historic Data time range above 6 hours. Chart retains original full-resolution Recorder points, shows 30-second hover/tap/keyboard inspection with actual timestamp, avoids connecting data across gaps longer than 90 seconds, uses a suitable 45-second nearest-reading tolerance, and refreshes after 30 seconds when new HA live state changes. Long-range history options still supported without altered smoothing.
+- Frontend smoke regression checks daily row values, battery charge/discharge, missing-data dash, five aligned table columns, and 10-minute selector/hover. Forecast calibration, cost accounting, HA Energy entities and TOU inverter controls unchanged.
+
 ## v0.5.19 — Seasonal solar backfill with verified holdout and real forecast skill (2026-11-02)
 
 - Added **pure historical learning engine** `forecast_calibration.py` to reconstruct expected PV production from archived Open-Meteo tilted irradiance and compare it to existing Home Assistant Recorder **hourly long-term solar power + battery SOC statistics**. Supports up to 30/90/180/365 days of available history, without inventing past readings. Uses Home Assistant local time, physical-hour midpoint (including Adelaide's half-hour timezone) and hemisphere-appropriate seasons.
