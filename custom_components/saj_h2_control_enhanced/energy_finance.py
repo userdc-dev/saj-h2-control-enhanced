@@ -16,7 +16,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .tariffs import (
-    EXAMPLE_PROFILE, price_power_interval,
+    EXAMPLE_PROFILE, price_power_interval, choose_rates,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -274,11 +274,18 @@ class SajEnergyAccounting(DataUpdateCoordinator):
         pricing=pricing_for(self.entry)
         if not self.entry.options.get("currency"):
             pricing["currency"]=self.hass.config.currency or "AUD"
+        moment=datetime.now(timezone.utc)
+        profile=pricing.get("tariff_profile") or {}
+        active=None
+        if profile.get("configured"):
+            import_band,export_band=choose_rates(profile,moment.astimezone(self.tz))
+            active={"import":import_band,"export":export_band,
+                    "checked_at":moment.isoformat()}
         self.async_set_updated_data({
             **data,
             "accounting":self.totals,
-            "costs":snapshot_costs(
-                self.totals,pricing,datetime.now(timezone.utc),self.tz),
+            "costs":snapshot_costs(self.totals,pricing,moment,self.tz),
+            "current_tariff":active,
             "pricing":pricing,
             "estimated_from_power":True,
             "grid_direction_unverified":True,
