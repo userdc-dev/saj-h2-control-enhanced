@@ -26,6 +26,33 @@ const safeMetric=(hass,key)=>{
   const numeric=Number(state.state);
   return Number.isFinite(numeric)?numeric:null;
 };
+// Prefer the inverter's actual *today* energy counters. Grid import/export
+// instead come from the existing gap-aware local monitor ledger because the
+// SAJ grid sell/feed-in counter direction is not verified yet.
+const nativeTodayEnergy=(hass,key)=>{
+  const direct=hass?.states?.["sensor.saj_h2_safe_monitor_"+key+"_today"];
+  const values=Object.values(hass?.states||{});
+  const friendly={
+    solar:"Solar today",
+    home:"Home consumed today",
+    battery_charge:"Battery charged today",
+    battery_discharge:"Battery discharged today"
+  }[key];
+  const state=direct||values.find(st=>
+    st.entity_id?.startsWith("sensor.") &&
+    st.attributes?.unit_of_measurement==="kWh" &&
+    typeof st.attributes?.friendly_name==="string" &&
+    st.attributes.friendly_name.toLowerCase().includes(
+      (friendly||"nonexistent marker").toLowerCase()) &&
+    /saj|safe monitor/i.test(st.attributes.friendly_name));
+  if(!state || ["unknown","unavailable",""].includes(String(state.state)))
+    return null;
+  const n=Number(state.state);
+  return Number.isFinite(n)&&n>=0?n:null;
+};
+const fmtTodayKwh=value=>
+  typeof value==="number"&&Number.isFinite(value)&&value>=0?
+    value.toFixed(2)+" kWh":"—";
 const fmtPower=value=>value===null?"—":
   Math.abs(value)>=1000?(Math.abs(value)/1000).toFixed(2)+" kW":
   Math.round(Math.abs(value)).toLocaleString()+" W";
@@ -111,6 +138,13 @@ const CSS = [
   ".flowTable tr:last-child td{border-bottom:0}",
   ".flowTable td{border:0;border-right:1px solid var(--divider-color,#45484c);border-bottom:1px solid var(--divider-color,#45484c);padding:10px 7px;font-size:12px}",
   ".flowTable .flowNumbers td{font-size:17px;font-weight:750;letter-spacing:.1px}",
+  ".flowTable .flowDailyTotals td{border-top:2px solid var(--divider-color,#52575c);background:rgba(128,128,128,.045);padding:10px 8px;vertical-align:top}",
+  ".flowDailyLabel{display:block;font-size:11px;color:var(--secondary-text-color,#aaa);font-weight:700;margin-bottom:7px}",
+  ".flowDailyLine{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:5px 0;font-size:12px;line-height:1.4}",
+  ".flowDailyLine b{font-variant-numeric:tabular-nums;white-space:nowrap}",
+  ".flowDailyName{font-size:11px;color:var(--secondary-text-color,#aaa);text-align:left}",
+  ".flowDailySource{display:block;font-size:10px;line-height:1.35;margin-top:6px;color:var(--secondary-text-color,#999)}",
+
   ".flowGraph{gap:14px;margin:18px 0 8px}.flowGraphTrack{height:9px}",
   ".socFlow{margin-top:14px;padding-top:12px;border-top:1px solid var(--divider-color,#45484c)}",
   ".flowSummary{margin-top:14px;font-size:12px}",
@@ -2165,7 +2199,56 @@ class SajTOUDynamicCard extends HTMLElement {
       exp===null?"—":fmtPower(exp)+" export",
       values.tomorrow===null?"—":fmtEnergy(values.tomorrow)+" tomorrow"
     ])add(r3,el("td",null,cell));
-    add(body,r1,r2,r3);add(table,body);add(tableWrap,table);
+    const monitorToday={
+      solar:nativeTodayEnergy(hass,"solar"),
+      home:nativeTodayEnergy(hass,"home"),
+      charge:nativeTodayEnergy(hass,"battery_charge"),
+      discharge:nativeTodayEnergy(hass,"battery_discharge")
+    };
+    const costToday=this._costState()?.attributes?.today||{};
+    const gridToday={
+      import:Number.isFinite(costToday.import_kwh)&&costToday.import_kwh>=0?
+        costToday.import_kwh:null,
+      export:Number.isFinite(costToday.export_kwh)&&costToday.export_kwh>=0?
+        costToday.export_kwh:null
+    };
+    const expectedByNow=typeof model.today==="number"&&
+      typeof model.remaining_today==="number"?
+      Math.max(0,model.today-model.remaining_today):null;
+    const totalsRow=el("tr","flowDailyTotals");
+    const detailCell=(label,rows,note)=>{
+      const td=el("td");
+      const labelEl=el("strong","flowDailyLabel",label);
+      add(td,labelEl);
+      for(const [name,value] of rows){
+        const item=el("div","flowDailyLine");
+        if(name)add(item,el("span","flowDailyName",name));
+        add(item,el("b",null,fmtTodayKwh(value)));
+        td.append(item);
+      }
+      if(note){
+        td.title=note;
+        add(td,el("small","flowDailySource",note));
+      }
+      return td;
+    };
+    add(totalsRow,
+      detailCell("Today so far",[["Generated",monitorToday.solar]],
+        "Inverter daily solar generation counter (kWh)"),
+      detailCell("Today so far",[["Used",monitorToday.home]],
+        "Inverter daily home consumption counter (kWh)"),
+      detailCell("Today so far",[
+        ["Charged",monitorToday.charge],
+        ["Discharged",monitorToday.discharge]],
+        "Separate inverter daily charged and discharged energy counters (kWh)"),
+      detailCell("Today so far",[
+        ["Imported",gridToday.import],
+        ["Exported",gridToday.export]],
+        "Estimated from recorded grid power since monitoring started today; provisional direction and coverage"),
+      detailCell("Forecast by now",[["Expected",expectedByNow]],
+        "Today's modeled full-day forecast minus remaining expected energy. Not measured generation")
+    );
+    add(body,r1,r2,r3,totalsRow);add(table,body);add(tableWrap,table);
     // Battery first: mode, SOC, and stored energy above the power bars.
     if(values.soc!==null){
       const socBox=el("div","socFlow");
