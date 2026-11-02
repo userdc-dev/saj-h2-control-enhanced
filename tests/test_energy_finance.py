@@ -5,6 +5,7 @@ from energy_finance.py AST so CI can verify arithmetic without HA installed.
 """
 import ast
 import datetime
+import math
 from pathlib import Path
 import unittest
 from zoneinfo import ZoneInfo
@@ -15,11 +16,11 @@ COMP=ROOT/"custom_components"/"saj_h2_control_enhanced"
 def pure():
     source=ast.parse((COMP/"energy_finance.py").read_text())
     functions={"validate_pricing","split_grid_energy","estimate_cost",
-               "estimate_benefit","snapshot_costs","local_period"}
+               "estimate_benefit","snapshot_costs","local_period","_money"}
     nodes=[n for n in source.body if isinstance(n,ast.FunctionDef)
            and n.name in functions]
     module=ast.fix_missing_locations(ast.Module(body=nodes,type_ignores=[]))
-    scope={"MAX_GAP_SECONDS":60,"datetime":datetime.datetime}
+    scope={"MAX_GAP_SECONDS":60,"datetime":datetime.datetime,"math":math}
     exec(compile(module,"energy_finance.py","exec"),scope)
     return scope
 
