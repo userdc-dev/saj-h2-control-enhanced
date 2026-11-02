@@ -1,3 +1,12 @@
+## v0.5.18 — Minimal dashboard, selectable sensor IDs and interactive solar forecasts (2026-11-02)
+
+- Restructured Costs & savings to show three meaningful headline values first, with **Cost breakdown** and the long **Edit electricity tariffs** interface in separate collapsed panels. Existing time windows, user tariff selections, backend calculations, and ability to edit/switch rates remain unchanged. When no tariff has been saved, the editor opens for first-time setup.
+- Rebuilt the Home Assistant Energy sensor reference as a concise collapsed section with four responsive groups (**Grid, Solar, Battery, Home**). Every actually discovered sensor exposes its **friendly name and exact entity ID** in a selectable, read-only field with a **Copy** button; never synthesise IDs. Includes signed grid power, separate import/export kWh/W and battery **energy charged**, **energy discharged**, signed power and SOC. Clipboard API falls back to selecting/copying the input for local HTTP/unsupported browsers.
+- Added mouse-hover, touch and keyboard-accessible inspection to the **cumulative Actual vs projected solar chart** with a crosshair, forecast hour value, nearest actual Recorder point and actual sample time. Loads local-day solar history separately from the Historic Data range, refreshable on demand. Displays a partial-recording warning and **gaps in historical actual data as broken lines**, not continuous invented energy.
+- Added hover/tap/focus inspection to seven-day and hourly forecast bars, showing precise available kWh and reported cloud percentage; collapsed the lengthy hourly list and saved PV model editor. Existing Historic Data signed-power graph and all prior hover behaviour remain in place.
+- Added dependency-free **Node mock-DOM frontend smoke test** to GitHub Actions, checking actual dashboard methods and copy/hover interactions. No new Modbus write path, external repository, YAML configuration, or changes to existing sensor unique IDs.
+- Full browser/mobile integration, meter polarity and forecast model accuracy still require owner testing.
+
 ## v0.5.17 — Energy power-measurement selection and true daily supply charge (2026-11-02)
 
 - Added new distinct **Grid power • signed** (W, device class POWER, state class MEASUREMENT) for HA Energy **Standard** grid power measurement; retained and clarified the two existing import-only and export-only W sensors for HA Energy **Two sensors**, with a precise in-dashboard setup guide. Grid sign remains provisional until checked against the utility meter.
