@@ -1516,12 +1516,27 @@ class SajTOUDynamicCard extends HTMLElement {
         "text-anchor":h===0?"start":h===24?"end":"middle"},
         String(h).padStart(2,"0")+":00");
     }
-    for(const [points,color] of [[projected,"#eab54c"],[actual,"#55a4ed"]]){
-      if(points.length<2)continue;
-      const path=points.map((pt,i)=>(i?"L":"M")+x(pt.hour).toFixed(1)+","+
-        y(pt.kwh).toFixed(1)).join(" ");
-      shape("path",{d:path,stroke:color,"stroke-width":2.7,fill:"none",
-        "stroke-linecap":"round","stroke-linejoin":"round"});
+    const actualChunks=[];
+    let chunk=[],last=null;
+    for(const sample of actual){
+      if(last!==null&&sample.t-last>30*60000&&chunk.length){
+        actualChunks.push(chunk);chunk=[];
+      }
+      chunk.push(sample);last=sample.t;
+    }
+    if(chunk.length)actualChunks.push(chunk);
+    const paths=[
+      {series:[projected],color:"#eab54c"},
+      {series:actualChunks,color:"#55a4ed"}
+    ];
+    for(const pathGroup of paths){
+      for(const points of pathGroup.series){
+        if(points.length<2)continue;
+        const d=points.map((pt,i)=>(i?"L":"M")+x(pt.hour).toFixed(1)+","+
+          y(pt.kwh).toFixed(1)).join(" ");
+        shape("path",{d,stroke:pathGroup.color,"stroke-width":2.7,fill:"none",
+          "stroke-linecap":"round","stroke-linejoin":"round"});
+      }
     }
     const cursor=shape("line",{x1:L,y1:T,x2:L,y2:B,
       stroke:"currentColor","stroke-width":1.2,"stroke-dasharray":"4 4",
@@ -1616,7 +1631,7 @@ class SajTOUDynamicCard extends HTMLElement {
       (records.length?" since "+fmtTime(records[0].t):" (waiting for samples)")+
       ". This blue total may be LOW if recordings started late or contain gaps"+
       (missingSeconds>60?" ("+(missingSeconds/3600).toFixed(1)+" hours of gaps)":"")+
-      ". No missing energy is fabricated."));
+      ". Gaps in actual readings are shown as breaks. No missing energy is fabricated."));
     if(this._forecastHistoryError)
       add(panel,el("p","muted",this._forecastHistoryError));
     return panel;
