@@ -516,7 +516,7 @@ class SajTOUDynamicCard extends HTMLElement {
     this._scheduleWriteError = false;
     this._schedulePlan = null;
     this._schedulePlanKey = "";
-    this._page = "control";
+    this._page = "energy";
     this._costForm = null;
     this._costEditing = false;
     this._costEditorOpen = null;
@@ -571,10 +571,10 @@ class SajTOUDynamicCard extends HTMLElement {
       });
       this.render();
     } else if(combinedEnergySig!==this._lastEnergySignature) {
-      this._lastEnergySignature=energySig;
-      // Updating safe monitoring graphics must not reset an active time input
-      // or discard an in-progress TOU schedule draft.
-      if(this._page==="control"&&this._historyHours<=1/6&&
+      this._lastEnergySignature=combinedEnergySig;
+      // Monitoring updates must not reset a live inverter-control draft.
+      // Historic Data lives exclusively on the read-only Energy tab.
+      if(this._page==="energy"&&this._historyHours<=1/6&&
          !this._historyPending&&Date.now()-this._historyFetchedAt>=30000){
         this._historySignature="";
         this._loadHistory();
@@ -584,11 +584,13 @@ class SajTOUDynamicCard extends HTMLElement {
         if(this._page==="forecast"&&forecastChanged&&!this._forecastSaving)this.render();
         if(this._page==="cost"&&!this._costEditing&&
            !this._costEditorOpen&&!this._costSaving)this.render();
-      }else{
+      }else if(this._page==="energy"){
         const old=this.shadowRoot?.querySelector(".energyOverview");
         if(old)old.replaceWith(this._energyOverview());
         else this.render();
       }
+      // On Control, do nothing: a cost/forecast/energy sensor update must
+      // NEVER discard focus from live mode, fallback or TOU schedule editors.
     }
   }
   _goPage(page){
@@ -2153,12 +2155,12 @@ class SajTOUDynamicCard extends HTMLElement {
     }finally{
       this._historyPending=false;
       if(hours!==this._historyHours){this._loadHistory();return;}
-      if(this._page==="forecast"){
-        this.render();
-      }else{
+      if(this._page==="energy"){
         const old=this.shadowRoot?.querySelector(".liveHistory");
         if(old)old.replaceWith(this._historyChart());
+        else this.render();
       }
+      // Never re-render the control editor because history finished loading.
     }
   }
   getCardSize() {return 7;}
@@ -2366,7 +2368,14 @@ class SajTOUDynamicCard extends HTMLElement {
     }
     const nav=el("nav","sajNav");
     nav.setAttribute("aria-label","SAJ dashboard pages");
-    for(const [id,title] of [["control","Energy & controls"],["cost","Costs & savings"],["forecast","Solar forecast"]]){
+    // Keep monitoring and inverter commands on distinct pages. Every
+    // control remains behind its existing hardware-confirmation guard.
+    for(const [id,title] of [
+      ["energy","Energy"],
+      ["control","Control"],
+      ["cost","Costs & savings"],
+      ["forecast","Solar forecast"]
+    ]){
       const button=el("button",null,title);
       button.type="button";
       if(this._page===id)button.setAttribute("aria-current","page");
@@ -2435,8 +2444,15 @@ class SajTOUDynamicCard extends HTMLElement {
       notice.setAttribute("role","status");
       add(card,notice);
     }
-    add(card,this._energyOverview());
-    add(card,this._costOverview());
+    if(this._page==="energy"){
+      // Monitoring only. No operating-mode buttons, TOU editing or VPP
+      // buttons may be rendered on this page.
+      add(card,this._energyOverview());
+      add(card,this._costOverview());
+      return;
+    }
+    // Control is a deliberate separate tab. All existing confirmation,
+    // readback age, write locks, draft state and safety checks stay intact.
     add(card,this._vppQuickActions(group));
     if (!this._drafts.has(group.id)) this._drafts.set(group.id,cloneDraft(group));
     const draft=this._drafts.get(group.id);
