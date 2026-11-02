@@ -86,6 +86,7 @@ def accounting_scope():
         "EXAMPLE_PROFILE":T.EXAMPLE_PROFILE,
         "price_power_interval":T.price_power_interval,
         "choose_rates":T.choose_rates,
+        "full_daily_supply":T.full_daily_supply,
     }
     exec(compile(ast.fix_missing_locations(ast.Module(nodes,[])),
                  "energy_finance.py","exec"),namespace)
@@ -150,6 +151,86 @@ class AccountingTests(unittest.TestCase):
                 first_cost+0.03*.12,places=6)
             self.assertAlmostEqual(
                 second.totals["lifetime"]["import_kwh"],0.06,places=6)
+        asyncio.run(run())
+
+    def test_full_supply_is_charged_without_power_measurements(self):
+        async def run():
+            self.profile["daily_supply"]=1.4944
+            self.profile["gst_mode"]="included"
+            self.profile["other_tax_percent"]=0
+            self.entry.options["tariff_profile"]=T.validate_profile(self.profile)
+            Time.at=RealDateTime(2026,11,2,13,1,tzinfo=TZ).astimezone(timezone.utc)
+            await self.accounting.async_initialize()
+            day=self.accounting.totals["today"]["tariff"]
+            month=self.accounting.totals["month"]["tariff"]
+            self.assertAlmostEqual(day["supply_cost"],1.4944,places=6)
+            self.assertAlmostEqual(day["net_cost"],1.4944,places=6)
+            self.assertEqual(day["coverage_seconds"],0)
+            self.assertAlmostEqual(month["supply_cost"],1.4944,places=6)
+            cost=self.accounting.data["costs"]["today"]
+            self.assertEqual(cost["net_cost"],1.49)
+            self.assertEqual(cost["supply_days_charged"],1)
+            # repeated telemetry does not re-charge the fixed fee
+            for _ in range(5):
+                self.advance(10)
+            self.assertAlmostEqual(day["supply_cost"],1.4944,places=6)
+            await self.accounting.async_save()
+            replacement=self.ns["SajEnergyAccounting"](
+                FakeHass(),self.entry,self.monitor)
+            await replacement.async_initialize()
+            self.assertAlmostEqual(
+                replacement.totals["today"]["tariff"]["supply_cost"],
+                1.4944,places=6)
+        asyncio.run(run())
+
+    def test_supply_not_double_charged_on_midday_tariff_edit(self):
+        async def run():
+            self.profile["daily_supply"]=1.5
+            self.profile["gst_mode"]="included"
+            self.profile["other_tax_percent"]=0
+            self.entry.options["tariff_profile"]=T.validate_profile(self.profile)
+            Time.at=RealDateTime(2026,11,2,10,0,tzinfo=TZ).astimezone(timezone.utc)
+            await self.accounting.async_initialize()
+            self.assertAlmostEqual(
+                self.accounting.totals["today"]["tariff"]["supply_cost"],1.5)
+            self.profile["daily_supply"]=2.5
+            self.entry.options["tariff_profile"]=T.validate_profile(self.profile)
+            self.entry.options["tariff_revision"]="rev2"
+            self.accounting.on_tariff_changed()
+            self.assertAlmostEqual(
+                self.accounting.totals["today"]["tariff"]["supply_cost"],1.5)
+            self.assertAlmostEqual(
+                self.accounting.totals["month"]["tariff"]["supply_cost"],1.5)
+            Time.at=RealDateTime(2026,11,3,8,0,tzinfo=TZ).astimezone(timezone.utc)
+            self.accounting.on_monitor_update()
+            self.assertAlmostEqual(
+                self.accounting.totals["today"]["tariff"]["supply_cost"],2.5)
+            self.assertAlmostEqual(
+                self.accounting.totals["month"]["tariff"]["supply_cost"],4.0)
+            self.assertEqual(len(
+                self.accounting.totals["month"]["tariff"]["supply_charged_dates"]),2)
+        asyncio.run(run())
+
+    def test_upgrade_reconciles_current_day_prorated_fee(self):
+        async def run():
+            self.profile["daily_supply"]=1.5
+            self.profile["gst_mode"]="included"
+            self.profile["other_tax_percent"]=0
+            self.entry.options["tariff_profile"]=T.validate_profile(self.profile)
+            Time.at=RealDateTime(2026,11,2,11,0,tzinfo=TZ).astimezone(timezone.utc)
+            old=self.ns["_new_tariff_ledger"]()
+            old["coverage_seconds"]=1800
+            old["supply_cost"]=0.03125
+            old["net_cost"]=0.03125
+            self.accounting.totals["today"]=self.ns["_new_period"]("2026-11-02")
+            self.accounting.totals["month"]=self.ns["_new_period"]("2026-11")
+            self.accounting.totals["today"]["tariff"]=dict(old)
+            self.accounting.totals["month"]["tariff"]=dict(old)
+            self.accounting._ensure_daily_supply(Time.at)
+            self.assertAlmostEqual(
+                self.accounting.totals["today"]["tariff"]["supply_cost"],1.5)
+            self.assertAlmostEqual(
+                self.accounting.totals["month"]["tariff"]["supply_cost"],1.5)
         asyncio.run(run())
 
     def test_import_and_export_have_independent_signed_ledger(self):
