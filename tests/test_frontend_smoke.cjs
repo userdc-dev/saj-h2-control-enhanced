@@ -33,7 +33,7 @@ class MockNode {
     }
   }
   replaceChildren(...items){this._text="";this.children=[];this.append(...items);}
-  setAttribute(name,value){this.attributes[name]=String(value);}
+  setAttribute(name,value){this.attributes[name]=String(value);if(name==="class")this.className=String(value);}
   getAttribute(name){return this.attributes[name]??null;}
   addEventListener(type,callback){this.listeners[type]=callback;}
   querySelector(selector){
