@@ -337,6 +337,97 @@ async function main(){
   const safeModeButton=buttons[2];
   assert.equal(safeModeButton.disabled,false,
     "self-consumption mode button uses verified state and remains available");
+  // Four-page navigation must physically isolate inverter writes from
+  // the read-only Energy page, not merely hide them behind collapsed details.
+  // Keep TOU draft changes when navigating to Energy and back.
+  const controlRoleStates={
+    operating_mode:"Time-of-use",
+    outside_schedule:"Self-consumption",
+    charge_count:"0",discharge_count:"0",
+    charge_schedules:"0",discharge_schedules:"0",
+    sync_status:"Verified"
+  };
+  for(const [role,source] of Object.entries(device.entities)){
+    const id="sensor.saj_tou_test_"+role;
+    states[id]={entity_id:id,state:controlRoleStates[role],
+      attributes:{
+        ...source.attributes,saj_tou_role:role,saj_tou_entry_id:device.id
+      }};
+  }
+  card._page="energy";
+  card._historyData={solar:[],home:[],battery:[],gridImport:[],gridExport:[]};
+  card.render();
+  const navigate=label=>{
+    const nav=find(card.shadowRoot,"sajNav");
+    assert.ok(nav,"navigation must be present");
+    const tabs=findAll(nav,"button");
+    const target=tabs.find(b=>b.textContent===label);
+    assert.ok(target,"expected nav tab "+label);
+    target.listeners.click();
+    const active=findAll(find(card.shadowRoot,"sajNav"),"button")
+      .filter(b=>b.getAttribute("aria-current")==="page");
+    assert.equal(active.length,1,"exactly one active page");
+    assert.equal(active[0].textContent,label);
+  };
+  assert.deepEqual(
+    findAll(find(card.shadowRoot,"sajNav"),"button").map(b=>b.textContent),
+    ["Energy","Control","Costs & savings","Solar forecast"],
+    "Energy, Control, Costs and Solar forecast should be separate tabs");
+  assert.equal(card._page,"energy","Energy is the safe initial page");
+  assert.ok(find(card.shadowRoot,"energyOverview"));
+  assert.ok(find(card.shadowRoot,"liveHistory"),
+    "Historic Data stays on read-only Energy page");
+  assert.ok(find(card.shadowRoot,"costSection"),
+    "read-only cost overview stays visible on Energy");
+  assert.equal(find(card.shadowRoot,"controlPanel"),undefined);
+  assert.equal(find(card.shadowRoot,"vppQuickActions"),undefined);
+  assert.ok(!card.shadowRoot.textContent.includes("Save schedule changes to inverter"),
+    "Energy must not render any schedule write controls");
+  const beforeNavServiceCount=ws.length;
+  navigate("Control");
+  assert.equal(card._page,"control");
+  assert.ok(find(card.shadowRoot,"vppQuickActions"));
+  assert.ok(find(card.shadowRoot,"controlPanel"));
+  assert.ok(find(card.shadowRoot,"scheduleGrid"));
+  assert.equal(find(card.shadowRoot,"energyOverview"),undefined,
+    "Live energy/history is not duplicated on Control");
+  assert.equal(find(card.shadowRoot,"costSection"),undefined,
+    "Cost summary remains read-only on Energy");
+  const savedDraft=card._drafts.get(device.id);
+  assert.ok(savedDraft,"TOU draft is retained for the selected inverter");
+  savedDraft.changed=true;
+  navigate("Energy");
+  assert.equal(card._drafts.get(device.id),savedDraft,
+    "navigating to Energy must not discard unsaved schedule edits");
+  assert.equal(card._drafts.get(device.id).changed,true);
+  navigate("Control");
+  assert.equal(card._drafts.get(device.id).changed,true,
+    "navigating back to Control must show the same unsaved draft");
+  assert.ok(card.shadowRoot.textContent.includes("Unsaved changes"));
+  // Safe Monitor readings change every ~10 seconds; this must NOT force
+  // a new rendering of the active Control editor or lose input focus.
+  card.hass=card._hass; // establish observed device/energy signatures
+  const liveControlTree=card.shadowRoot.children[1];
+  states["sensor.saj_h2_safe_monitor_total_solar_power"].state="12345";
+  card.hass=card._hass;
+  assert.equal(card.shadowRoot.children[1],liveControlTree,
+    "new live energy readings cannot redraw focused Control editors");
+  assert.equal(card._drafts.get(device.id).changed,true);
+  navigate("Costs & savings");
+  assert.ok(find(card.shadowRoot,"costEditorShell"));
+  assert.equal(find(card.shadowRoot,"vppQuickActions"),undefined);
+  assert.equal(find(card.shadowRoot,"controlPanel"),undefined);
+  navigate("Solar forecast");
+  assert.ok(find(card.shadowRoot,"forecastDay"));
+  assert.equal(find(card.shadowRoot,"controlPanel"),undefined);
+  navigate("Energy");
+  assert.ok(find(card.shadowRoot,"energyOverview"));
+  assert.equal(ws.length,beforeNavServiceCount,
+    "switching tabs and receiving telemetry must never send a service call");
+  // Reset test state for existing detailed costs/forecast checks.
+  savedDraft.changed=false;
+  states["sensor.saj_h2_safe_monitor_total_solar_power"].state="12410";
+  card._page="energy";
   const costs=card._costPage();
   assert.equal(find(costs,"costEditorShell").open,false,
     "already configured tariff editor should be folded away");
