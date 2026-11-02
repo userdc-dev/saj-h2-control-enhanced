@@ -19,7 +19,7 @@ from homeassistant.helpers.storage import Store
 
 from .forecast_calibration import (
     eligible_samples, score_history, evaluate_issued_forecasts,
-    stats_by_hour, factor_for, season, finite,
+    stats_by_hour, factor_for, season, finite, timestamp,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -361,7 +361,6 @@ class SajEditableForecast(DataUpdateCoordinator):
                     "notes":"At least 28 hourly solar and SOC statistics are needed; older data cannot be invented.",
                 }
             else:
-                from .forecast_calibration import timestamp
                 starts=[timestamp(row) for row in stat_power]
                 starts=[t for t in starts if t is not None]
                 if not starts:
