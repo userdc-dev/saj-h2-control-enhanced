@@ -16,7 +16,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .tariffs import (
-    EXAMPLE_PROFILE, price_power_interval, choose_rates,
+    EXAMPLE_PROFILE, price_power_interval, choose_rates, full_daily_supply,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -134,7 +134,7 @@ def snapshot_costs(totals,pricing,now,tz):
         if detailed:
             ledger=row.get("tariff") or {}
             priced_seconds=ledger.get("coverage_seconds",0)
-            if priced_seconds<=0:
+            if priced_seconds<=0 and not ledger.get("supply_charged_dates"):
                 result[kind]={
                     **common, "import_cost":None,"export_credit":None,
                     "supply_cost":None,"net_cost":None,"tax_adjustment":None,
@@ -167,6 +167,7 @@ def snapshot_costs(totals,pricing,now,tz):
                     if ledger.get("battery_coverage_seconds",0)>=
                        0.8*priced_seconds else None,
                 "tariff_coverage_seconds":round(priced_seconds),
+                "supply_days_charged":len(ledger.get("supply_charged_dates") or {}),
                 "tariff_partial":True,
                 "import_bands":[
                     {"label":key,**{k:round(v,4) for k,v in amount.items()}}
@@ -224,6 +225,8 @@ def _new_tariff_ledger():
         "battery_discharge_illustrative_value":0.0,
         "home_coverage_seconds":0.0,"battery_coverage_seconds":0.0,
         "import_bands":{},"export_bands":{},
+        "supply_charged_dates":{},
+        "supply_tax_adjustment":0.0,
     }
 
 
@@ -267,6 +270,10 @@ class SajEnergyAccounting(DataUpdateCoordinator):
         except Exception as exc:
             _LOGGER.warning("Could not load energy accounting storage: %s",exc)
         self._last_revision=self.entry.options.get("tariff_revision")
+        # A fixed DAILY supply charge must appear even before any grid-power
+        # reading arrives; it is independent of telemetry coverage.
+        if self._ensure_daily_supply(datetime.now(timezone.utc)):
+            await self.async_save()
         self.refresh_snapshot()
 
     def refresh_snapshot(self):
@@ -299,6 +306,7 @@ class SajEnergyAccounting(DataUpdateCoordinator):
         self.last_home_power=None
         self.last_solar_power=None
         self.last_battery_power=None
+        self._ensure_daily_supply(datetime.now(timezone.utc))
         self.refresh_snapshot()
 
     def _periods(self,local):
@@ -307,6 +315,63 @@ class SajEnergyAccounting(DataUpdateCoordinator):
             if self.totals.get(key,{}).get("period")!=period:
                 self.totals[key]=_new_period(period)
         return self.totals["today"],self.totals["month"]
+
+    def _ensure_daily_supply(self,when):
+        """Post a full signed fixed supply charge once per local date.
+
+        The monthly ledger preserves older days, even after rate edits.
+        If upgrading from v0.5.16, reconcile the CURRENT day's already
+        prorated supply fee instead of adding a second full-day charge.
+        Older dates are never silently repriced.
+        """
+        p=pricing_for(self.entry)
+        profile=p.get("tariff_profile") or {}
+        if not profile.get("configured"):
+            return False
+        local=when.astimezone(self.tz)
+        day_key=local.date().isoformat()
+        day,month=self._periods(local)
+        month_ledger=month.setdefault("tariff",_new_tariff_ledger())
+        charged=month_ledger.setdefault("supply_charged_dates",{})
+        if day_key in charged:
+            # After a previous restart/day rollover, keep today's row in sync
+            # if the monthly ledger already contains this date.
+            today_ledger=day.setdefault("tariff",_new_tariff_ledger())
+            day_charged=today_ledger.setdefault("supply_charged_dates",{})
+            if day_key not in day_charged:
+                recorded=charged[day_key]
+                value=recorded["amount"] if isinstance(recorded,dict) else recorded
+                tax=recorded.get("tax",0) if isinstance(recorded,dict) else 0
+                today_ledger["supply_cost"]+=value
+                today_ledger["net_cost"]+=value
+                today_ledger["tax_adjustment"]+=tax
+                today_ledger["supply_tax_adjustment"]=tax
+                day_charged[day_key]=recorded
+            return False
+        day_ledger=day.setdefault("tariff",_new_tariff_ledger())
+        day_charged=day_ledger.setdefault("supply_charged_dates",{})
+        full_amount,full_tax=full_daily_supply(profile)
+        # Version migration: yesterday's supply is left intact. TODAY's old
+        # pro-rated amount is topped up rather than counted twice.
+        previous_amount=day_ledger.get("supply_cost",0.0)
+        previous_tax=day_ledger.get("supply_tax_adjustment",0.0)
+        if not previous_tax and previous_amount:
+            # v0.5.16 had no supply-specific tax field; derive the tax share
+            # using the current matching signed tax components.
+            base=profile["daily_supply"]
+            if abs(base)>1e-12:
+                previous_tax=previous_amount*(full_tax/(base+full_tax)) if abs(base+full_tax)>1e-12 else 0.0
+        delta=full_amount-previous_amount
+        tax_delta=full_tax-previous_tax
+        for ledger in (day_ledger,month_ledger):
+            ledger["supply_cost"]+=delta
+            ledger["net_cost"]+=delta
+            ledger["tax_adjustment"]+=tax_delta
+            ledger["supply_tax_adjustment"]=ledger.get("supply_tax_adjustment",0.0)+tax_delta
+        record={"amount":full_amount,"tax":full_tax,"revision":self.entry.options.get("tariff_revision")}
+        day_charged[day_key]=record
+        charged[day_key]=record
+        return True
 
     def _tariff_apply(self,day,month,part,profile,previous_home,
                       current_home,previous_battery,current_battery,
@@ -356,7 +421,6 @@ class SajEnergyAccounting(DataUpdateCoordinator):
         home=data.get("home_load_power")
         solar=data.get("total_pv_power")
         battery=data.get("battery_power")
-        self._periods(now.astimezone(self.tz))
         revision=self.entry.options.get("tariff_revision")
         if revision!=self._last_revision:
             self.on_tariff_changed()
@@ -372,9 +436,10 @@ class SajEnergyAccounting(DataUpdateCoordinator):
                 # midnight and summer/winter DST changes are respected.
                 priced=price_power_interval(
                     previous,now,self.last_grid_power,grid,profile,self.tz,
-                    split_grid_energy)
+                    split_grid_energy,include_supply=False)
                 for part in priced:
                     day,month=self._periods(part["local"])
+                    self._ensure_daily_supply(part["local"])
                     imp=part["import_kwh"]
                     exp=part["export_kwh"]
                     for row in (day,month,self.totals["lifetime"]):
@@ -406,6 +471,9 @@ class SajEnergyAccounting(DataUpdateCoordinator):
                         self._tariff_apply(day,month,part,profile,
                             self.last_home_power,home,
                             self.last_battery_power,battery,previous,now)
+        # Make sure a whole-day fixed supply charge is shown even if every
+        # grid power sensor was unavailable for this update.
+        self._ensure_daily_supply(now)
         self.last_time=now if isinstance(grid,(int,float)) and math.isfinite(grid) else None
         self.last_grid_power=grid if self.last_time else None
         self.last_home_power=home
