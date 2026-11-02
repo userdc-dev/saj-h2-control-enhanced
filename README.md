@@ -4,12 +4,13 @@
 
 > **New developer / AI assistant:** [READ THE COMPLETE DEVELOPER_HANDOFF.md FIRST](DEVELOPER_HANDOFF.md). The handover includes exact inverter registers, code architecture, real-vs-simulated testing evidence, safety gates, recovery steps, and outstanding requirements. The historical chronology is preserved in [the archive](docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md).
 >
-> **Version in this README:** v0.5.18. Inspect [manifest.json](custom_components/saj_h2_control_enhanced/manifest.json) and [GitHub Actions](https://github.com/userdc-dev/saj-h2-control-enhanced/actions) to confirm the current release.
+> **Version in this README:** v0.5.19. Inspect [manifest.json](custom_components/saj_h2_control_enhanced/manifest.json) and [GitHub Actions](https://github.com/userdc-dev/saj-h2-control-enhanced/actions) to confirm the current release.
 
 **Versioning rule:** Keep iterative improvements in the pre-1.0 patch series (`0.5.6`, `0.5.7`, etc.) until the complete feature set is stable and hardware-verified. Reserve **v1.0.0** for the final release; do not prematurely claim stability with a major version bump.
 
 ## What this integration does
 
+- **Validated historical solar forecast learning (v0.5.19):** examines up to 30/90/180/365 days of **existing Home Assistant hourly long-term statistics**, aligns them to historical Open-Meteo tilted-radiation observations, learns seasonal/time-of-day calibration with a **chronological holdout**, and applies adjustments **only if the holdout MAE improves**. Also records fresh next-day forecasts **before** the target day and tracks forward daytime MAE and 5-day-over-5-day indicative trends. Shows real data coverage; does not invent unavailable historical readings or old issued forecasts. Calibration can be rerun from the forecast dashboard; initial and weekly checks are automatic. [Full forecast learning guide](docs/SOLAR_FORECAST_LEARNING.md).
 - **Clutter-free dashboard (v0.5.18):** streamlined Costs & savings overview with collapsible detailed cost breakdown and time-of-use tariff editor; a four-column-responsive, initially collapsed **Home Assistant Energy sensor guide** shows actual entity IDs and friendly names in selectable inputs with Copy buttons (grid, solar, battery charge/discharge, SOC and home).
 - **Every graph is inspectable:** the original Historic Data kW graph retains its hover/tap/keyboard crosshair. The forecast **Actual vs projected** kWh graph now offers the same inspection, plus separate daily/hourly forecast bars respond to hover/tap/focus. The actual forecast chart retrieves its **own local-day Recorder history**, flags missing observations, and visibly breaks lines across gaps. The 24-hour bar list and saved panel editor are collapsed by default to stay tidy.
 - **Regression coverage:** Node's offline mock Home Assistant/DOM smoke test exercises copyable IDs, compact sections and forecast hover event handlers, alongside existing Python/JS safety and accounting tests. This is not a live browser hardware test.
@@ -57,7 +58,7 @@ Core TOU registers: charge mask `0x3604`, discharge mask `0x3605`, charge slots 
 
 ## Install or update — one GitHub repository, no YAML
 
-**Full beginner-friendly guide:** [Installation and upgrades](docs/INSTALLATION.md). For selecting built-in HA Energy entities, editing signed tariff rates and understanding safe estimate limitations, see **[Energy & Costs guide](docs/ENERGY_AND_COSTS.md)** and **[Time-of-use tariff setup](docs/TIME_OF_USE_TARIFFS.md)**.
+**Full beginner-friendly guide:** [Installation and upgrades](docs/INSTALLATION.md). [Historical solar forecasting and accuracy](docs/SOLAR_FORECAST_LEARNING.md). For selecting built-in HA Energy entities, editing signed tariff rates and understanding safe estimate limitations, see **[Energy & Costs guide](docs/ENERGY_AND_COSTS.md)** and **[Time-of-use tariff setup](docs/TIME_OF_USE_TARIFFS.md)**.
 
 All required control code, the separate read-only monitoring *component*, the dashboard card and the installer are contained **in this repository**. You do **not** need to download a second GitHub repository, modify `configuration.yaml`, register a JavaScript resource or paste dashboard YAML.
 
