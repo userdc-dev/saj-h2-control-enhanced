@@ -1,6 +1,6 @@
 # Developer handover — SAJ H2 Control Enhanced
 
-**Canonical current guide; updated 2026-11-02, Australia/Adelaide.** Read this before changing any code, dashboard, or Modbus control. **Current version at the time of this handover: 0.5.20.** The project was previously design-only, but now has a deployed Home Assistant control integration with working mode controls, schedule editing code, new fallback control, and read-only energy graphics/table within the TOU dashboard. **Not every writable feature has been proven on the owner's actual inverter.**
+**Canonical current guide; updated 2026-11-02, Australia/Adelaide.** Read this before changing any code, dashboard, or Modbus control. **Current version at the time of this handover: 0.5.21.** The project was previously design-only, but now has a deployed Home Assistant control integration with working mode controls, schedule editing code, new fallback control, and read-only energy graphics/table within the TOU dashboard. **Not every writable feature has been proven on the owner's actual inverter.**
 
 **Repository:** https://github.com/userdc-dev/saj-h2-control-enhanced  
 **Older full development diary:** [docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md](docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md) (57 KB historical archive; early claims of “planning-only” are OBSOLETE)  
@@ -11,6 +11,16 @@
 > The owner wants this file to be detailed enough that a human developer or future assistant with **only this repo and these notes** understands the purpose, chronology, code, register mapping, tests, successful live observations, unresolved issues, installation, safety constraints, and next actions. Do not delete or hollow out this handover. Keep it current whenever changing actual features.
 >
 > **Brand spelling preference:** call the SAJ mobile application **elekeeper** (lowercase) in all new messages and UI. Older archive entries may use the old capitalization.
+
+## v0.5.21 — Historic Data grid hover shows missing despite visible export (2026-11-02)
+
+**User screenshot at 16:11 on 2 November 2026:** 10-minute Historic Data purple grid curve at roughly **−6.76 kW**, while hover inspection displayed `Grid ±: — no nearby reading`. Solar and house samples were correctly shown; the export line was clearly visible. This was **not** a faulty inverter register or grid sign; the curve already used real `gridExport` Recorder samples and drew it with a negative sign.
+
+**Root cause:** In `_historyChart().showAt()`, historical tooltip used `readings.grid=imp&&exp ? {y:imp.y-exp.y}:null`. Since independent split import/export sensors only produce new HA Recorder events when their state changes (zero may remain unchanged), one direction can lack a recent sample even when the other has a valid sample and is being plotted. Tooltip assumed both existed, creating a false missing reading.
+
+**Fix:** Sample each direction with existing nearest-sample method and existing 45-second 10-minute-window tolerance (or half the cursor interval on longer windows). If both are sufficiently contemporaneous (≤15s), net = import − export; if only import exists use positive import; if only export exists use negative export. When readings are not contemporaneous, prefer the active direction over an inactive zero; if both are nonzero, choose the reading closest to cursor rather than inventing a synchronized net. If neither is recent, show missing instead of falsely displaying zero. Preserve `value.t` for actual sample-time tooltip. Append **importing/exporting/no net exchange** to the grid label. Purple plotting, kW axis, all non-grid series and sensors untouched.
+
+**Regression:** `tests/test_frontend_smoke.cjs` invokes the actual `_historyChart()` and SVG mouse hover for export-only, import-only, synchronized import+export, non-synchronous nonzero readings, actual zero, stale readings and fully missing data. This tests correct timestamps and explicit sign. No new backend, Modbus, PV forecast, accounting, tariff or TOU writes. Frontend cache path bumps from `/saj-h2-tou/v0520/` to `/saj-h2-tou/v0521/`. This is offline/mock HA verification, not physical inverter validation. Do **not** alter Safe Monitor in response to this display-only problem.
 
 ## v0.5.20 — Daily cumulative Live Energy row + 10-minute historical analytics (2026-11-02)
 
