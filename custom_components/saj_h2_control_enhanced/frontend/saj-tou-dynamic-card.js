@@ -841,6 +841,20 @@ class SajTOUDynamicCard extends HTMLElement {
     const keys=["solar","home","battery","soc","stored","gridImport",
       "gridExport","outlook","remaining","tomorrow"];
     const values=Object.fromEntries(keys.map(k=>[k,safeMetric(hass,k)]));
+    const editableForecast=this._forecastState();
+    const model=editableForecast?.attributes||{};
+    const custom=Boolean(model.settings?.configured && model.daily?.length);
+    if(custom){
+      // Derived actual energy from Safe Monitor's recorded outlook and remaining;
+      // avoid mixing old forecast totals with the new user-specific model.
+      const actual=values.outlook!==null&&values.remaining!==null?
+        Math.max(0,values.outlook-values.remaining):null;
+      values.remaining=typeof model.remaining_today==="number"?model.remaining_today:null;
+      values.outlook=actual!==null&&values.remaining!==null?
+        Math.round((actual+values.remaining)*100)/100:
+        typeof model.today==="number"?model.today:null;
+      values.tomorrow=typeof model.tomorrow==="number"?model.tomorrow:null;
+    }
     if(keys.every(k=>values[k]===null)){
       add(panel,el("p","muted",
         "Live energy readings unavailable. This visual panel uses existing "+
@@ -942,7 +956,8 @@ class SajTOUDynamicCard extends HTMLElement {
     add(panel,this._historyChart());
     add(panel,el("div","flowFoot",
       "Forecast is an estimate; grid import/export direction is provisional. "+
-      "This panel is read-only; TOU control actions are separate."));
+      "This panel is read-only; TOU control actions are separate."+
+      (custom?" Forecast values use your saved solar layout.":"")));
     return panel;
   }
   render() {
