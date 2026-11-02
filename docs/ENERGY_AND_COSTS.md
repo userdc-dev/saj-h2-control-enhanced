@@ -36,42 +36,25 @@ In some HA versions Energy asks for just energy, in others you can also choose c
 
 For the native SAJ lifetime **solar** and **battery** energy counters, compare at least a few readings against the official SAJ app/elekeeper before relying on them as authoritative; the register mapping has not been universally validated for all SAJ firmware models.
 
-## B. Electricity cost estimates
+## B. Electricity cost estimates — full time-of-use tariff editor
 
-Open the **Costs & savings** tab inside **SAJ H2 Control** (also accessible from the compact Cost estimates panel on Energy & controls).
+Open **Costs & savings** inside **SAJ H2 Control**. You can configure:
 
-Set **three signed static rates** in the HA-configured currency:
+- Multiple editable **import-rate categories** (Peak, Off-peak, Solar sponge and any custom category) with **one or more time windows and selected weekdays** per category. Overnight periods work across midnight; uncovered times use an editable fallback import rate.
+- **Standard export FiT time windows**, **special high/battery FiT time windows**, and a separate export fallback. Standard FiT applies outside qualifying high windows by default; define explicit standard windows if your retailer plan requires them.
+- Positive or negative prices for every import and export category, plus positive or negative daily supply charges.
+- Separate **GST percentage** (included or extra), taxable import/export/supply checkboxes, and an optional **signed percentage extra levy or rebate**.
+- **High FiT eligibility**: if the special FiT is contractually available to all exports in a window, apply it. If **battery-only**, don't claim eligibility without a verified energy-origin meter: use standard FiT and show an uncredited *potential adjustment*.
 
-- **Import cost per kWh** — positive = customer pays; negative = customer *earns* by importing.
-- **Export payment per kWh** — positive = customer receives credit; negative = customer pays a fee to export.
-- **Daily supply charge** — normally positive; negative values are supported for unusual rebates.
+**Full beginner-friendly instructions:** [TIME_OF_USE_TARIFFS.md](TIME_OF_USE_TARIFFS.md).
 
-Defaults are **illustrative only** (import 0.35, export 0.05, daily 1.00, normally AUD on Australian systems). Until the user confirms pricing, dollar totals are not displayed. Cost settings are stored in the *control integration config entry*, not in YAML. Changing these rates **never** modifies inverter TOU registers or battery controls.
+### Time-aware monetary accounting, not flat-rate multiplication
 
-Net estimated customer cost:
+Electricity imports and exports are priced **per recorded short interval** using the matching local wall-clock window, weekday and tax treatment. Intervals are split across minute/window boundaries, midnight and daylight-saving changes. A tariff change applies prospectively; previously accrued monetary costs **are not recomputed** at the new rates. Recorded costs and energy counters persist across restarts.
 
-```
-grid imported (kWh) × signed import cost
- - grid exported (kWh) × signed export payment
- + daily supply rate × recorded-coverage hours / 24
-```
+Daily/month figures show **partial measured coverage** separately from **tariff-priced coverage**. Per-category kWh and monetary breakdowns help diagnose unexpectedly high/low costs. Missing past data is not backfilled or invented.
 
-A positive result indicates net expense, a negative result indicates estimated net credit. Results are provided for **today** and **this calendar month**, strictly over available recorded intervals. The supply charge is prorated by recorded coverage rather than pretending an entire day was monitored. An actual bill can include demand charges, taxes, discounts, billing cycles, separate TOU rate periods, distributor adjustments and other items that the flat model does not represent.
-
-### Solar and battery estimated benefit
-
-The dashboard shows a **combined illustrative self-supply and export value** using monitored home-demand energy and inferred grid imports/exports:
-
-```
-max(0, monitored house demand kWh − monitored grid import kWh) × import cost
- + monitored export kWh × export payment
-```
-
-The optional **battery discharge potential** is discharge kWh multiplied by import cost. **Do not add battery potential to combined self-supply benefit**; it overlaps, ignores charging cost/losses, and might represent grid-charged energy. These figures are not auditable component-by-component savings or counterfactual bill guarantees. Negative tariffs can produce a negative estimated benefit: do not clamp the monetary results to zero.
-
-### Future live prices
-
-This release has **static rates only**, explicitly editable in the UI. Dynamic pricing from AEMO/retailers, separate import/export TOU bands and historical tariff re-pricing are future work. Do not claim a live AEMO connection or automatically apply public wholesale prices to a customer's retail tariff.
+The combined self-supply/export value and battery-discharge potential are **illustrative and overlapping**, not independently measurable or additive. This is not a utility bill. **AEMO dynamic pricing is not connected**, and public wholesale rates should not be assumed equal to a household retail tariff.
 
 ## C. Forecast learns from actual observations
 
