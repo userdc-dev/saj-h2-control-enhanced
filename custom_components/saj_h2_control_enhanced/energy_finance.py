@@ -111,6 +111,9 @@ def snapshot_costs(totals, pricing, now, tz):
         if imp is None or exp is None:
             costs[kind] = None
             continue
+        supply_fraction = max(0, row.get("coverage_seconds", 0)/86400)
+        home = row.get("home_kwh")
+        battery = row.get("battery_discharge_kwh")
         costs[kind] = {
             "import_kwh": round(imp, 3),
             "export_kwh": round(exp, 3),
@@ -121,6 +124,15 @@ def snapshot_costs(totals, pricing, now, tz):
                                       pricing["export_rate"],
                                       supply_fraction*pricing["daily_supply"]),
             "coverage_seconds": round(row.get("coverage_seconds",0)),
+            "solar_kwh": round(row["solar_kwh"],3)
+                if row.get("solar_kwh") is not None else None,
+            "home_kwh": round(home,3) if home is not None else None,
+            "battery_discharge_kwh": round(battery,3) if battery is not None else None,
+            "self_supply_estimated_benefit": estimate_benefit(
+                home,imp,exp,pricing["import_rate"],pricing["export_rate"]),
+            "battery_discharge_illustrative_value": (
+                round(battery*pricing["import_rate"],2)
+                if battery is not None else None),
             "period_partial": True,
             "label": "since tracking began / available monitored intervals",
         }
@@ -141,6 +153,9 @@ class SajEnergyAccounting(DataUpdateCoordinator):
                      "today":{},"month":{}}
         self.last_time=None
         self.last_grid_power=None
+        self.last_home_power=None
+        self.last_solar_power=None
+        self.last_battery_power=None
         self._last_save=0.0
         self._last_meter=None
 
@@ -171,12 +186,16 @@ class SajEnergyAccounting(DataUpdateCoordinator):
         now=datetime.now(timezone.utc)
         data=self.monitor.data or {}
         grid=data.get("grid_power")
+        home=data.get("home_load_power")
+        solar=data.get("total_pv_power")
+        battery=data.get("battery_power")
         day,month=local_period(now,self.tz)
         daily=self.totals.setdefault("today",{})
         monthly=self.totals.setdefault("month",{})
         if daily.get("period")!=day:
             self.totals["today"]=daily={"period":day,"import_kwh":0.0,
-                "export_kwh":0.0,"coverage_seconds":0.0}
+                "export_kwh":0.0,"home_kwh":0.0,"solar_kwh":0.0,
+                "battery_discharge_kwh":0.0,"coverage_seconds":0.0}
         if monthly.get("period")!=month:
             self.totals["month"]=monthly={"period":month,"import_kwh":0.0,
                 "export_kwh":0.0,"coverage_seconds":0.0}
@@ -190,6 +209,21 @@ class SajEnergyAccounting(DataUpdateCoordinator):
                 for row in (daily,monthly,self.totals["lifetime"]):
                     row["import_kwh"]=row.get("import_kwh",0)+imp
                     row["export_kwh"]=row.get("export_kwh",0)+exp
+                # Approximate self-consumption and battery value only using
+                # intervals with simultaneous valid samples, never full-day
+                # counters mixed with a partially recorded grid history.
+                for field,current,previous in (
+                    ("home_kwh",home,self.last_home_power),
+                    ("solar_kwh",solar,self.last_solar_power),
+                    ("battery_discharge_kwh",battery,self.last_battery_power)
+                ):
+                    if isinstance(current,(int,float)) and isinstance(previous,(int,float)):
+                        energy=max(0,(max(current,0)+max(previous,0))/2)*dt/3600000
+                        for row in (daily,monthly):
+                            row[field]=(row[field]+energy) if row.get(field) is not None else None
+                    else:
+                        # Unknown coverage must not be reported as zero energy.
+                        for row in (daily,monthly):row[field]=None
                 daily["coverage_seconds"]+=dt
                 monthly["coverage_seconds"]+=dt
         if isinstance(grid,(float,int)):
@@ -198,6 +232,9 @@ class SajEnergyAccounting(DataUpdateCoordinator):
         else:
             self.last_grid_power=None
             self.last_time=None
+        self.last_home_power=home
+        self.last_solar_power=solar
+        self.last_battery_power=battery
         self.refresh_snapshot()
         if monotonic()-self._last_save>=60:
             self._last_save=monotonic()
