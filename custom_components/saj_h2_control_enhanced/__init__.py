@@ -447,18 +447,25 @@ async def async_setup(hass: HomeAssistant, config):
             if not await client.connect():
                 raise vol.Invalid("Cannot reach inverter for VPP double-read")
             snapshot=await read_full(client)
-            soc_state=hass.states.get(
-                "sensor.saj_h2_safe_monitor_battery_state_of_charge"
+            # The Control integration must not depend on one particular HA
+            # entity ID or the entity's last_updated timestamp for SOC.
+            # An unchanged battery % may legitimately go hours without an
+            # HA state_changed event, yet still be readable directly.
+            # Reuse this already-connected read-only Modbus client and take
+            # TWO verified measurements from the established 0x406F register.
+            from .vpp_soc_readback import (
+                read_verified_battery_soc, BatterySocReadbackError,
             )
             soc=None
-            if soc_state:
-                try:
-                    reading_time=getattr(soc_state,"last_updated",None)
-                    age=(datetime.now(timezone.utc)-reading_time).total_seconds()
-                    if 0 <= age <= 90:
-                        soc=float(soc_state.state)
-                except (TypeError,ValueError,AttributeError):
-                    pass
+            soc_readback_error=None
+            try:
+                soc=await read_verified_battery_soc(client,unit_id=UNIT_ID)
+            except BatterySocReadbackError as exc:
+                soc_readback_error=str(exc)
+                _LOGGER.warning(
+                    "VPP read-only preflight: inverter battery SOC not verified: %s",
+                    soc_readback_error,
+                )
             preview=preview_dispatch(
                 snapshot[2],
                 direction=data["direction"],
@@ -468,6 +475,13 @@ async def async_setup(hass: HomeAssistant, config):
                 )),
                 soc=soc,
             )
+            preview["battery_soc_percent"]=soc
+            preview["battery_soc_source"]=(
+                "fresh inverter 0x406F (double-read)"
+                if soc is not None else "unavailable"
+            )
+            if soc_readback_error is not None:
+                preview["battery_soc_verification_note"]=soc_readback_error
             return entry,snapshot,preview
         except ScheduleTransactionError as exc:
             raise vol.Invalid("VPP read-only preflight refused: "+str(exc)) from exc
