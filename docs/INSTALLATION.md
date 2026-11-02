@@ -48,7 +48,16 @@ Install and restart, then configure the controller in Settings → Devices & ser
 
 **Limit:** HACS installs the controller folder; it does **not** automatically install the additional `bundled_components/saj_h2_safe` directory. If the read-only monitor is already installed, it is reused. Otherwise, use the installer in section 1 for the **full** installation. You never need to visit or clone another GitHub repository. On Home Assistant OS without host shell/config access, use an appropriate supported file-management installation method to install the bundled monitor; HACS alone will not provide new Live energy sensors.
 
-## 4. Check the result
+## 4. Built-in Energy, electricity prices and smarter forecasts
+
+After configuring **both** integrations, your SAJ H2 Control dashboard now has **Energy & controls**, **Costs & savings** and **Solar forecast** tabs.
+
+- In **Costs & savings**, enter your signed import cost, export payment or export fee, and daily supply charge. Default prices are illustrative and not applied as real prices until confirmed.
+- In **Settings → Dashboards → Energy**, select the new human-readable sensor aliases for solar, grid and battery using the [Energy & Costs setup guide](ENERGY_AND_COSTS.md). Grid-energy totals are estimates from recorded signed power; verify polarity with a known import/export condition before using them.
+- The editable solar forecast learns gradually from qualified clear-sky hours; the read-only SAJ monitor and your original SAJ Energy dashboard are unchanged.
+- If you configure Safe Monitor **after** the controller was already loaded, reload SAJ H2 Control Enhanced so it can attach its optional read-only energy accounting.
+
+## 5. Check the result
 
 | What to check | Expected |
 |---|---|
@@ -60,7 +69,7 @@ Install and restart, then configure the controller in Settings → Devices & ser
 
 Unavailable monitor sensors must display unavailable values, never fabricated zero readings. If readings are missing, confirm the Safe Monitor integration is configured, its Modbus IP is correct and it reports available entities. The dashboard reads those existing entities.
 
-## 5. Upgrades and troubleshooting
+## 6. Upgrades and troubleshooting
 
 - **Update using the same installation command** as section 1. Existing controller files are backed up. Existing `saj_h2_safe` files are preserved unchanged, including locally customized versions.
 - **Old UI:** restart Home Assistant and hard-refresh the browser. Inspect the versioned frontend asset and HA logs if necessary.
