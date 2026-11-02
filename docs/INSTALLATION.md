@@ -52,7 +52,9 @@ Install and restart, then configure the controller in Settings → Devices & ser
 
 After configuring **both** integrations, your SAJ H2 Control dashboard now has **Energy & controls**, **Costs & savings** and **Solar forecast** tabs.
 
-- In **Costs & savings**, enter your signed import cost, export payment or export fee, and daily supply charge. Default prices are illustrative and not applied as real prices until confirmed.
+The Costs & savings tab includes a **full time-of-use rate editor**, supporting multiple import windows, weekend/weekday selections, standard and high export FiT windows, signed prices, and GST/extra levies. Follow the [Tariff setup guide](TIME_OF_USE_TARIFFS.md); every example value must be replaced with your actual retailer plan.
+
+- In **Costs & savings**, configure your Peak/Off-peak/Solar sponge time windows, standard and special FiT periods, signed prices, daily supply and GST/other tax settings. Default prices are illustrative and not applied as real prices until confirmed.
 - In **Settings → Dashboards → Energy**, select the new human-readable sensor aliases for solar, grid and battery using the [Energy & Costs setup guide](ENERGY_AND_COSTS.md). Grid-energy totals are estimates from recorded signed power; verify polarity with a known import/export condition before using them.
 - The editable solar forecast learns gradually from qualified clear-sky hours; the read-only SAJ monitor and your original SAJ Energy dashboard are unchanged.
 - If you configure Safe Monitor **after** the controller was already loaded, reload SAJ H2 Control Enhanced so it can attach its optional read-only energy accounting.
