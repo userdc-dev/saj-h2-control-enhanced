@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import json
 from uuid import uuid4
@@ -101,13 +101,30 @@ def check_record(value, entry_id):
         value.get("live_activation_supported") is not False
     ):
         raise SupervisorError("Journal claims possible inverter writes")
+    if value.get("status") in ACTIVE | {
+        "rehearsal_interrupted", "review_required", "rehearsal_completed"
+    } and value.get("baseline") is not None:
+        baseline = value.get("baseline")
+        if type(baseline) is not dict or set(baseline) != {
+            "charge_words", "discharge_words", "mode", "fallback"
+        }:
+            raise SupervisorError("Incomplete or invalid full TOU register journal")
+        words = (baseline["charge_words"], baseline["discharge_words"])
+        if (any(type(w) is not list for w in words) or
+                len(words[0]) != 23 or len(words[1]) != 21 or
+                any(type(x) is not int or not 0 <= x <= 65535
+                    for group in words for x in group)):
+            raise SupervisorError("Invalid persisted TOU raw register blocks")
+        if baseline["mode"] not in (0, 1) or baseline["fallback"] not in (0, 1):
+            raise SupervisorError("Invalid persisted mode/fallback")
+        if snapshot_hash(baseline) != value.get("baseline_hash"):
+            raise SupervisorError("Full TOU snapshot fingerprint mismatch")
     if value.get("status") in ACTIVE:
         begin = parse_utc(value.get("started_utc"))
         end = parse_utc(value.get("ends_utc"))
         if not begin < end or (end-begin).total_seconds() > 65*60:
             raise SupervisorError("Invalid pending dispatch window")
-        baseline = value.get("baseline")
-        if not isinstance(baseline, dict) or snapshot_hash(baseline) != value.get("baseline_hash"):
+        if value.get("baseline") is None:
             raise SupervisorError("Unverified full TOU baseline fingerprint")
     if not isinstance(value.get("audit"), list):
         raise SupervisorError("Journal audit history missing")
@@ -221,7 +238,7 @@ class VPPSafetySupervisor:
             end = parse_utc(preview.get("planned_end_local"))
             now = self._now()
             if not (now < begin <= now.replace(microsecond=0)
-                    + __import__("datetime").timedelta(minutes=5)):
+                    + timedelta(minutes=5)):
                 raise SupervisorError("Preflight start time expired or too far in future")
             if int((end-begin).total_seconds()) != duration*60:
                 raise SupervisorError("Preflight deadline and duration disagree")
@@ -273,6 +290,34 @@ class VPPSafetySupervisor:
                        "Read-only test finished, but exact original TOU state "
                        "could not be verified. Inspect inverter; no writes sent."),
             ))
+            return self.status()
+
+    async def verify_baseline(self, snapshot):
+        """Read-only exact comparison; never silently overwrite another actor."""
+        async with self._lock:
+            if self.record.get("baseline") is None:
+                raise SupervisorError("No retained baseline to verify")
+            now = self._now()
+            try:
+                compared = snapshot_hash(full_snapshot(snapshot))
+                result = ("unchanged" if compared == self.record["baseline_hash"]
+                          else "changed_externally")
+            except SupervisorError:
+                result = "readback_invalid"
+            pending = self.record["status"] in ACTIVE
+            new_status = (self.record["status"] if result == "unchanged"
+                          else "review_required")
+            if pending and result != "unchanged":
+                new_status = "review_required"
+            next_record = self._transition(
+                new_status, "explicit_read_only_baseline_check", now,
+                baseline_check=result,
+                last_verified_utc=now.isoformat() if result=="unchanged" else None,
+                error=(None if result=="unchanged" else
+                       "Stored baseline does not match device; manually inspect "
+                       "all 7+7 schedules before further use."),
+            )
+            await self._commit(next_record)
             return self.status()
 
     async def cancel(self):
