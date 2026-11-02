@@ -516,7 +516,7 @@ class SajTOUDynamicCard extends HTMLElement {
     }
     if(!settings.configured)
       add(section,el("div","costNotice",
-        "Example electricity prices are not your tariff. Open Costs & savings to enter your import rate, export credit or fee, and daily supply charge."));
+        "Example prices are not your tariff. Open Costs & savings to configure peak, off-peak, solar sponge, export FiT windows and GST."));
     const today=state.attributes.today,month=state.attributes.month;
     const stats=el("div","costStatGrid");
     for(const [label,row,note] of [
@@ -710,7 +710,7 @@ class SajTOUDynamicCard extends HTMLElement {
       const remove=control("Remove time",()=>{
         windows.splice(index,1);this._refreshTariffEditor();
       },"tariffRemove");
-      remove.disabled=windows.length<=1;
+      remove.disabled=windows.length<=1 && windows!==p.export_high_windows;
       add(times,remove);add(container,times);
       const days=el("div","tariffDays");
       days.setAttribute("aria-label",label+" weekdays");
@@ -811,7 +811,8 @@ class SajTOUDynamicCard extends HTMLElement {
     eligible.addEventListener("change",()=>{
       p.high_fit_eligibility=eligible.value;this._costEditing=true;
     });
-    add(eligibility,eligible,exports);
+    add(eligibility,eligible);
+    add(exports,eligibility);
     add(exports,el("p","costNotice",
       "If the higher rate is battery-only, this integration cannot certify the exported source. "+
       "It conservatively bills at the standard FiT and reports a possible high-FiT adjustment separately. "+
@@ -856,7 +857,8 @@ class SajTOUDynamicCard extends HTMLElement {
     selectGST.addEventListener("change",()=>{
       p.gst_mode=selectGST.value;this._costEditing=true;
     });
-    add(gstMode,selectGST,taxes);
+    add(gstMode,selectGST);
+    add(taxes,gstMode);
     const taxable=el("div","tariffTaxGroups");
     for(const [heading,prefix] of [
       ["GST applied to","gst_on_"],
