@@ -96,7 +96,7 @@ class VPPPreviewTests(unittest.TestCase):
         self.assertNotIn("asyncio.sleep",code)
         entry=(COMP/"__init__.py").read_text()
         self.assertIn('"preview_vpp_dispatch"',entry)
-        self.assertIn("snapshot = await read_full(client)",entry)
+        self.assertIn("snapshot=await read_full(client)",entry)
         self.assertIn('"VPP_PREFLIGHT_ONLY"',code)
         self.assertNotIn('"start_vpp_dispatch"',entry)
         self.assertNotIn('"stop_vpp_dispatch"',entry)
