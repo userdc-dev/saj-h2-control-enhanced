@@ -47,7 +47,7 @@ def preview_dispatch(config, *, direction, duration_minutes, now, soc=None):
     reasons = []
     warnings = []
     # Never program a schedule for the past or for an unverified weekend.
-    begin = (now + timedelta(minutes=2)).replace(second=0, microsecond=0)
+    begin = now.replace(second=0, microsecond=0) + timedelta(minutes=3)
     finish = begin + timedelta(minutes=duration_minutes)
     if begin.date() != finish.date():
         reasons.append("This command would cross midnight; overnight TOU timing is unverified")
