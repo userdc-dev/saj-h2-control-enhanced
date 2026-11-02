@@ -1,64 +1,74 @@
 #!/usr/bin/env bash
-# SAJ H2 Control Enhanced: code-only installation, no configuration.yaml edits.
-# Usage: bash scripts/install.sh /path/to/homeassistant/config [--with-safe-monitor]
+# One-repo, zero-YAML installer for SAJ H2 Control Enhanced + bundled Safe Monitor.
+# Usage: bash scripts/install.sh /path/to/homeassistant/config [--control-only]
 set -euo pipefail
 if [[ $# -lt 1 || $# -gt 2 || ! -d "$1" ]]; then
-  echo "Usage: bash scripts/install.sh /path/to/homeassistant/config [--with-safe-monitor]" >&2
+  echo "Usage: bash scripts/install.sh /path/to/homeassistant/config [--control-only]" >&2
   exit 2
 fi
 HA_CONFIG="$(cd "$1" && pwd -P)"
-if [[ $# -eq 2 && "$2" != "--with-safe-monitor" ]]; then
+if [[ $# -eq 2 && "$2" != "--control-only" ]]; then
   echo "Unsupported option: $2" >&2
   exit 2
 fi
-for program in curl tar mktemp cp; do
-  command -v "$program" >/dev/null || { echo "Missing required tool: $program" >&2; exit 1; }
+for tool in curl tar mktemp cp; do
+  command -v "$tool" >/dev/null || { echo "Missing required tool: $tool" >&2; exit 1; }
 done
-mkdir -p "$HA_CONFIG/custom_components"
+repo="saj-h2-control-enhanced"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
+curl --fail --location --silent --show-error \
+  "https://github.com/userdc-dev/$repo/archive/refs/heads/main.tar.gz" \
+  --output "$tmp/repo.tar.gz"
+mkdir -p "$tmp/download"
+tar -xzf "$tmp/repo.tar.gz" -C "$tmp/download"
+root="$tmp/download/$repo-main"
+control_src="$root/custom_components/saj_h2_control_enhanced"
+monitor_src="$root/bundled_components/saj_h2_safe"
 
-install_component() {
-  local repo="$1" domain="$2" update_existing="$3"
-  local dest="$HA_CONFIG/custom_components/$domain"
-  if [[ -d "$dest" && "$update_existing" == "no" ]]; then
-    echo "Preserving existing independent $domain integration (no overwrite)."
-    return
-  fi
-  local archive="$tmp/$domain.tar.gz" unpack="$tmp/$domain-unpack"
-  mkdir -p "$unpack"
-  curl --fail --location --silent --show-error \
-    "https://github.com/userdc-dev/$repo/archive/refs/heads/main.tar.gz" \
-    --output "$archive"
-  tar -xzf "$archive" -C "$unpack"
-  local source="$unpack/$repo-main/custom_components/$domain"
-  if [[ ! -f "$source/manifest.json" || ! -f "$source/__init__.py" ]]; then
-    echo "Invalid download: $domain is missing manifest.json or __init__.py" >&2
-    exit 1
-  fi
-  if [[ -d "$dest" ]]; then
-    local backup_dir="$HA_CONFIG/.saj-h2-backups/$(date +%Y%m%d-%H%M%S)"
-    mkdir -p "$backup_dir"
-    cp -a "$dest" "$backup_dir/$domain"
-    echo "Backed up installed $domain code to $backup_dir/$domain"
-  fi
-  mkdir -p "$dest"
-  cp -a "$source/." "$dest/"
-  echo "Installed $domain from $repo."
-}
-
-install_component "saj-h2-control-enhanced" "saj_h2_control_enhanced" "yes"
-if [[ "${2:-}" == "--with-safe-monitor" ]]; then
-  # The separate safe monitor is read-only and must not be overwritten;
-  # this option installs it ONLY if it does not already exist.
-  install_component "saj-h2-safe-enhanced" "saj_h2_safe" "no"
+# Validate all required files before changing any installation.
+for item in "$control_src/manifest.json" "$control_src/__init__.py"; do
+  [[ -f "$item" ]] || { echo "Incomplete controller archive: $item" >&2; exit 1; }
+done
+if [[ "${2:-}" != "--control-only" ]]; then
+  for item in "$monitor_src/manifest.json" "$monitor_src/__init__.py" \
+              "$monitor_src/const.py" "$monitor_src/sensor.py" \
+              "$monitor_src/solar_forecast.py" "$monitor_src/solar_model.py"; do
+    [[ -f "$item" ]] || { echo "Incomplete bundled Safe Monitor: $item" >&2; exit 1; }
+  done
 fi
+
+components="$HA_CONFIG/custom_components"
+mkdir -p "$components"
+control_dest="$components/saj_h2_control_enhanced"
+monitor_dest="$components/saj_h2_safe"
+
+# Never modify an existing independently installed read-only monitor.
+if [[ "${2:-}" != "--control-only" ]]; then
+  if [[ -e "$monitor_dest" ]]; then
+    echo "Existing SAJ H2 Safe Monitor detected; preserving it unchanged."
+  else
+    cp -a "$monitor_src" "$monitor_dest"
+    echo "Installed bundled SAJ H2 Safe Monitor (read-only)."
+  fi
+else
+  echo "Controller-only option selected; Safe Monitor left unchanged."
+fi
+
+if [[ -d "$control_dest" ]]; then
+  backup="$HA_CONFIG/.saj-h2-backups/$(date +%Y%m%d-%H%M%S)"
+  mkdir -p "$backup"
+  cp -a "$control_dest" "$backup/saj_h2_control_enhanced"
+  echo "Backed up existing controller code: $backup/saj_h2_control_enhanced"
+fi
+mkdir -p "$control_dest"
+cp -a "$control_src/." "$control_dest/"
+echo "Installed/updated SAJ H2 Control Enhanced from THIS GitHub repository."
 echo
-echo "Installation files copied. Restart Home Assistant using its normal service/UI."
-echo "Next: Settings → Devices & services → Add integration → SAJ H2 Control Enhanced."
-echo "Choose an existing SAJ Safe Monitor source, or enter the inverter's Modbus IP/port."
-echo "The integration itself registers its card and SAJ H2 Control dashboard."
-echo "NO configuration.yaml, Lovelace YAML, or manual JS resource editing is required."
-echo "The Live energy section needs the separate SAJ H2 Safe Enhanced integration."
-echo "If you used --with-safe-monitor and it was newly installed, also add it via the HA UI."
-echo "Backed-up code cannot roll back settings already written to the inverter."
+echo "Restart Home Assistant using its normal service/UI."
+echo "Open Settings → Devices & services → Add integration."
+echo "1. If not already configured, add SAJ H2 Safe Monitor with your inverter IP."
+echo "2. Add SAJ H2 Control Enhanced and select your monitor or enter the same IP."
+echo "The SAJ TOU Control dashboard is created automatically."
+echo "No configuration.yaml, Lovelace YAML or JS resource edits required."
+echo "Restoring a code backup does not revert settings already written to the inverter."
