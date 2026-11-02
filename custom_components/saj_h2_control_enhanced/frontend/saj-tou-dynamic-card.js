@@ -1989,9 +1989,30 @@ class SajTOUDynamicCard extends HTMLElement {
       };
       const imp=nearest(series.gridImport,snap);
       const exp=nearest(series.gridExport,snap);
-      // Import/export sensor values are complementary only when both present.
-      readings.grid=imp&&exp?
-        {t:Math.max(imp.t,exp.t),y:imp.y-exp.y}:null;
+      // The grid import/export entities record independently: an unchanged
+      // zero-valued import sensor may have NO nearby Recorder event while
+      // export has fresh samples (and vice versa). The plotted purple lines
+      // already use each direction independently, so tooltip values must
+      // work when only one direction has an actual nearby reading.
+      // Never combine non-contemporaneous nonzero readings into a fake net.
+      if(imp&&exp){
+        if(Math.abs(imp.t-exp.t)<=15000){
+          readings.grid={t:Math.max(imp.t,exp.t),y:imp.y-exp.y};
+        }else if(imp.y===0){
+          readings.grid={t:exp.t,y:-exp.y};
+        }else if(exp.y===0){
+          readings.grid={t:imp.t,y:imp.y};
+        }else{
+          readings.grid=Math.abs(imp.t-snap)<=Math.abs(exp.t-snap)?
+            {t:imp.t,y:imp.y}:{t:exp.t,y:-exp.y};
+        }
+      }else if(imp){
+        readings.grid={t:imp.t,y:imp.y};
+      }else if(exp){
+        readings.grid={t:exp.t,y:-exp.y};
+      }else{
+        readings.grid=null;
+      }
       for(const [key,label] of Object.entries(labels)){
         const marker=markers[key];
         const value=readings[key];
@@ -2007,7 +2028,10 @@ class SajTOUDynamicCard extends HTMLElement {
         const item=el("span","historyValue");
         item.style.color=colors[key];
         item.textContent=label+": "+(value?
-          (value.y/1000).toFixed(2)+" kW":"— no nearby reading");
+          (value.y/1000).toFixed(2)+" kW"+
+            (key==="grid"?(value.y<0?" · exporting":
+              value.y>0?" · importing":" · no net exchange"):""):
+          "— no nearby reading");
         if(value){
           item.title="Recorded "+fmtTimestamp(value.t);
         }
