@@ -1,6 +1,25 @@
 # VPP Quick Actions — staged implementation and safety contract
 
-**Current scope: v0.5.23, PREVIEW ONLY for timed actions (unchanged safety contract from v0.5.22).** The compact dashboard has a duration selector (5/10/60 min), **Preview max charge**, **Preview max discharge**, and **Return to Self-consumption**. The first two do **not** issue a Modbus write, arm a timer or create an automation. The Self-consumption action delegates to the existing confirmed `supervised_self_consumption_pilot` path and uses its original device-readback, confirmation and single-write safeguards.
+**Current scope: v0.5.24, no-write preflight and persistent watchdog rehearsal. Live timed battery dispatch is still disabled.** The compact dashboard has a duration selector (5/10/60 min), **Preview max charge**, **Preview max discharge**, and **Return to Self-consumption**. The first two do **not** issue a Modbus write, arm a timer or create an automation. The Self-consumption action delegates to the existing confirmed `supervised_self_consumption_pilot` path and uses its original device-readback, confirmation and single-write safeguards.
+
+## v0.5.24 — Persistent safety-supervisor rehearsal (no inverter writes)
+
+A real single-click timed battery command is **NOT** enabled. To commission its recovery system without risking repeated weekly TOU exports, this release adds a persistent, explicitly **read-only** watchdog rehearsal.
+
+**Control → VPP quick actions → Safety supervisor** (collapsed by default):
+
+1. Use **Preview max charge/discharge** with 5, 10 or 60 minutes. Preflight must pass.
+2. Expand **Safety supervisor**. Click **Check status**, then **Run dry-run rehearsal**; explicitly confirm the *simulation-only* warning. The backend performs another fresh full double-read and checks SOC, overlapping schedules and weekday support. It saves the complete raw 23+21 TOU words, current mode and outside-TOU fallback, a SHA-256 fingerprint, absolute UTC deadline and an append-only bounded audit trail in a per-entry Home Assistant Store.
+3. A Home Assistant scheduler ticks about every 20 seconds. It can advance `rehearsal_scheduled → rehearsal_running → rehearsal_completed` after comparing the **full** saved baseline against another verified double-read. A missing/changed/inconsistent readback results in **review_required**, not false success.
+4. **Cancel rehearsal** stops only the simulated session—**NOT the actual inverter**. It saves the cancellation in the persistent journal.
+5. After HA restarts mid-rehearsal, the stored session is marked **rehearsal_interrupted**; HA displays a persistent review notification and no automatic battery command is resumed. Run **Verify saved schedules** (fresh full double-read) and only **Acknowledge review** if the exact baseline matches.
+6. Unknown/tampered journal schema, ambiguous write flags and failed storage are **fail-closed**. A write-ahead journal save must succeed before a dry-run transition becomes visible. The browser status API never exposes the raw saved schedule snapshot.
+
+Services: `vpp_rehearsal_status`, `start_vpp_safety_rehearsal`, `cancel_vpp_safety_rehearsal`, `verify_vpp_safety_baseline` and `acknowledge_vpp_safety_warning` (all `SupportsResponse.ONLY`, all no-write). The **existing** `preview_vpp_dispatch` still works and also uses the same global Modbus command lock.
+
+**What this does not provide:** No inverter writes, no guaranteed real hardware stop, no saved one-shot TOU schedule, no live charging/discharging, no wholesale dispatch, no curtailment and no recovery write. Software running on HA cannot guarantee clearing a weekly inverter schedule while HA/network/inverter is offline. The **physical 5-minute low-power supervised field test** and a proven fail-safe one-shot or manufacturer recovery method are still required before any real dispatch action is exposed.
+
+Automated tests: `tests/test_vpp_safety_supervisor.py` covers save-before-state transitions, disk failure, raw 7+7 register integrity, reboot interruption, external schedule changes, missing readback, cancellation, strict simulation-only commands and lack of Modbus write methods. Frontend smoke exercises status, start and cancel service routing. Live physical commissioning remains outstanding.
 
 ## Why isn't one-click max power already armed?
 
