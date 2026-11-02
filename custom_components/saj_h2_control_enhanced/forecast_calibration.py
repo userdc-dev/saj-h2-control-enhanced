@@ -191,9 +191,15 @@ def score_history(samples,summary):
                  "seasonal_hours":{}})
     if len(samples)<MIN_TRAIN+MIN_TEST:
         return meta
-    train_end=max(MIN_TRAIN,int(len(samples)*.7))
-    train,test=samples[:train_end],samples[train_end:]
-    if len(test)<MIN_TEST:
+    # Split by COMPLETE local calendar dates, not arbitrary hours. Splitting
+    # the same day's weather across train and test would leak day conditions.
+    dates=sorted({row["date"] for row in samples})
+    if len(dates)<6:
+        return meta
+    first_test_date=dates[max(3,int(len(dates)*.7))]
+    train=[row for row in samples if row["date"]<first_test_date]
+    test=[row for row in samples if row["date"]>=first_test_date]
+    if len(train)<MIN_TRAIN or len(test)<MIN_TEST:
         return meta
     draft=_fit(train)
     before=_mae(test,{})
@@ -210,6 +216,8 @@ def score_history(samples,summary):
                  "Historical calibration held back (no measured improvement)",
         "approved":approved,"train_hours":len(train),
         "holdout_hours":len(test),
+        "train_days":len({r["date"] for r in train}),
+        "holdout_days":len({r["date"] for r in test}),
         "base_mae_kwh":round(before,3) if before is not None else None,
         "corrected_mae_kwh":round(after,3) if after is not None else None,
         "improvement_percent":round(improvement,1),
