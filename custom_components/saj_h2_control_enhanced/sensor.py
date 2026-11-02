@@ -210,6 +210,50 @@ class SajEnergyBridgeSensor(CoordinatorEntity, SensorEntity):
         }
 
 
+class SajCostEstimateSensor(CoordinatorEntity, SensorEntity):
+    """UI source: signed-tariff partial-period estimated costs and coverage."""
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_name = "Estimated electricity cost today"
+    _attr_native_unit_of_measurement = "AUD"
+    _attr_device_class = SensorDeviceClass.MONETARY
+    _attr_icon = "mdi:currency-usd"
+
+    def __init__(self, accounting):
+        super().__init__(accounting)
+        self._attr_unique_id = f"{accounting.entry.entry_id}_cost_estimate"
+        self._attr_device_info = {
+            "identifiers":{(DOMAIN,accounting.entry.entry_id)},
+            "name":"SAJ H2 TOU Readback",
+            "manufacturer":"SAJ",
+            "model":"H2 · estimated electricity costs",
+        }
+
+    @property
+    def native_value(self):
+        payload=self.coordinator.data or {}
+        pricing=payload.get("pricing",{})
+        if not pricing.get("configured"):
+            return None
+        return (payload.get("costs",{}).get("today") or {}).get("net_cost")
+
+    @property
+    def extra_state_attributes(self):
+        data=self.coordinator.data or {}
+        return {
+            "saj_tou_role":"cost_estimate",
+            "saj_tou_entry_id":self.coordinator.entry.entry_id,
+            "pricing":data.get("pricing",{}),
+            "today":data.get("costs",{}).get("today"),
+            "month":data.get("costs",{}).get("month"),
+            "direction_unverified":True,
+            "estimation_not_billing":True,
+            "read_only":True,
+            "note":"Signed static tariff estimate, calculated from power-integrated monitored intervals only; grid polarity not field verified."
+        }
+
+
 async def async_setup_entry(hass, entry, async_add_entities):
     entities = [SajTOUSensor(entry.runtime_data, key) for key in DETAILS]
     forecast = getattr(entry.runtime_data, "editable_forecast", None)
@@ -218,4 +262,5 @@ async def async_setup_entry(hass, entry, async_add_entities):
     accounting = getattr(entry.runtime_data,"energy_accounting",None)
     if accounting is not None:
         entities.extend(SajEnergyBridgeSensor(accounting,key) for key in ENERGY_BRIDGE)
+        entities.append(SajCostEstimateSensor(accounting))
     async_add_entities(entities)
