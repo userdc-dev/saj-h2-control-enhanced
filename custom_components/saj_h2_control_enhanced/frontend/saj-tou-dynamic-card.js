@@ -266,6 +266,15 @@ const CSS = [
   ".energyEntity{font-size:11px;color:var(--secondary-text-color,#bbb);overflow-wrap:anywhere;display:block}",
   ".costNotice{padding:10px 12px;border-left:3px solid var(--warning-color,#d6ae57);background:rgba(128,128,128,.035);border-radius:0 7px 7px 0;font-size:12px;line-height:1.65;margin:12px 0}",
   ".costPage .costDetail{margin:16px 0 20px}",
+  ".costBreakdown,.costEditorShell{border:1px solid var(--divider-color,#464b50);border-radius:12px;margin:14px 0;overflow:hidden}",
+  ".costDetailsSummary{padding:14px 16px;cursor:pointer;font-size:13px;font-weight:650}",
+  ".costBreakdown[open] > .costDetailsSummary,.costEditorShell[open] > .costDetailsSummary{border-bottom:1px solid var(--divider-color,#45494d)}",
+  ".costBreakdown .costDetail,.costBreakdown .costStatGrid{margin:12px;}",
+  ".costEditorShell .costSettings{margin:0;border:0;border-radius:0}",
+  ".costPage .costStatGrid{grid-template-columns:repeat(auto-fit,minmax(185px,1fr))}",
+  ".costPage .costStat strong{font-size:19px}",
+  ".costPage .costStat small{max-width:260px}",
+
   ".costPage .costSettings h3{font-size:17px}",
   ".tariffSubsection{border:1px solid var(--divider-color,#424750);border-radius:12px;padding:15px;margin:18px 0;background:rgba(125,125,125,.025)}",
   ".tariffSubsection h3{margin-bottom:9px}.tariffSubsection .muted{line-height:1.6}",
@@ -440,6 +449,8 @@ class SajTOUDynamicCard extends HTMLElement {
     this._page = "control";
     this._costForm = null;
     this._costEditing = false;
+    this._costEditorOpen = null;
+    this._costBreakdownOpen = false;
     this._costSaving = false;
     this._costMessage = "";
     this._costError = false;
@@ -486,7 +497,8 @@ class SajTOUDynamicCard extends HTMLElement {
       if(this._page==="forecast"||this._page==="cost"){
         // Preserve focused editable settings while live telemetry refreshes.
         if(this._page==="forecast"&&forecastChanged&&!this._forecastSaving)this.render();
-        if(this._page==="cost"&&!this._costEditing&&!this._costSaving)this.render();
+        if(this._page==="cost"&&!this._costEditing&&
+           !this._costEditorOpen&&!this._costSaving)this.render();
       }else{
         const old=this.shadowRoot?.querySelector(".energyOverview");
         if(old)old.replaceWith(this._energyOverview());
@@ -627,6 +639,7 @@ class SajTOUDynamicCard extends HTMLElement {
           " (special high-FiT window: eligibility unverified)":"")));
     }
     const isTOU=Boolean(pricing.tariff_profile?.configured);
+    if(this._costEditorOpen===null)this._costEditorOpen=!isTOU;
     if(!isTOU){
       add(root,el("p","costNotice",
         "Time-of-use example schedules are shown below. They are NOT your retailer's rates. "+
@@ -645,11 +658,7 @@ class SajTOUDynamicCard extends HTMLElement {
       ["Today · estimated net","net_cost",data.today,"Covered intervals only"],
       ["Month · estimated net","net_cost",data.month,"Covered intervals only"],
       ["Today · self-supply / export benefit","self_supply_estimated_benefit",
-        data.today,"Illustrative combined value, not a verified battery saving"],
-      ["Month · self-supply / export benefit","self_supply_estimated_benefit",
-        data.month,"Illustrative total, not an exact counterfactual"],
-      ["Today · battery discharge value","battery_discharge_illustrative_value",
-        data.today,"Gross potential; overlaps combined benefit"]
+        data.today,"Illustrative value, not verified battery savings"]
     ]){
       const item=this._costText(name,key,pricing.configured?row:null);
       add(item,el("small",null,small));stats.append(item);
@@ -704,13 +713,38 @@ class SajTOUDynamicCard extends HTMLElement {
       }
       detail.append(card);
     }
-    add(root,detail);
+    const breakdown=el("details","costBreakdown");
+    breakdown.open=Boolean(this._costBreakdownOpen);
+    breakdown.addEventListener("toggle",()=>this._costBreakdownOpen=breakdown.open);
+    add(breakdown,el("summary","costDetailsSummary",
+      "Cost breakdown · Imported, exported, supply and rates"));
+    const secondary=el("div","costStatGrid");
+    for(const [label,value,description] of [
+      ["Month · self-supply / export value",data.month?.self_supply_estimated_benefit,
+        "Illustrative combined benefit"],
+      ["Today · battery discharge potential",data.today?.battery_discharge_illustrative_value,
+        "Overlaps self-supply benefit; not additional bill saving"]
+    ]){
+      const card=this._costText(label,"amount",
+        {amount:pricing.configured?value:null});
+      add(card,el("small",null,description));secondary.append(card);
+    }
+    add(breakdown,secondary,detail);
+    add(root,breakdown);
     if(!this._costForm){
       const source=pricing.tariff_profile||this._tariffDefault(pricing);
       this._costForm=JSON.parse(JSON.stringify(source));
     }
     const p=this._costForm;
     const currency=pricing.currency||this._hass?.config?.currency||"AUD";
+    const editorShell=el("details","costEditorShell");
+    editorShell.open=Boolean(this._costEditorOpen);
+    editorShell.addEventListener("toggle",()=>{
+      this._costEditorOpen=editorShell.open;
+      this._costEditing=editorShell.open;
+    });
+    add(editorShell,el("summary","costDetailsSummary",
+      "Edit electricity tariffs · Time windows, export FiT & GST"));
     const editor=el("section","costSettings");
     add(editor,el("h3",null,"Your time-of-use electricity plan"),
       el("p","muted",
@@ -953,6 +987,7 @@ class SajTOUDynamicCard extends HTMLElement {
     save.addEventListener("click",()=>this._saveCostSettings());
     const reset=control("Discard unsaved changes",()=>{
       this._costForm=null;this._costEditing=false;this._costMessage="";
+      this._costEditorOpen=false;
       this._refreshTariffEditor();
     });
     add(actionRow,save,reset);add(editor,actionRow);
@@ -962,7 +997,8 @@ class SajTOUDynamicCard extends HTMLElement {
       "Static TOU rates only; dynamic retailer/AEMO pricing not connected. "+
       "Tariff saves do not change inverter operating mode, battery or charge schedules. "+
       "Historic cost entries are not re-priced; a new tariff version applies to future readings."));
-    add(root,editor);
+    add(editorShell,editor);
+    add(root,editorShell);
     add(root,el("div","costNotice",
       "Estimated grid direction must first be checked against your meter. "+
       "Today/month figures cover recorded intervals only, and will not exactly match a retailer bill. "+
@@ -1002,6 +1038,7 @@ class SajTOUDynamicCard extends HTMLElement {
       });
       this._costForm=null;
       this._costEditing=false;
+      this._costEditorOpen=false;
       this._costMessage="Tariff saved. The new schedule applies to future monitored intervals only; previous costs remain unchanged.";
       this._costError=false;
     }catch(error){
