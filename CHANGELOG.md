@@ -1,3 +1,10 @@
+## v0.5.13 — Historic Data readability refresh (2026-11-02)
+
+- Replaced the cramped Live energy history chart with a clearer **Historic Data** chart using a single kW scale, round-number ticks, subtle gridlines, better timeline labels and selectable 6h/12h/24h/48h/7d ranges.
+- Removed cumulative solar Forecast (kWh) from this power-only chart; detailed forecasts remain available on the separate Solar forecast page.
+- Kept signed battery power (positive discharge, negative charge) instead of losing direction through absolute values. Grid import is plotted above zero and export below zero using their existing separate read-only sensor entities; direction remains inferred until field-verified.
+- Added decimation preserving within-bucket minimum/maximum points, and kept missing recorder intervals as gaps. No inverter write code or previously installed monitor files changed.
+
 ## v0.5.12 — Editable dashboard solar forecasts and Live energy history (2026-11-02)
 
 - Added an in-dashboard Solar forecast page opened from the Live energy forecast column or Forecast details button, without affecting the TOU control screen.
