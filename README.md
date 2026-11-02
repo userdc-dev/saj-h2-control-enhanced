@@ -51,15 +51,17 @@ Core TOU registers: charge mask `0x3604`, discharge mask `0x3605`, charge slots 
 
 All required control code, the separate read-only monitoring *component*, the dashboard card and the installer are contained **in this repository**. You do **not** need to download a second GitHub repository, modify `configuration.yaml`, register a JavaScript resource or paste dashboard YAML.
 
-### Recommended: one copy/paste command (Linux / Docker host)
+### Recommended: one command (Linux / Docker host)
 
-Run these commands in an SSH terminal on the Home Assistant host. **This example config path and Docker container name belong to the original installation; replace them for a different system.**
+Run these commands in an SSH terminal on the Home Assistant host. **Before running:** replace `/home/USER/compose-files/homeassistant/config` with the actual Home Assistant config directory on your host (including your username/path). Replace `homeassistant` if your Docker container has another name. `/home/USER` is a placeholder, not an automatically detected path.
 
 ```bash
 curl -fL https://raw.githubusercontent.com/userdc-dev/saj-h2-control-enhanced/main/scripts/install.sh -o /tmp/install-saj-h2.sh &&
-bash /tmp/install-saj-h2.sh /home/kamrui/compose-files/homeassistant/config &&
+bash /tmp/install-saj-h2.sh /home/USER/compose-files/homeassistant/config &&
 docker restart homeassistant
 ```
+
+**For the original Kamrui installation only:** substitute `/home/kamrui/compose-files/homeassistant/config` for the generic path above. This preserves the command that works for that host.
 
 The installer downloads **only this repository**, installs/updates the controller, and also installs its **bundled read-only Safe Monitor if not already installed**. It preserves any pre-existing monitor directory instead of overwriting it, and backs up existing controller code. You do **not** need an extra `--with-safe-monitor` flag (that old documentation was incorrect).
 
