@@ -61,6 +61,7 @@ def forecast_scope():
         "factor_for":CAL.factor_for,
         "season":CAL.season,
         "finite":CAL.finite,
+        "timestamp":CAL.timestamp,
     }
     exec(compile(ast.fix_missing_locations(ast.Module(nodes,[])),
                  "forecast.py","exec"),scope)
