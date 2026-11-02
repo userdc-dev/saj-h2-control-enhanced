@@ -313,8 +313,11 @@ class SajEditableForecast(DataUpdateCoordinator):
             clouds=hourly.get("cloud_cover") or []
             if not len(stamps)==len(gti)==len(clouds):
                 raise ValueError("Archive hourly weather values are incomplete")
-            # Open-Meteo archive returns hour START timestamps.
-            return {int(ts):(value,cloud) for ts,value,cloud in
+            # Open-Meteo radiation is a PRECEDING-hour average at its
+            # timestamp. HA hourly mean power is keyed by the START of that
+            # physical hour. Shift archive timestamps back one hour, matching
+            # the existing live forecast's hourly-end convention.
+            return {int(ts)-3600:(value,cloud) for ts,value,cloud in
                     zip(stamps,gti,clouds)}
         return await asyncio.gather(*(group_archive(group) for group in groups))
 
