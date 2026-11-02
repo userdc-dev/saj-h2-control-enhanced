@@ -9,6 +9,7 @@
   ],
   "codeowners": [],
   "config_flow": true,
+  "after_dependencies": ["saj_h2_safe"],
   "iot_class": "local_polling",
   "integration_type": "hub",
   "dependencies": [
