@@ -96,7 +96,7 @@ class VPPSocReadbackTests(unittest.TestCase):
                       preflight)
         self.assertIn("snapshot=await read_full(client)",preflight)
         self.assertNotIn("hass.states.get(",preflight)
-        self.assertNotIn("last_updated",preflight)
+        self.assertNotIn("getattr(soc_state",preflight)
         self.assertIn("soc=soc",preflight)
         self.assertIn("BatterySocReadbackError",preflight)
         self.assertIn("soc_readback_error",preflight)
