@@ -238,7 +238,13 @@ const CSS = [
   ".historyLegend{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}",
   ".historyLegend label{font-size:12px;display:flex;align-items:center;gap:5px}",
   ".historyLegend input{accent-color:var(--primary-color,#16b9b1)}",
-  ".historySvg{display:block;width:100%;height:auto;max-height:320px}",
+  ".historySvg{display:block;width:100%;height:auto;max-height:390px;overflow:visible}",
+  ".liveHistory{padding:18px 20px;background:var(--ha-card-background,var(--card-background-color,#202124))}",
+  ".liveHistory .historyHead h3{font-size:18px;margin:0 0 4px}",
+  ".liveHistory .historyLegend{margin:16px 0 14px;gap:10px}",
+  ".historyToggle{border:1px solid var(--divider-color,#444);padding:7px 11px;border-radius:10px;cursor:pointer;white-space:nowrap}",
+  ".historyToggle input{margin:0}.historyDot{font-size:15px}",
+  "@media(max-width:650px){.liveHistory{padding:12px}.historyToggle{padding:6px 8px}.liveHistory .historyLegend{gap:6px}}",
   ".historyFoot{font-size:11px;color:var(--secondary-text-color,#aaa);margin-top:8px;line-height:1.5}",
   ".forecastNotice{padding:10px;border-left:3px solid var(--warning-color,#d3a435);margin:10px 0;font-size:12px;line-height:1.6}",
     ".summaryLabel{color:var(--secondary-text-color,#aaa);font-weight:500}",
@@ -378,7 +384,7 @@ class SajTOUDynamicCard extends HTMLElement {
     this._historyPending = false;
     this._historyError = "";
     this._historyHours = 24;
-    this._historyVisible = {solar:true,home:true,battery:true,grid:true,forecast:true};
+    this._historyVisible = {solar:true,home:true,battery:true,grid:true};
     this._historySignature = "";
   }
   setConfig(config) {this._cfg=config||{};this.render();}
@@ -676,121 +682,174 @@ class SajTOUDynamicCard extends HTMLElement {
   }
   _historyChart(){
     const panel=el("section","forecastHistory liveHistory");
-    const top=el("div","historyHead");
-    add(top,el("h3",null,"Live energy · history"));
+    const heading=el("div","historyHead");
+    const title=el("div");
+    add(title,el("h3",null,"Historic Data"),
+      el("div","muted","Recorded power · kW · signed battery and grid flow"));
     const select=el("select");
     for(const hours of [6,12,24,48,168]){
       const option=el("option",null,hours===168?"7 days":hours+" hours");
-      option.value=String(hours);option.selected=hours===this._historyHours;select.append(option);
+      option.value=String(hours);
+      option.selected=hours===this._historyHours;
+      select.append(option);
     }
-    select.setAttribute("aria-label","Energy history period");
+    select.setAttribute("aria-label","Historic Data time range");
     select.addEventListener("change",()=>{
       this._historyHours=Number(select.value);
+      this._historyData=null;
       this._historySignature="";
-      this._historyData=null;this._loadHistory();
+      const old=this.shadowRoot.querySelector(".liveHistory");
+      if(old)old.replaceWith(this._historyChart());
     });
-    add(top,select);add(panel,top);
+    add(heading,title,select);add(panel,heading);
+    const labels={solar:"Solar production",home:"House usage",battery:"Battery ±",grid:"Grid ±"};
+    const colors={solar:"#eab54c",home:"#51a7ee",battery:"#46c79e",grid:"#c08df0"};
     const legend=el("div","historyLegend");
-    const labels={solar:"Solar",home:"House",battery:"Battery",grid:"Grid",forecast:"Forecast"};
-    const colors={solar:"#e9ad28",home:"#4aa3f1",battery:"#57c78a",grid:"#d882df",forecast:"#e86c69"};
     for(const [key,label] of Object.entries(labels)){
-      const holder=el("label");
-      const box=el("input");
-      box.type="checkbox";box.checked=this._historyVisible[key];
-      box.addEventListener("change",()=>{
-        this._historyVisible[key]=box.checked;
+      const holder=el("label","historyToggle");
+      const checkbox=el("input");
+      checkbox.type="checkbox";checkbox.checked=this._historyVisible[key]!==false;
+      checkbox.addEventListener("change",()=>{
+        this._historyVisible[key]=checkbox.checked;
         const old=this.shadowRoot.querySelector(".liveHistory");
         if(old)old.replaceWith(this._historyChart());
       });
-      const swatch=el("span");swatch.style.color=colors[key];
-      swatch.textContent="●";
-      add(holder,box,swatch,el("span",null,label));legend.append(holder);
+      const dot=el("span","historyDot","●");
+      dot.style.color=colors[key];
+      add(holder,checkbox,dot,el("span",null,label));legend.append(holder);
     }
     add(panel,legend);
     const history=this._historyData;
     if(!history){
-      add(panel,el("p","muted",this._historyError||"Loading recorded sensor history…"));
+      add(panel,el("p","muted",this._historyError||
+        "Loading Home Assistant recorded history…"));
       if(!this._historyPending)this._loadHistory();
       return panel;
     }
-    const svg=document.createElementNS("http://www.w3.org/2000/svg","svg");
-    svg.setAttribute("viewBox","0 0 920 280");
+    const activeKeys=Object.keys(labels).filter(k=>this._historyVisible[k]!==false);
+    const series={
+      solar:history.solar||[],
+      home:history.home||[],
+      battery:history.battery||[],
+      gridImport:history.gridImport||[],
+      gridExport:history.gridExport||[]
+    };
+    const displayed=activeKeys.flatMap(k=>k==="grid"?
+      [...series.gridImport,...series.gridExport.map(p=>({t:p.t,y:-p.y}))]:
+      series[k]);
+    if(!displayed.length){
+      add(panel,el("p","muted",
+        "No recorded measurements for the selected period. Check Home Assistant Recorder or select a longer interval."));
+      return panel;
+    }
+    const now=Date.now(),start=now-this._historyHours*3600000;
+    const values=displayed.filter(p=>p.t>=start&&p.t<=now).map(p=>p.y/1000);
+    const maxRaw=Math.max(0,...values),minRaw=Math.min(0,...values);
+    // Rounded human-readable major intervals: 0.5, 1, 2, 5, 10, ... kW
+    const niceStep=(v)=>{
+      if(v<=0)return 1;
+      const mag=Math.pow(10,Math.floor(Math.log10(v)));
+      return [1,2,2.5,5,10].map(n=>n*mag).find(n=>n>=v)||10*mag;
+    };
+    const step=niceStep((maxRaw-minRaw)/5||0.2);
+    let high=Math.max(step,Math.ceil(maxRaw/step)*step);
+    let low=Math.min(0,Math.floor(minRaw/step)*step);
+    if(high-low>step*9){const wider=niceStep((maxRaw-minRaw)/6);high=Math.max(wider,Math.ceil(maxRaw/wider)*wider);low=Math.min(0,Math.floor(minRaw/wider)*wider);}
+    const ns="http://www.w3.org/2000/svg";
+    const svg=document.createElementNS(ns,"svg");
+    svg.setAttribute("viewBox","0 0 960 360");
     svg.setAttribute("class","historySvg");
     svg.setAttribute("role","img");
-    svg.setAttribute("aria-label","Historical solar, house, battery and grid in kW; forecast in kWh on separate scale");
-    const ns="http://www.w3.org/2000/svg";
-    const shape=(tag,attrs,content)=>{
-      const node=document.createElementNS(ns,tag);
-      Object.entries(attrs).forEach(([k,v])=>node.setAttribute(k,String(v)));
-      if(content!==undefined)node.textContent=content;
-      svg.append(node);return node;
+    svg.setAttribute("aria-label","Recorded power history in kilowatts, showing battery charging below zero and grid exports below zero");
+    const make=(tag,attrs,content)=>{
+      const item=document.createElementNS(ns,tag);
+      Object.entries(attrs).forEach(([k,v])=>item.setAttribute(k,String(v)));
+      if(content!==undefined)item.textContent=content;
+      svg.append(item);return item;
     };
-    const left=52,right=864,topY=20,bottom=240;
-    const powerKeys=["solar","home","battery","grid"];
-    const powerPoints=powerKeys.flatMap(k=>history[k]||[]);
-    const forecastPoints=history.forecast||[];
-    const maxPower=Math.max(1,...powerPoints.map(p=>Math.abs(p.y)));
-    const maxForecast=Math.max(1,...forecastPoints.map(p=>p.y));
-    const now=Date.now(),start=now-this._historyHours*3600000;
-    const x=t=>left+Math.max(0,Math.min(1,(t-start)/(now-start)))*(right-left);
-    const yP=v=>bottom-(v/maxPower)*(bottom-topY);
-    const yF=v=>bottom-(v/maxForecast)*(bottom-topY);
-    for(let i=0;i<=4;i++){
-      const py=topY+(bottom-topY)*i/4;
-      shape("line",{x1:left,y1:py,x2:right,y2:py,stroke:"currentColor","stroke-opacity":".15"});
-      shape("text",{x:45,y:py+4,fill:"currentColor","text-anchor":"end","font-size":12},
-        ((maxPower*(4-i)/4)/1000).toFixed(1));
-      shape("text",{x:872,y:py+4,fill:"currentColor","text-anchor":"start","font-size":12},
-        (maxForecast*(4-i)/4).toFixed(1));
+    const L=63,R=938,T=22,B=306;
+    const x=t=>L+Math.max(0,Math.min(1,(t-start)/(now-start)))*(R-L);
+    const y=w=>B-(w/1000-low)/(high-low)*(B-T);
+    const gridStep=niceStep((high-low)/6);
+    const digits=gridStep<1?1:0;
+    for(let v=Math.ceil(low/gridStep)*gridStep;v<=high+gridStep/100;v+=gridStep){
+      const py=y(v*1000);
+      make("line",{x1:L,y1:py,x2:R,y2:py,stroke:"currentColor",
+        "stroke-opacity":Math.abs(v)<gridStep/100?".53":".11",
+        "stroke-width":Math.abs(v)<gridStep/100?1.6:1});
+      make("text",{x:L-11,y:py+4,fill:"currentColor","fill-opacity":".8",
+        "text-anchor":"end","font-size":13},Math.abs(v)<gridStep/100?"0":v.toFixed(digits));
     }
-    for(let i=0;i<=4;i++){
-      const ratio=i/4;
-      const tick=new Date(start+(now-start)*ratio);
-      shape("text",{x:x(tick.getTime()),y:264,fill:"currentColor",
-        "text-anchor":i===0?"start":i===4?"end":"middle","font-size":12},
-        tick.toLocaleString(undefined,{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}));
+    for(let i=0;i<=6;i++){
+      const dt=new Date(start+(now-start)*i/6);
+      const xx=x(dt.getTime());
+      make("line",{x1:xx,y1:T,x2:xx,y2:B,stroke:"currentColor","stroke-opacity":".045"});
+      make("text",{x:xx,y:336,fill:"currentColor","fill-opacity":".72",
+        "text-anchor":i===0?"start":i===6?"end":"middle","font-size":12},
+        dt.toLocaleString(undefined,this._historyHours<=24?
+          {hour:"2-digit",minute:"2-digit"}:
+          {month:"short",day:"numeric",hour:"2-digit"}));
     }
-    for(const key of Object.keys(labels)){
-      if(!this._historyVisible[key])continue;
-      const points=history[key]||[];
-      if(!points.length)continue;
-      // Break lines across missing observations (>15 minutes for 6/12/24h).
-      let segments=[],segment=[],last=0;
-      const gap=this._historyHours>=168?3*3600000:25*60000;
-      for(const pt of points){
-        if(last&&pt.t-last>gap&&segment.length){segments.push(segment);segment=[];}
-        segment.push(pt);last=pt.t;
+    make("text",{x:L,y:13,fill:"currentColor","fill-opacity":".7","font-size":12},"kW");
+    const plot=(points,color,negative=false)=>{
+      const valid=points.filter(p=>p.t>=start&&p.t<=now).sort((a,b)=>a.t-b.t);
+      if(!valid.length)return;
+      // Time-gap boundaries prevent long lines across missing recorder data.
+      const maxGap=this._historyHours>=168?4*3600000:45*60000;
+      let chunks=[],chunk=[],last=null;
+      for(const p of valid){
+        if(last!==null&&p.t-last>maxGap&&chunk.length){chunks.push(chunk);chunk=[];}
+        chunk.push(p);last=p.t;
       }
-      if(segment.length)segments.push(segment);
-      for(const seg of segments){
-        const stride=Math.max(1,Math.ceil(seg.length/400));
-        const reduced=seg.filter((_,i)=>i%stride===0 || i===seg.length-1);
-        const d=reduced.map((p,i)=>(i?"L":"M")+x(p.t).toFixed(1)+","+
-          (key==="forecast"?yF(p.y):yP(Math.abs(p.y))).toFixed(1)).join(" ");
-        shape("path",{d,fill:"none",stroke:colors[key],"stroke-width":2.2,
-          "stroke-linejoin":"round","stroke-linecap":"round"});
+      if(chunk.length)chunks.push(chunk);
+      for(const points of chunks){
+        // Preserve minima and maxima within time buckets, rather than
+        // simple stride sampling that can erase rapid power spikes.
+        const target=450;
+        const compact=points.length<=target?points:(()=>{
+          const result=[],size=Math.ceil(points.length/(target/2));
+          for(let i=0;i<points.length;i+=size){
+            const bucket=points.slice(i,i+size);
+            let lo=bucket[0],hi=bucket[0];
+            for(const p of bucket){if(p.y<lo.y)lo=p;if(p.y>hi.y)hi=p;}
+            result.push(...(lo.t===hi.t?[lo]:lo.t<hi.t?[lo,hi]:[hi,lo]));
+          }
+          return result;
+        })();
+        const d=compact.map((p,i)=>(i?"L":"M")+x(p.t).toFixed(1)+","+
+          y((negative?-1:1)*p.y).toFixed(1)).join(" ");
+        make("path",{d,fill:"none",stroke:color,"stroke-width":2.2,
+          "stroke-opacity":".96","stroke-linejoin":"round","stroke-linecap":"round"});
       }
+    };
+    if(activeKeys.includes("solar"))plot(series.solar,colors.solar);
+    if(activeKeys.includes("home"))plot(series.home,colors.home);
+    if(activeKeys.includes("battery"))plot(series.battery,colors.battery);
+    if(activeKeys.includes("grid")){
+      plot(series.gridImport,colors.grid);
+      plot(series.gridExport,colors.grid,true);
     }
     add(panel,svg);
-    add(panel,el("div","historyFoot",
-      "Left scale: kW (solar, house, battery and grid absolute power). Right scale: kWh (forecast outlook). "+
-      "Recorded Home Assistant sensor history only; missing data is not synthesized. "+
-      "Battery/grid direction is shown by the live table, not this magnitude chart."));
+    add(panel,el("p","historyFoot",
+      "One scale for every line (kW). Battery above 0 = discharging; below 0 = charging. "+
+      "Grid above 0 = importing; below 0 = exporting (direction inferred from SAJ monitor). "+
+      "Only actual Home Assistant Recorder measurements are shown; gaps remain gaps."));
     if(this._historyError)add(panel,el("p","bad",this._historyError));
     return panel;
   }
   async _loadHistory(){
     if(this._historyPending||!this._hass)return;
     const ids={
-      solar:SAFE_ENERGY_IDS.solar,home:SAFE_ENERGY_IDS.home,
+      solar:SAFE_ENERGY_IDS.solar,
+      home:SAFE_ENERGY_IDS.home,
       battery:SAFE_ENERGY_IDS.battery,
-      grid:SAFE_ENERGY_IDS.gridImport,gridExport:SAFE_ENERGY_IDS.gridExport,
-      forecast:(this._forecastState()?.attributes?.settings?.configured?
-        this._forecastState().entity_id:SAFE_ENERGY_IDS.outlook)
+      gridImport:SAFE_ENERGY_IDS.gridImport,
+      gridExport:SAFE_ENERGY_IDS.gridExport
     };
     const idList=Object.values(ids);
-    const start=new Date(Date.now()-this._historyHours*3600000);
-    const signature=this._historyHours+"|"+idList.join("|");
+    const hours=this._historyHours;
+    const start=new Date(Date.now()-hours*3600000);
+    const signature=hours+"|"+idList.join("|");
     if(this._historySignature===signature&&this._historyData)return;
     this._historyPending=true;this._historyError="";
     try{
@@ -799,31 +858,31 @@ class SajTOUDynamicCard extends HTMLElement {
         "&minimal_response";
       const response=await this._hass.callApi("GET",
         "history/period/"+encodeURIComponent(start.toISOString())+query);
-      const result={solar:[],home:[],battery:[],grid:[],forecast:[]};
       if(!Array.isArray(response))throw Error("Unexpected Home Assistant history format");
-      const exports=[];
-      for(const series of response){
-        if(!Array.isArray(series)||!series.length)continue;
-        // HA minimal_response records the entity ID on the first sample only.
-        const seriesId=series.find(item=>item.entity_id)?.entity_id;
+      const result={solar:[],home:[],battery:[],gridImport:[],gridExport:[]};
+      for(const samples of response){
+        if(!Array.isArray(samples)||!samples.length)continue;
+        const seriesId=samples.find(sample=>sample.entity_id)?.entity_id;
         const key=Object.keys(ids).find(k=>ids[k]===seriesId);
         if(!key)continue;
-        for(const item of series){
-          const t=Date.parse(item.last_changed||item.last_updated||"");
-          if(["unknown","unavailable",""].includes(String(item.state)))continue;
-          const y=Number(item.state);
-          if(!Number.isFinite(t)||!Number.isFinite(y))continue;
-          if(key==="gridExport")exports.push({t,y});
-          else result[key].push({t,y});
+        for(const sample of samples){
+          const timestamp=Date.parse(sample.last_changed||sample.last_updated||"");
+          const raw=String(sample.state);
+          if(["unknown","unavailable",""].includes(raw))continue;
+          const value=Number(raw);
+          if(Number.isFinite(timestamp)&&Number.isFinite(value))
+            result[key].push({t:timestamp,y:value});
         }
       }
-      // Combine recorded import AND export magnitudes without assuming sign.
-      result.grid.push(...exports);
-      for(const key of Object.keys(result))result[key].sort((a,b)=>a.t-b.t);
-      this._historyData=result;this._historySignature=signature;
-    }catch(err){
-      this._historyData={solar:[],home:[],battery:[],grid:[],forecast:[]};
-      this._historyError="Recorded history unavailable: "+(err?.message||String(err));
+      for(const points of Object.values(result))points.sort((a,b)=>a.t-b.t);
+      // An older request must not replace a newer selected time range.
+      if(hours!==this._historyHours)return;
+      this._historyData=result;
+      this._historySignature=signature;
+    }catch(error){
+      if(hours!==this._historyHours)return;
+      this._historyData={solar:[],home:[],battery:[],gridImport:[],gridExport:[]};
+      this._historyError="Recorder history unavailable: "+(error?.message||String(error));
     }finally{
       this._historyPending=false;
       if(this._page==="forecast"){
