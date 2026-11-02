@@ -238,6 +238,18 @@ const CSS = [
   ".forecastTrack{height:12px;border-radius:8px;background:var(--divider-color,#444);overflow:hidden}",
   ".forecastFill{height:100%;background:var(--primary-color,#16b9b1);border-radius:8px}",
   ".forecastSettings{margin:18px 0;padding:16px;border:1px solid var(--divider-color,#555);border-radius:12px}",
+  ".forecastLearning{padding:13px;margin:12px 0}",
+  ".forecastLearning h3{font-size:16px;margin:0 0 10px}",
+  ".learningSummary{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px}",
+  ".learningStat{border:1px solid var(--divider-color,#444);border-radius:9px;padding:10px}",
+  ".learningStat strong{display:block;font-size:16px;margin:5px 0}",
+  ".learningStat small{font-size:11px;display:block;line-height:1.4}",
+  ".learningControls{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:12px}",
+  ".learningSelect{padding:8px;border:1px solid var(--divider-color,#555);border-radius:8px;background:var(--card-background-color,#222);color:var(--primary-text-color,#eee)}",
+  ".learningDetails{border-top:1px solid var(--divider-color,#555);margin-top:13px;padding-top:8px}",
+  ".learningDetails summary{cursor:pointer;font-size:12px;padding:7px}",
+  ".learningDetails p{font-size:12px;line-height:1.55}",
+
   ".forecastSettingGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:8px;margin:10px 0}",
   ".forecastSettingGrid label{display:flex;flex-direction:column;gap:5px;font-size:12px}",
   ".forecastSettingGrid input{width:100%;box-sizing:border-box}",
@@ -465,6 +477,9 @@ class SajTOUDynamicCard extends HTMLElement {
     this._forecastForm = null;
     this._forecastEditorOpen = null;
     this._forecastSaving = false;
+    this._forecastScanBusy = false;
+    this._forecastScanDays = 180;
+    this._forecastScanMessage = "";
     this._forecastMessage = "";
     this._forecastError = false;
     this._historyData = null;
@@ -1203,16 +1218,78 @@ class SajTOUDynamicCard extends HTMLElement {
     add(section,el("p","muted",
       "PV-side energy forecast. The AC inverter limit does not necessarily cap total PV production while charging the battery."));
     const learning=data.learning||{};
-    const learnCard=el("section","forecastSettings");
-    add(learnCard,el("h3",null,"Forecast self-learning"),
-      el("p","muted",(learning.status||"Calibration pending")+" · "+
-        (learning.clear_sky_hours??0)+" eligible clear-sky hours recorded"),
-      el("p","historyFoot",
-        "The model gradually adjusts estimates from observed solar power. "+
-        "Only clear hours with at least 45 minutes of reliable readings and battery SOC below 97% qualify. "+
-        "Correction factors are capped at 65%–115% and saved across restarts. "+
-        "Past days before this feature was enabled are not automatically backfilled."));
-    add(section,learnCard);
+    const historical=learning.historical||{};
+    const issued=learning.issued_forecast_accuracy||{};
+    const card=el("section","forecastSettings forecastLearning");
+    add(card,el("h3",null,"Forecast learning & accuracy"));
+    const summary=el("div","learningSummary");
+    for(const [label,value,help] of [
+      ["Live learning",(learning.clear_sky_hours??0)+" h",
+       "Clear-sky recorded hours"],
+      ["Historical model",historical.approved?"Validated":
+       (historical.eligible_hours??0)+" h available",
+       historical.status||"History not analysed"],
+      ["Forward accuracy",typeof issued.mae_kwh==="number"?
+       issued.mae_kwh.toFixed(2)+" kWh MAE":"Pending",
+       (issued.days_scored||0)+" saved predictions scored"]
+    ]){
+      const box=el("div","learningStat");
+      add(box,el("span","muted",label),el("strong",null,value),
+        el("small","muted",help));
+      summary.append(box);
+    }
+    add(card,summary);
+    const controls=el("div","learningControls");
+    const lookback=el("select","learningSelect");
+    for(const [number,label] of [[30,"30 days"],[90,"90 days"],
+                                  [180,"6 months"],[365,"12 months"]]){
+      const opt=el("option",null,label);
+      opt.value=String(number);
+      opt.selected=number===this._forecastScanDays;
+      lookback.append(opt);
+    }
+    lookback.setAttribute("aria-label","Past data to analyse");
+    lookback.addEventListener("change",()=>this._forecastScanDays=Number(lookback.value));
+    const run=el("button","secondaryAction",
+      this._forecastScanBusy||learning.historical_scanning?
+      "Analysing…":"Analyse past readings");
+    run.type="button";
+    run.disabled=!state||this._forecastScanBusy||learning.historical_scanning;
+    run.addEventListener("click",()=>this._scanForecastHistory());
+    add(controls,lookback,run);
+    add(card,controls);
+    if(this._forecastScanMessage)add(card,el("p","muted",this._forecastScanMessage));
+    if(learning.historical_error)add(card,el("p","forecastNotice",
+      "History scan: "+learning.historical_error));
+    const details=el("details","learningDetails");
+    add(details,el("summary",null,"Calibration checks & limitations"));
+    if(typeof historical.base_mae_kwh==="number"&&
+       typeof historical.corrected_mae_kwh==="number"){
+      add(details,el("p",null,
+        "Historical holdout · Baseline "+historical.base_mae_kwh.toFixed(2)+
+        " kWh MAE · Adjusted "+historical.corrected_mae_kwh.toFixed(2)+
+        " kWh MAE · "+(historical.approved?"Validated":"Not applied")));
+    }
+    add(details,el("p","muted",
+      "Recorder solar statistics: "+(historical.power_stat_hours??0)+
+      " hours · Battery SOC statistics: "+(historical.soc_stat_hours??0)+
+      " hours · Qualifying clear-sky samples: "+
+      (historical.eligible_hours??0)+" hours."));
+    if(historical.seasonal_hours)
+      add(details,el("p","muted","Seasons: "+
+        Object.entries(historical.seasonal_hours).map(([k,v])=>k+" "+v+" h").join(" · ")));
+    if(learning.historical_last_scan)
+      add(details,el("p","muted",
+        "Last scan "+formatLocalTime(learning.historical_last_scan)+
+        " · "+(learning.historical_source||"Recorder")));
+    add(details,el("p","historyFoot",
+      "Historical weather reanalysis is a hindsight calibration, not an archived forecast. "+
+      "An earlier-to-later holdout must show lower error before corrections are enabled. "+
+      "Forward MAE uses actual forecasts stored before the target day and compares matching "+
+      "07:00–18:59 solar output. Missing Recorder hours cannot be reconstructed. "+
+      "No inverter writes, no automatic TOU changes."));
+    add(card,details);
+    add(section,card);
     const daily=Array.isArray(data.daily)?data.daily:[];
     const heading=el("h3",null,"Next seven days");add(section,heading);
     const days=el("div","forecastDays");
@@ -1342,6 +1419,30 @@ class SajTOUDynamicCard extends HTMLElement {
     add(settingsShell,wrapper);
     add(section,settingsShell);
     return section;
+  }
+  async _scanForecastHistory(){
+    if(this._forecastScanBusy||!this._hass)return;
+    this._forecastScanBusy=true;
+    this._forecastScanMessage="Scanning available HA statistics and historical weather…";
+    this.render();
+    try{
+      const data={days:this._forecastScanDays};
+      if(this._selected&&!this._selected.startsWith("sensor."))data.entry_id=this._selected;
+      const response=await this._hass.callWS({
+        type:"call_service",domain:"saj_h2_control_enhanced",
+        service:"scan_forecast_history",service_data:data,return_response:true
+      });
+      const result=response?.response?.result||response?.result||response?.response||{};
+      this._forecastScanMessage=(result.status||"Scan complete")+
+        (typeof result.eligible_hours==="number"?
+        " · "+result.eligible_hours+" qualifying hours":"")+
+        (result.error?" · "+result.error:"");
+    }catch(error){
+      this._forecastScanMessage="Unable to analyse: "+(error?.message||String(error));
+    }finally{
+      this._forecastScanBusy=false;
+      this.render();
+    }
   }
   async _saveForecastSettings(){
     const f=this._forecastForm;
