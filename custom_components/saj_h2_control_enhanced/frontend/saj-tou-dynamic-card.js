@@ -1231,7 +1231,8 @@ class SajTOUDynamicCard extends HTMLElement {
        historical.status||"History not analysed"],
       ["Forward accuracy",typeof issued.mae_kwh==="number"?
        issued.mae_kwh.toFixed(2)+" kWh MAE":"Pending",
-       (issued.days_scored||0)+" saved predictions scored"]
+       (issued.days_scored||0)+" saved predictions scored"+
+       (issued.days_scored>=10?" · "+issued.trend:"")]
     ]){
       const box=el("div","learningStat");
       add(box,el("span","muted",label),el("strong",null,value),
@@ -1275,6 +1276,14 @@ class SajTOUDynamicCard extends HTMLElement {
       " hours · Battery SOC statistics: "+(historical.soc_stat_hours??0)+
       " hours · Qualifying clear-sky samples: "+
       (historical.eligible_hours??0)+" hours."));
+    if(typeof issued.previous_five_mae_kwh==="number"&&
+       typeof issued.recent_five_mae_kwh==="number")
+      add(details,el("p","muted",
+        "Issued-forecast error · Previous 5 days: "+
+        issued.previous_five_mae_kwh.toFixed(2)+" kWh MAE · "+
+        "Latest 5 days: "+issued.recent_five_mae_kwh.toFixed(2)+
+        " kWh MAE · "+issued.trend+
+        ". This is indicative, not proof of long-term improvement."));
     if(historical.seasonal_hours)
       add(details,el("p","muted","Seasons: "+
         Object.entries(historical.seasonal_hours).map(([k,v])=>k+" "+v+" h").join(" · ")));
