@@ -521,6 +521,7 @@ class SajTOUDynamicCard extends HTMLElement {
     this._historyHours = 24;
     this._historyVisible = {solar:true,home:true,battery:true,grid:true};
     this._historySignature = "";
+    this._historyFetchedAt = 0;
     this._forecastHistoryData = null;
     this._forecastHistoryPending = false;
     this._forecastHistoryError = "";
@@ -556,6 +557,11 @@ class SajTOUDynamicCard extends HTMLElement {
       this._lastEnergySignature=energySig;
       // Updating safe monitoring graphics must not reset an active time input
       // or discard an in-progress TOU schedule draft.
+      if(this._page==="control"&&this._historyHours<=1/6&&
+         !this._historyPending&&Date.now()-this._historyFetchedAt>=30000){
+        this._historySignature="";
+        this._loadHistory();
+      }
       if(this._page==="forecast"||this._page==="cost"){
         // Preserve focused editable settings while live telemetry refreshes.
         if(this._page==="forecast"&&forecastChanged&&!this._forecastSaving)this.render();
@@ -1786,8 +1792,8 @@ class SajTOUDynamicCard extends HTMLElement {
     add(title,el("h3",null,"Historic Data"),
       el("div","muted","Recorded power · kW · signed battery and grid flow"));
     const select=el("select");
-    for(const hours of [6,12,24,48,168]){
-      const option=el("option",null,hours===168?"7 days":hours+" hours");
+    for(const hours of [1/6,6,12,24,48,168]){
+      const option=el("option",null,hours===1/6?"10 minutes":hours===168?"7 days":hours+" hours");
       option.value=String(hours);
       option.selected=hours===this._historyHours;
       select.append(option);
@@ -1894,7 +1900,8 @@ class SajTOUDynamicCard extends HTMLElement {
       const valid=points.filter(p=>p.t>=start&&p.t<=now).sort((a,b)=>a.t-b.t);
       if(!valid.length)return;
       // Time-gap boundaries prevent long lines across missing recorder data.
-      const maxGap=this._historyHours>=168?4*3600000:45*60000;
+      const maxGap=this._historyHours<=1/6?90*1000:
+        this._historyHours>=168?4*3600000:45*60000;
       let chunks=[],chunk=[],last=null;
       for(const p of valid){
         if(last!==null&&p.t-last>maxGap&&chunk.length){chunks.push(chunk);chunk=[];}
@@ -1930,7 +1937,8 @@ class SajTOUDynamicCard extends HTMLElement {
     }
     // Mouse/touch/keyboard inspection: snaps to a time slot and reports the
     // actual timestamp and reading nearest that slot, never an invented sample.
-    const intervalMinutes=this._historyHours<=24?5:this._historyHours<=48?10:30;
+    const intervalMinutes=this._historyHours<=1/6?0.5:
+      this._historyHours<=24?5:this._historyHours<=48?10:30;
     const intervalMs=intervalMinutes*60000;
     const cursor=make("line",{x1:L,y1:T,x2:L,y2:B,stroke:"currentColor",
       "stroke-opacity":".7","stroke-width":1.3,"stroke-dasharray":"4 4",
@@ -1946,7 +1954,7 @@ class SajTOUDynamicCard extends HTMLElement {
     tooltip.setAttribute("aria-live","off");
     const intro=el("span","historyEmpty",
       "Hover, tap or use ← / → on the graph to inspect recorded readings ("+
-      intervalMinutes+"-minute steps).");
+      (intervalMinutes<1?"30-second":intervalMinutes+"-minute")+" steps).");
     tooltip.append(intro);
     const nearest=(points,epoch)=>{
       if(!points?.length)return null;
@@ -2095,6 +2103,7 @@ class SajTOUDynamicCard extends HTMLElement {
       if(hours!==this._historyHours)return;
       this._historyData=result;
       this._historySignature=signature;
+      this._historyFetchedAt=Date.now();
     }catch(error){
       if(hours!==this._historyHours)return;
       this._historyData={solar:[],home:[],battery:[],gridImport:[],gridExport:[]};
