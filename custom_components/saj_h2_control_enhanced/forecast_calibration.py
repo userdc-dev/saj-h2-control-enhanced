@@ -247,7 +247,10 @@ def evaluate_issued_forecasts(predictions,power_stats,tz,now=None):
             issued=datetime.fromisoformat(str(p.get("issued_at")).replace("Z","+00:00"))
             if issued.tzinfo is None or issued.astimezone(tz).date()>=target or target>=latest_date:
                 continue
-            estimate=float(p["predicted_kwh"])
+            # Score exactly the same 07:00–18:59 interval for forecast
+            # and observed production; never compare daytime actual with a
+            # full-day forecast (which would bias the MAE).
+            estimate=float(p["predicted_daytime_kwh"])
         except (ValueError,TypeError,KeyError):
             continue
         hours=days.get(day,{})
@@ -258,7 +261,7 @@ def evaluate_issued_forecasts(predictions,power_stats,tz,now=None):
         # the metric daytime coverage, not a certified full-day total.
         observed=sum(max(0,v) for v in hours.values())/1000
         results.append({"date":day,"issued_at":p["issued_at"],
-                        "forecast_kwh":round(estimate,2),
+                        "forecast_daytime_kwh":round(estimate,2),
                         "observed_daytime_kwh":round(observed,2),
                         "absolute_error_kwh":round(abs(estimate-observed),2),
                         "daytime_hours":len(hours)})
@@ -271,5 +274,5 @@ def evaluate_issued_forecasts(predictions,power_stats,tz,now=None):
         "recent":results[-7:],
         "status":"Tracking issued forecasts" if len(results)>=3 else
                  "Awaiting at least three complete days",
-        "limitation":"Issued previous-day forecast vs observed 07:00–18:59 kWh from hourly means; NOT full-day metered energy. No historic forecasts invented.",
+        "limitation":"Previous-day 07:00–18:59 FORECAST vs matching daytime observed kWh from hourly means (not full-day metered energy). No historic forecasts invented.",
     }
