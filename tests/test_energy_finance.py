@@ -84,10 +84,16 @@ class EnergyFinanceTests(unittest.TestCase):
         for token in ("solar_production_energy","solar_production_power",
                       "battery_charged_energy","battery_discharged_energy",
                       "battery_state_of_charge","grid_import_energy_estimate",
-                      "grid_export_energy_estimate","SajCostEstimateSensor"):
+                      "grid_export_energy_estimate","grid_signed_power",
+                      "grid_import_power","grid_export_power",
+                      "SajCostEstimateSensor"):
             self.assertIn(token,sensor)
         self.assertIn("SensorStateClass.TOTAL_INCREASING",sensor)
         self.assertIn("SensorStateClass.MEASUREMENT",sensor)
+        self.assertIn('"grid_signed_power": ("Grid power • signed',sensor)
+        self.assertIn('"grid_power","W","power"',sensor)
+        self.assertIn('"grid_import","W","power"',sensor)
+        self.assertIn('"grid_export","W","power"',sensor)
         finance=(COMP/"energy_finance.py").read_text()
         self.assertIn("Store(hass",finance)
         self.assertNotIn("write_register",finance)
