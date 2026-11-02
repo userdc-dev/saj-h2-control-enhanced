@@ -7,12 +7,14 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta, timezone
+from time import monotonic
 import logging
 from zoneinfo import ZoneInfo
 
 from aiohttp import ClientTimeout
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.helpers.storage import Store
 
 _LOGGER = logging.getLogger(__name__)
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
@@ -72,6 +74,91 @@ class SajEditableForecast(DataUpdateCoordinator):
         self._forecast_hours = {}
         self._fetched_at = None
         self._previous_settings = None
+        self.learning_store=Store(hass,1,f"saj_h2_control_forecast_learning_{entry.entry_id}")
+        self.factors={}
+        self.learned_hours=0
+        self._learning_settings_key=None
+        self._learning_hour_end=None
+        self._sample_at=None
+        self._sample_power=None
+        self._kwh_actual=0.0
+        self._coverage=0.0
+        self._peak_soc=0.0
+
+    async def async_load_learning(self):
+        try:
+            saved=await self.learning_store.async_load() or {}
+            values=saved.get("factors",{})
+            self.factors={str(k):float(v) for k,v in values.items()
+                          if str(k).isdigit() and 0<=int(k)<=23
+                          and 0.65<=float(v)<=1.15}
+            self.learned_hours=max(0,int(saved.get("learned_hours",0)))
+            self._learning_settings_key=saved.get("settings_key")
+        except (TypeError,ValueError,KeyError) as exc:
+            _LOGGER.warning("Invalid solar learning history; resetting: %s",exc)
+            self.factors={}
+            self.learned_hours=0
+
+    async def _persist_learning(self):
+        await self.learning_store.async_save({
+            "factors":self.factors,
+            "learned_hours":self.learned_hours,
+            "settings_key":self._learning_settings_key,
+        })
+
+    def on_live_update(self):
+        """Learn only from observed reliable clear-sky hours, never device writes."""
+        now=datetime.now(timezone.utc).timestamp()
+        sample=self._learning_source()
+        power=sample.get("total_pv_power")
+        soc=sample.get("battery_soc")
+        end=(int(now)//3600+1)*3600
+        if self._learning_hour_end is not None and end!=self._learning_hour_end:
+            self._finalize_learning(self._learning_hour_end)
+            self._kwh_actual=0.0
+            self._coverage=0.0
+            self._peak_soc=0.0
+            self._sample_at=None
+            self._sample_power=None
+        self._learning_hour_end=end
+        if isinstance(soc,(int,float)) and 0<=soc<=100:
+            self._peak_soc=max(self._peak_soc,float(soc))
+        if isinstance(power,(int,float)) and 0<=power<=90000:
+            if self._sample_at is not None and self._sample_power is not None:
+                dt=now-self._sample_at
+                if 0<dt<=45:
+                    self._kwh_actual+=(float(power)+self._sample_power)*dt/7200000
+                    self._coverage+=dt
+            self._sample_at=now
+            self._sample_power=float(power)
+        else:
+            self._sample_at=None
+            self._sample_power=None
+
+    def _learning_source(self):
+        # Listener receives read-only SAJ Safe Monitor updates, when attached.
+        return (getattr(self,"_live_monitor",None) or object()).data or {} if getattr(self,"_live_monitor",None) is not None else {}
+
+    def _finalize_learning(self,end_epoch):
+        reference=self._forecast_hours.get(end_epoch)
+        if reference is None or self._coverage<2700 or self._peak_soc>=97:
+            return
+        expected=reference.get("base_kwh",0)
+        cloud=reference.get("cloud",100)
+        if expected<0.7 or cloud is None or cloud>25:
+            return
+        if self._kwh_actual<0:
+            return
+        local_hour=datetime.fromtimestamp(end_epoch-1,timezone.utc).astimezone(
+            ZoneInfo(self.hass.config.time_zone or "Australia/Adelaide")).hour
+        key=str(local_hour)
+        observed=max(0.65,min(1.15,self._kwh_actual/expected))
+        previous=self.factors.get(key,1.0)
+        self.factors[key]=round(max(.65,min(1.15,previous*.85+observed*.15)),4)
+        self.learned_hours+=1
+        # Store only at eligible hour transitions, not on every 10s poll.
+        self.hass.async_create_task(self._persist_learning())
+        _LOGGER.debug("Solar forecast learned hour %s, ratio %.3f",key,observed)
 
     async def _group_weather(self, session, group):
         # Open-Meteo azimuth is -180..180 degrees relative to due south.
@@ -105,6 +192,15 @@ class SajEditableForecast(DataUpdateCoordinator):
         settings_key = (str(groups), efficiency, ac_limit)
         if self._previous_settings != settings_key:
             self._forecast_hours = {}
+        if self._learning_settings_key != str(settings_key):
+            self.factors={}
+            self.learned_hours=0
+            self._learning_settings_key=str(settings_key)
+            self._learning_hour_end=None
+            self._sample_at=None
+            self._sample_power=None
+            self._kwh_actual=0.0
+            self._coverage=0.0
         session = async_get_clientsession(self.hass)
         try:
             series = await asyncio.gather(
@@ -126,8 +222,15 @@ class SajEditableForecast(DataUpdateCoordinator):
                 else:
                     # kWh over a one-hour sample, estimated on PV side.
                     # Do not cap by AC inverter nameplate: DC charging may coexist.
-                    hours[end] = {"kwh": round(wh * efficiency / 100 / 1000, 4),
-                                  "cloud": round(sum(cloud_values) / len(cloud_values))}
+                    raw=wh * efficiency / 100 / 1000
+                    local_hour=datetime.fromtimestamp(end-1,timezone.utc).astimezone(
+                        ZoneInfo(self.hass.config.time_zone or "Australia/Adelaide")).hour
+                    factor=self.factors.get(str(local_hour),1.0)
+                    hours[end] = {
+                        "base_kwh":round(raw,4),
+                        "kwh":round(raw*factor,4),
+                        "cloud":round(sum(cloud_values) / len(cloud_values))
+                    }
             if len(hours) < 24:
                 raise ValueError("Insufficient valid weather samples")
             self._forecast_hours = hours
@@ -169,12 +272,15 @@ class SajEditableForecast(DataUpdateCoordinator):
             "week": round(sum(v["kwh"] for v in daily), 2),
             "updated": self._fetched_at.isoformat() if self._fetched_at else None,
             "settings": settings,
+            "learning":{
+                "clear_sky_hours":self.learned_hours,
+                "hourly_factors":dict(self.factors),
+                "status":("Calibrating" if self.learned_hours<24 else "Learning active"),
+                "limitation":"Only clear hours with >=45 min reliable observations and SOC below 97% qualify; learning factors bounded 0.65–1.15.",
+            },
             "model": "Open-Meteo tilted irradiance; PV-side estimate; no AC clipping",
             "note": ("AC limit is displayed for system reference, not applied as a "
                      "PV production cap because DC battery charging can coexist with AC output."),
         }
 
-    def on_live_update(self):
-        """Recalculate partial-day remaining based on clock without new API calls."""
-        if self._forecast_hours:
-            self.async_set_updated_data(self._make_snapshot(settings_for(self.entry)))
+
