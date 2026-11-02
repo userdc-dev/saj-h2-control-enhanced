@@ -71,7 +71,7 @@ class EnergyFinanceTests(unittest.TestCase):
             "today":dict(row,period="2026-11-02"),
             "month":dict(row,period="2026-11"),
         }
-        pricing={"import_rate":.5,"export_rate":.1,"daily_supply":1.5}
+        pricing={"import_rate":.5,"export_rate":.1,"daily_supply":1.5,"configured":True}
         out=self.p["snapshot_costs"](totals,pricing,now,tz)
         # Import $2 - export $0.20 + full daily supply $1.50
         self.assertEqual(out["today"]["net_cost"],3.30)
