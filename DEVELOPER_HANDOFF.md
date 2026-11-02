@@ -1,6 +1,6 @@
 # Developer handover — SAJ H2 Control Enhanced
 
-**Canonical current guide; updated 2026-11-02, Australia/Adelaide.** Read this before changing any code, dashboard, or Modbus control. **Current version at the time of this handover: 0.5.10.** The project was previously design-only, but now has a deployed Home Assistant control integration with working mode controls, schedule editing code, new fallback control, and read-only energy graphics/table within the TOU dashboard. **Not every writable feature has been proven on the owner's actual inverter.**
+**Canonical current guide; updated 2026-11-02, Australia/Adelaide.** Read this before changing any code, dashboard, or Modbus control. **Current version at the time of this handover: 0.5.11.** The project was previously design-only, but now has a deployed Home Assistant control integration with working mode controls, schedule editing code, new fallback control, and read-only energy graphics/table within the TOU dashboard. **Not every writable feature has been proven on the owner's actual inverter.**
 
 **Repository:** https://github.com/userdc-dev/saj-h2-control-enhanced  
 **Older full development diary:** [docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md](docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md) (57 KB historical archive; early claims of “planning-only” are OBSOLETE)  
@@ -444,5 +444,42 @@ On 2026-11-02 the user supplied two annotated screenshots and requested:
 4. Verify empty schedule panels have the add button in their header; edited drafts show a marker; Save still uses one confirmation and does complete preflight/post-write checks.
 5. Record actual on-device confirmation for remaining unverified schedule/fallback write combinations and document device firmware and elekeeper evidence before considering v1.0.0.
 6. Keep the separate `saj_h2_safe` integration and old SAJ Energy dashboard **unchanged**.
+
+## 21. v0.5.11 — self-contained Safe Monitor bundle and easiest installation
+
+**User requirement (2026-11-02):** No instructions that send users to a second GitHub repository to obtain required Live energy monitoring. **Every required code file must live in `userdc-dev/saj-h2-control-enhanced`** and installation should prominently offer the short copy-paste shell command used for the owner's Kamrui system.
+
+### Authoritative source layout
+
+- `custom_components/saj_h2_control_enhanced/`: existing controller, Modbus TOU services, frontend card, config flow, dashboard registration and settings readback.
+- `bundled_components/saj_h2_safe/`: **complete, local snapshot** of the read-only SAJ H2 Safe Monitor: `__init__.py`, `config_flow.py`, `const.py`, `manifest.json`, `sensor.py`, `solar_forecast.py`, `solar_model.py`. This has the same `saj_h2_safe` HA domain, so existing sensor IDs and HA automations remain compatible. Do not rename the domain, and never overwrite already-installed monitor code. This is the actual monitoring/forecast code, not an online link or a placeholder.
+- `scripts/install.sh`: downloads **one archive of this controller repository**, copies bundled monitor `bundled_components/saj_h2_safe/` to `custom_components/saj_h2_safe/` **only when missing**, and installs/updates controller `custom_components/saj_h2_control_enhanced/`. Before replacing controller code, backs up old code to `<HA_CONFIG>/.saj-h2-backups/` outside `custom_components/`. `--control-only` is the optional skip-monitor flag; `--with-safe-monitor` is obsolete and must not appear in current instructions. Installer never executes Modbus writes, edits YAML, deletes entities or restarts HA on its own.
+- `docs/INSTALLATION.md`: contains both the owner's exact copy-paste command and generic installation instructions. It explains first-time setup of the **two separate HA config entries** (monitor, controller) through Settings → Devices & services, no YAML or JS resources required. Controller auto-creates the dashboard after HA restart and config flow.
+
+### Single command for existing Kamrui deployment
+
+```bash
+curl -fL https://raw.githubusercontent.com/userdc-dev/saj-h2-control-enhanced/main/scripts/install.sh -o /tmp/install-saj-h2.sh &&
+bash /tmp/install-saj-h2.sh /home/kamrui/compose-files/homeassistant/config &&
+docker restart homeassistant
+```
+
+For any other installation change the HA config path and use its own HA restart mechanism. Users should review any downloaded script before execution. This installs code from only this GitHub repository; no second GitHub source is fetched at runtime.
+
+### Why keep two HA domains?
+
+Existing `saj_h2_safe` entities already feed the Live energy chart and may be referenced by the owner's other dashboards, energy statistics and automations. Moving their sensor IDs into the controller domain risks breaking that system. **Packaging both from one GitHub source does not require merging them into a single HA config entry.** New users configure each bundled component through HA's UI once; upgrades preserve all existing entities/config entries.
+
+### HACS limitation explained accurately
+
+The root `hacs.json` makes the **controller** installable as a HACS custom Integration repository. HACS normally copies **only one `custom_components/<domain>` integration folder**, not a second independent `bundled_components/` tree. Therefore **HACS-only installation is not a full first-time Live energy installation**; recommend the one-command script above for complete deployments or copying both folders from this repository through supported file management. This is a HACS limitation, not a missing external dependency. No other GitHub repository is needed.
+
+### Regression tests and release policy
+
+- `tests/test_install_script.py`: runs the actual installer offline using **one simulated repository archive**, verifies first install of **both** integrations, preservation of existing Safe Monitor, backup of controller before update, no external repo URL and no change to `configuration.yaml`. It also rejects obsolete `--with-safe-monitor` flag.
+- `tests/test_package_and_ui.py`: checks all bundled monitor files, root HACS/main integration layout, frontend version parity and that the installer refers to the bundle rather than a second download.
+- CI: Python compile, JS syntax, simulated Modbus write/readback safety, installer shell syntax, and the offline install tests. **These are not proof of live inverter compatibility.**
+- Version is **0.5.11** and frontend cache-bust is `/saj-h2-tou/v0511/saj-tou-dynamic-card.js`. Reserve **v1.0.0** for completed hardware validation.
+- **No changes** to the existing control write services, Modbus register mappings, permissions, confirmation dialogs or the user's current Safe Monitor installation were needed for this packaging release.
 
 **Historical appendix:** The full earlier handover is retained unabridged at [docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md](docs/DEVELOPER_HANDOFF_HISTORY_THROUGH_V040.md); it contains original 2026-11-01 experiments, paired screenshots, previous mode-control iterations, firmware discovery, dashboard cache fixes, and repeated user feedback. Its early “planning-only” language was true at the time but is no longer a current feature status.
