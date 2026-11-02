@@ -1,3 +1,11 @@
+## v0.5.17 — Energy power-measurement selection and true daily supply charge (2026-11-02)
+
+- Added new distinct **Grid power • signed** (W, device class POWER, state class MEASUREMENT) for HA Energy **Standard** grid power measurement; retained and clarified the two existing import-only and export-only W sensors for HA Energy **Two sensors**, with a precise in-dashboard setup guide. Grid sign remains provisional until checked against the utility meter.
+- Fixed the accounting error where the **daily supply charge was prorated by 10-second-class telemetry coverage** and thus showed only cents after a short monitoring period. The entire configured signed fixed supply charge (and selected taxes/levies) is posted **once per local calendar date**, even if no instantaneous power samples arrive.
+- Preserves month-to-date daily charges, upgrades today's older v0.5.16 prorated amount to one full charge without counting it twice, prevents a mid-day tariff edit from charging supply twice, persists changes on setup, and keeps import/export energy charges limited to actual recorded intervals. Old flat-rate configurations also receive a full fixed daily supply charge.
+- Provides separate **supply days counted** and **meter/tariff coverage hours** in Costs & savings; clarifies that days entirely offline before tariff tracking are not auto-billed, and the estimator is not a retailer invoice.
+- Added offline regression tests for no-telemetry supply billing, legacy flat rates, month rollover, tariff edits, storage/restart persistence and v0.5.16 current-day migration. Existing TOU controls, forecast, dashboard, historical graph and Modbus write safety unchanged.
+
 ## v0.5.16 — Full signed time-of-use tariff schedules, special FiT and taxes (2026-11-02)
 
 - Replaced the single flat-rate editor with editable multi-window import pricing: up to 12 user-defined rate categories (Peak, Off-peak, Solar sponge and additional), up to 24 windows per category, weekday selection, overnight wrapping, and a priced fallback for uncovered hours. Overlapping import windows are rejected.
