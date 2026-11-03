@@ -942,26 +942,53 @@ async def async_setup_entry(hass: HomeAssistant, entry):
         now=datetime.now(timezone.utc)
         end=parse_utc(supervisor.record["ends_utc"])
         snapshot=None
-        if now>=end:
-            # At the end of the rehearsal compare ALL device raw words,
-            # under the same lock as live manual commands. Never auto-restore.
-            lock=hass.data.get(DOMAIN,{}).get("pilot_lock")
-            if lock is not None:
-                async with lock:
-                    from .schedule_transaction import read_full
-                    client=None
-                    try:
-                        host,port=coordinator._connection_details()
-                        client=AsyncModbusTcpClient(
-                            host,port=int(port),timeout=5,retries=0)
-                        if await client.connect():
-                            snapshot=await read_full(client)
-                    except Exception as exc:
-                        _LOGGER.warning(
-                            "VPP no-write baseline verification unavailable: %s",exc)
-                    finally:
-                        if client is not None:
-                            client.close()
+        # Fresh SOC is read directly from the inverter while the rehearsal
+        # is active. Do not rely on an entity's last_updated timestamp.
+        # Both reads and any terminal raw-schedule verification share the
+        # existing device-command lock. No Modbus writes are performed.
+        lock=hass.data.get(DOMAIN,{}).get("pilot_lock")
+        if lock is None:
+            report=await supervisor.observe_battery(
+                soc=None,error="VPP safety command lock unavailable")
+        else:
+            from .vpp_soc_readback import (
+                read_verified_battery_soc, BatterySocReadbackError)
+            async with lock:
+                client=None
+                try:
+                    host,port=coordinator._connection_details()
+                    client=AsyncModbusTcpClient(
+                        host,port=int(port),timeout=5,retries=0)
+                    if not await client.connect():
+                        raise BatterySocReadbackError(
+                            "Cannot reach inverter for battery SOC check")
+                    soc=await read_verified_battery_soc(client,unit_id=UNIT_ID)
+                    report=await supervisor.observe_battery(soc=soc)
+                    if now>=end and report["status"] in ACTIVE:
+                        from .schedule_transaction import read_full
+                        snapshot=await read_full(client)
+                except Exception as exc:
+                    _LOGGER.warning(
+                        "VPP no-write battery/schedule monitoring unavailable: %s",
+                        exc)
+                    report=await supervisor.observe_battery(
+                        soc=None,error="Fresh battery/schedule monitoring unavailable: "
+                        +str(exc))
+                finally:
+                    if client is not None:
+                        client.close()
+        if report["status"]=="review_required":
+            async_create_notification(
+                hass,
+                "Read-only VPP rehearsal interrupted: battery SOC could not "
+                "be verified or crossed its conservative limit. No inverter "
+                "writes were sent. Check the battery in elekeeper and verify "
+                "the saved TOU baseline before acknowledging.",
+                title="SAJ VPP — battery safety review required",
+                notification_id="saj_h2_vpp_review_"+entry.entry_id,
+            )
+            return
+
         try:
             report=await supervisor.tick(snapshot=snapshot)
             if report["status"]=="review_required":
