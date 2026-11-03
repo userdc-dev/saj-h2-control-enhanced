@@ -2,6 +2,14 @@
 
 **Current scope: v0.5.24, no-write preflight and persistent watchdog rehearsal. Live timed battery dispatch is still disabled.** The compact dashboard has a duration selector (5/10/60 min), **Preview max charge**, **Preview max discharge**, and **Return to Self-consumption**. The first two do **not** issue a Modbus write, arm a timer or create an automation. The Self-consumption action delegates to the existing confirmed `supervised_self_consumption_pilot` path and uses its original device-readback, confirmation and single-write safeguards.
 
+## Development branch — active rehearsal battery SOC watchdog (not released)
+
+The simulated VPP supervisor now performs **two fresh direct inverter SOC readings** during each active 20-second watchdog check using existing register `0x406F` and the shared device lock. It records the latest verified SOC for the status response without writing the persistence journal every poll. Missing/inconsistent SOC, failed communication or SOC >=95% during a charge rehearsal / <=10% during discharge causes a durable `review_required` warning and interrupts the **simulation only**. A full verified 7+7 TOU baseline readback and explicit acknowledgement are required before another rehearsal. Any finished rehearsal also requires its usual exact raw schedule verification.
+
+**This is NOT a real emergency stop.** This logic never sends a physical inverter stop command, restores TOU slots, or guarantees action if HA is offline. The existing Return to Self-consumption command is a separate user-confirmed live control, not an automatic emergency recovery mechanism. Battery watts, battery temperature, BMS alarms and grid import/export have **not** been added as trusted live safety gates in this development branch: their device mapping, freshness semantics, sign, limits and hardware response require verification first. An SOC measurement alone does not establish battery safety.
+
+Do not enable a real dispatch service based on these read-only rehearsal changes. The same weekly recurrence, verified hardware recovery, maximum charging validation and other commissioning gates below remain mandatory.
+
 ## v0.5.24 — Persistent safety-supervisor rehearsal (no inverter writes)
 
 A real single-click timed battery command is **NOT** enabled. To commission its recovery system without risking repeated weekly TOU exports, this release adds a persistent, explicitly **read-only** watchdog rehearsal.
