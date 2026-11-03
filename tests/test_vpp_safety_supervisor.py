@@ -217,6 +217,46 @@ class VppSupervisorTests(unittest.TestCase):
                 self.assertEqual(self.sup.record["status"],"idle")
         asyncio.run(run())
 
+    def test_battery_soc_observation_is_read_only_and_not_journal_spam(self):
+        async def run():
+            await self.sup.begin_rehearsal(self.preview(),self.snap)
+            initial_saves=self.store.saves
+            result=await self.sup.observe_battery(soc=55.3)
+            self.assertEqual(result["status"],"rehearsal_scheduled")
+            self.assertEqual(result["latest_battery_soc_percent"],55.3)
+            self.assertEqual(self.store.saves,initial_saves)
+            self.assertFalse(result["write_sent"])
+            self.assertFalse(result["can_dispatch"])
+        asyncio.run(run())
+
+    def test_missing_soc_interrupts_simulation_and_requires_verification(self):
+        async def run():
+            await self.sup.begin_rehearsal(self.preview(),self.snap)
+            result=await self.sup.observe_battery(soc=None,error="Modbus read failed")
+            self.assertEqual(result["status"],"review_required")
+            self.assertEqual(result["baseline_check"],"needs_readback")
+            self.assertIn("Modbus read failed",result["last_error"])
+            self.assertFalse(result["write_sent"])
+            self.assertEqual(self.store.data["status"],"review_required")
+            with self.assertRaises(SupervisorError):
+                await self.sup.acknowledge()
+            await self.sup.verify_baseline(self.snap)
+            self.assertEqual((await self.sup.acknowledge())["status"],"idle")
+        asyncio.run(run())
+
+    def test_soc_limits_interrupt_charge_and_discharge_simulations(self):
+        async def run():
+            for direction,soc in (("charge",95),("discharge",10)):
+                sup=Supervisor(None,self.entry,store=MemoryStore(),
+                               clock=lambda:self.clock[0])
+                await sup.begin_rehearsal(
+                    self.preview(direction=direction),self.snap)
+                result=await sup.observe_battery(soc=soc)
+                self.assertEqual(result["status"],"review_required")
+                self.assertIn("breached",result["last_error"])
+                self.assertFalse(result["can_dispatch"])
+        asyncio.run(run())
+
     def test_no_dispatch_and_restoration_writes_in_module(self):
         self.assertNotIn("write_register",source)
         self.assertNotIn("write_coils",source)
