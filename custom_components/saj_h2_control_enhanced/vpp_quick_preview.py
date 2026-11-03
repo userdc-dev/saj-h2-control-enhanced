@@ -77,13 +77,21 @@ def preview_dispatch(config, *, direction, duration_minutes, now, soc=None):
         for kind, slots in (("charge", config.charge_slots),
                             ("discharge", config.discharge_slots)):
             for slot in slots:
-                if not slot.enabled or not (slot.day_mask & bit):
+                if not slot.enabled:
                     continue
                 start_min = _minutes(slot.start)
                 stop_min = _minutes(slot.end)
+                # A weekly slot crossing midnight can spill into the
+                # requested day from the previous day. Until overnight
+                # semantics are field-verified, no VPP preview may treat
+                # such a slot as safely non-overlapping, even when the
+                # slot's weekday mask differs from today's.
                 if start_min is None or stop_min is None or start_min >= stop_min:
-                    reasons.append(f"Active {kind} slot {slot.number} has an unverified time")
-                elif begin_min < stop_min and start_min < end_min:
+                    reasons.append(
+                        f"Active {kind} slot {slot.number} has an unverified "
+                        "or overnight time; possible cross-day conflict"
+                    )
+                elif slot.day_mask & bit and begin_min < stop_min and start_min < end_min:
                     reasons.append(
                         f"Existing {kind} slot {slot.number} overlaps the requested interval"
                     )
