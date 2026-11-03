@@ -292,6 +292,44 @@ class VPPSafetySupervisor:
             ))
             return self.status()
 
+    async def observe_battery(self, *, soc, error=None):
+        """Read-only battery guard for an active simulated VPP interval.
+
+        This cannot stop real inverter power flow. Missing/unsafe SOC stops
+        only the rehearsal and requires a fresh baseline check and review.
+        """
+        async with self._lock:
+            if self.record["status"] not in ACTIVE:
+                return self.status()
+            now = self._now()
+            direction = self.record.get("direction")
+            valid = type(soc) in (int, float) and 0 <= soc <= 100
+            unsafe = (
+                not valid
+                or (direction == "charge" and soc >= 95)
+                or (direction == "discharge" and soc <= 10)
+                or direction not in ("charge", "discharge")
+            )
+            if unsafe:
+                detail = error or (
+                    "Fresh inverter battery SOC unavailable" if not valid
+                    else f"Battery SOC {soc:.2f}% breached rehearsal guard"
+                )
+                await self._commit(self._transition(
+                    "review_required", "battery_guard_interrupted_simulation",
+                    now, error=detail,
+                    baseline_check="needs_readback",
+                    last_verified_utc=None,
+                    latest_battery_soc_percent=soc if valid else None,
+                    battery_checked_utc=now.isoformat(),
+                ))
+            else:
+                # Sample in memory only: do not rewrite the persistent journal
+                # every 20 seconds. A reboot still interrupts any rehearsal.
+                self.record["latest_battery_soc_percent"] = float(soc)
+                self.record["battery_checked_utc"] = now.isoformat()
+            return self.status()
+
     async def verify_baseline(self, snapshot):
         """Read-only exact comparison; never silently overwrite another actor."""
         async with self._lock:
