@@ -60,6 +60,30 @@ class VPPPreviewTests(unittest.TestCase):
             self.assertFalse(report["preflight_passed"])
             self.assertTrue(any("overlaps" in x for x in report["blockers"]))
 
+    def test_overnight_slot_on_previous_day_blocks_preview(self):
+        # A Sunday night slot can continue into Monday even when the
+        # Monday bit is not set. Never assume that it is non-overlapping.
+        overnight=[slot(1,True,start="23:45",end="00:30",mask=64)]+[
+            slot(i) for i in range(2,8)]
+        report=preview(snapshot(discharge=overnight),direction="charge")
+        self.assertFalse(report["preflight_passed"])
+        self.assertTrue(any("overnight" in x for x in report["blockers"]))
+        self.assertFalse(report["write_sent"])
+        self.assertFalse(report["can_start"])
+
+    def test_invalid_active_slot_on_other_weekday_fails_closed(self):
+        invalid=[slot(1,True,start="not-time",end="10:00",mask=2)]+[
+            slot(i) for i in range(2,8)]
+        report=preview(snapshot(charge=invalid))
+        self.assertFalse(report["preflight_passed"])
+        self.assertTrue(any("unverified" in x for x in report["blockers"]))
+
+    def test_valid_other_weekday_slot_does_not_block(self):
+        tuesday=[slot(1,True,start="17:30",end="19:00",mask=2)]+[
+            slot(i) for i in range(2,8)]
+        report=preview(snapshot(charge=tuesday))
+        self.assertTrue(report["preflight_passed"])
+
     def test_all_slots_occupied(self):
         full=[slot(i,True,start="08:00",end="09:00") for i in range(1,8)]
         r=preview(snapshot(discharge=full),direction="discharge")
