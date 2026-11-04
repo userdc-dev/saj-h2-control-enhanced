@@ -73,3 +73,26 @@ These are idealized and cannot be assumed to occur. Especially at load spikes, b
 ## GitHub safety checks
 
 CI `.github/workflows/safety-tests.yml` exercises `tests/test_export_readonly_trace.py` with an offline fake Modbus client and the owner's known meter values. This verifies decoding and failure handling without contacting an inverter. It is **not** physical commissioning approval or evidence that the 1.5 kW export ceiling is due to SAPN.
+
+## Field result: confirmed nighttime export plateau during supervised TOU discharge (2026-11-04 22:27–22:29 +10:30)
+
+The owner used the existing Home Assistant SAJ H2 schedule editor to **save** a Wednesday 22:23–22:35 recurring discharge slot at **30% (~2,970 W estimated maximum)** and switched to **Time-of-Use mode 1**, verified by Home Assistant's live Modbus readback. Their live UI screenshot at approximately 22:26 shows ~503 W home, 2.02 kW actual battery discharge and 1.50 kW export (SOC 95%, PV 0 W).
+
+The owner then ran six read-only observations through \`scripts/read_only_export_trace.py\`:
+
+| Local time | Home W | Battery W actual | Site export W | Independent meter export W |
+| --- | ---: | ---: | ---: | ---: |
+| 22:27:03 | 509 | 2013 | 1504 | 1484 |
+| 22:27:24 | 515 | 2024 | 1509 | 1489 |
+| 22:27:44 | 514 | 1970 | 1456 | 1437 |
+| 22:28:05 | 513 | 1986 | 1473 | 1473 |
+| 22:28:26 | 511 | 2043 | 1532 | 1533 |
+| 22:28:46 | 500 | 1956 | 1456 | 1456 |
+
+- **Arithmetic means:** battery **1998.7 W**, house **510.3 W**, site export **1488.3 W**. Physical energy balance matches sample by sample: \`battery - house = site export\`, because PV=0.
+- Actual export range **1456–1532 W**, all within 44 W of a ~1500 W target, despite a **~2970 W requested discharge ceiling** and household demand ~500 W; if unconstrained and fully dispatched, export capacity would have been ~2470 W. This is **strong evidence** of an **enforced effective net-site export cap near 1.5 kW at night**. It corroborates the owner's earlier lived experience; **not yet proof of what system or institution imposed the cap** (network operating envelope vs communications fallback vs gateway/firmware configuration).
+- Meter A independently agrees within ~0–20 W during most export readings, as expected with sequential reads.
+- Each sample reported **mode 1**, **anti-reflux mode raw 0**, **SOC 95.00%**, **battery temperature 21.0 C**, PV zero, and zero block read errors.
+- **Safety/cleanup essential:** The Wednesday discharge schedule **repeats weekly**. User was instructed to switch back to verified Self-consumption, delete and **save** the discharge schedule, and re-read to confirm **0/7 charge, 0/7 discharge, mode 0**. The user **has not yet supplied verification of cleanup**. Do not treat the test as completed operationally until the post-test device readback confirms these final conditions; never rely solely on its ending at 22:35.
+- **No further forced-discharge tests** are needed to establish the plateau. Investigate effective SAPN export-limit communication, approval, gateway and logged operating envelope via read-only channels. Don't write to unverified export-limit or voltage regulation registers.
+
