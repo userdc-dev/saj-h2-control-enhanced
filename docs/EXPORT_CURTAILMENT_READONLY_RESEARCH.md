@@ -113,6 +113,21 @@ The owner reports a **roughly 10 kW export ceiling in daylight and apparently ~1
 
 **Design impact:** Treat `10 kW by day / 1.5 kW at night` as a *user-observed pattern*, never a confirmed device setting or automatically enforceable/reprogrammable export schedule. Future VPP dispatch cannot assume nighttime high-rate battery export, must have verified effective time-varying site limit and fail closed when this is missing. Keep curtailment and live VPP commands disabled.
 
+## Elekeeper screenshot verification — 2026-11-04 afternoon (read-only visual evidence)
+
+Owner supplied screenshots of the local inverter elekeeper configuration pages. **Avoid publishing the pictured inverter serial number in logs/docs or screenshots.**
+
+1. **Export limitation setting** screen shows `All Day Export Limitation Settings: Off` and a separate clickable **`Time of Use Export Limitation Settings`** menu. The Off status matches read-only Modbus `0x365C = 0` (community decoder: anti-reflux disabled). Do **not** infer that TOU export limits are disabled: its submenu settings have not yet been shown. Do **not** infer that SAPN dynamic limits are disabled either.
+2. **Max Grid Input Current Limit** screen shows `Off`. This controls input not export, and cannot explain or prove any night export cap on its own.
+3. **Safety Settings** shows Country Australia and code `AS4777_AustraliaA`. UI timezone option says `(UTC+09:30) Adelaide` while the phone screenshot is from November (Adelaide summer daylight-saving is UTC+10:30). App screen shows inverter time `2026-11-04 14:17:42`, while phone status-bar clock is ~`14:48` on the same displayed screenshot. This **may** indicate stale app data, bad clock sync, or a time offset; it **does not establish** either. Accurate device local time and DST handling are prerequisites for relying on TOU export limit window configuration. Recommend read-only refresh/observation before considering use of `Auto time sync`; do not change clock/timezone without confirming effect on all active TOU schedules.
+4. **Feature Parameters** screenshot shows grid function words and inverter expansion options, neutral-to-ground detection `enabled`, Grid compliance curve selected (truncated), Maximum DCI `1000 mA`, Maximum Earth Leakage Current `200 mA`. These are **protection/compliance settings**: no project writes and no requested changes. No screenshot evidence of actual PV curtailment.
+
+Official SAJ H2/HS2/HS3 Configuration Instructions, Export/Generation Limitation Settings page 67: https://sp.saj-electric.com/hubfs/Guides%20and%20Manuals/HS3/H2_HS2_HS3_AS2_AS3_Configuration_Instructions_V1.0_en.pdf. Manual identifies a separate time-of-use export limitation menu. Another SAJ model family manual explicitly describes time-of-use export limitation as daily time-window limits: https://ro.saj-electric.com/hubfs/Guides%20and%20Manuals/H2/H2-%285K-12K%29-LS2/en/H2-%285K-12K%29-LS2_User_Manual_en.pdf. **Model-specific behavior still to be verified on this device.**
+
+SA Power Networks confirms a variable Flexible Exports limit up to 10 kW/phase with lower fallback at 1.5 kW in standard areas (or 0 kW for specified lower-hosting-capacity/SWER sites); communications failures can trigger the fallback. Source: https://www.sapowernetworks.com.au/industry/flexible-exports/ and government technical FAQ https://energymining.sa.gov.au/industry/hydrogen-and-renewable-energy/solar-batteries-and-smarter-homes/regulatory-changes-for-smarter-homes/dynamic-export-limits-requirement/questions-and-answers-for-industry. This is still **a possible cause of owner's nighttime observation, not proof**.
+
+**Next single request:** User taps **Time of Use Export Limitation Settings** and sends an image of all settings displayed, with no changes or Save. Check whether any nighttime 1500 W window exists. If not, investigate dynamic-export gateway/CSIP operating envelope, comms fallback, and whether observed 1.5 kW is a measured plateau rather than an applied limit. Under no circumstances bypass grid/export limits or disable compliance functions.
+
 ## Next read-only field work
 
 1. Re-read 0x365A-0x365C and identify the corresponding elekeeper "Export Limitation Settings" page, **without saving**.
