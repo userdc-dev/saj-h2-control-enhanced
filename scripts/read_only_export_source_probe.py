@@ -2,6 +2,8 @@
 """One-shot, strictly read-only SAJ H2 site-export control-source fingerprint.
 
 These are KNOWN holding-register reads only (Modbus function 03).
+TOU enable masks are at 0x3604/0x3605, NOT 0x3606/0x3607
+(which contain the first charge slot start/end times).
 This does NOT expose the SAPN/CSIP-AUS current operating envelope or its
 heartbeat, which might live in the manufacturer's communications gateway.
 It cannot establish a legal export permission or test inverter control writes.
@@ -11,7 +13,7 @@ from datetime import datetime
 import inspect
 
 BLOCKS = (
-    ("schedule_flags", 0x3606, 2),
+    ("schedule_flags", 0x3604, 2),
     ("mode", 0x3647, 1),
     ("grid_port_percent", 0x364F, 2),
     ("local_anti_reflux", 0x365A, 3),
@@ -64,6 +66,10 @@ def interpret(raw, errors):
         charge, discharge = raw["schedule_flags"]
         result["charge_mask_raw"] = charge
         result["discharge_mask_raw"] = discharge
+        result["discharge_schedule_enabled"] = bool(discharge)
+        result["charge_schedule_enabled"] = bool(charge)
+        if charge > 127 or discharge > 127:
+            result["errors"]["schedule_flags"] = "Out-of-range TOU enable mask; review full register decoder"
     if "mode" in raw:
         result["operating_mode_raw"] = raw["mode"][0]
     if "grid_port_percent" in raw:
