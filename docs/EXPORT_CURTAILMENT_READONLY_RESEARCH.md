@@ -178,6 +178,12 @@ The script compares the independent inverter-accessible meter-A sum with signed 
 
 **Do not run a 10 minute maximum discharge merely to diagnose this**: existing TOU schedule slots repeat weekly; nighttime network limit authority is unknown and a software-only watchdog cannot guarantee rollback. A later low-power supervised field test would require separate explicit approval, an independently verified safe one-shot and recovery method, and verified SAPN/export permission before any live dispatch is enabled.
 
+## Future supervised diagnostic sizing: moderate discharge, not 10 kW (2026-11-04 owner clarification)
+
+The owner points out that for the observed **~1.5 kW net-grid export plateau** after approximately **20:30–21:00 local time**, a *modest 3–4 kW battery discharge limit* can be diagnostic when household demand is low. The discharge-limit value is **not** a guaranteed battery output or a fixed grid-export command: without network or firmware curtailment, net export is approximately `max(0, requested battery output - household load)`; with a genuine 1.5 kW export cap enforced by reducing battery output, physical battery output can instead settle around `household load + 1.5 kW` (subject to losses, load variability, SoC and firmware behavior). Examples: 3 kW with a 0.5 kW home load gives **2.5 kW unconstrained** or **~1.5 kW if capped**; 4 kW with a 1 kW home load gives **3 kW unconstrained** or **~1.5 kW if capped**. If house load is too high, the smaller discharge setting will not expose an export ceiling.
+
+**This is a test-design consideration only, not approval or implementation of any live write or forced discharge.** A planned test may briefly export **more than 1.5 kW if that limit is not active**, so avoid even 3–4 kW forced discharge until permitted network-export allowance has been confirmed, the seven weekly TOU slots' existing state has been safely snapshotted and an independent physical recovery strategy has been verified. Do not claim a maximum-power (10 kW) discharge test is necessary. Prefer daytime and nighttime read-only comparisons of genuine operating conditions first; if later authorized, use the lowest controlled power level sufficient to distinguish the hypotheses.
+
 ## Next read-only field work
 
 1. Re-read 0x365A-0x365C and identify the corresponding elekeeper "Export Limitation Settings" page, **without saving**.
