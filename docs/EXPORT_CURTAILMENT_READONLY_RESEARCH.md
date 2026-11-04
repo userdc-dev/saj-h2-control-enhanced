@@ -193,3 +193,14 @@ The owner points out that for the observed **~1.5 kW net-grid export plateau** a
 3. Independently establish whether any SAPN dynamic site-wide export limit applies and how the device receives it.
 4. Capture comparable midday data with high sunlight, battery near 100%, known load and grid export. Only then assess possible solar clipping/curtailment.
 5. Preserve unchanged everything else (mode, TOU registers, charge/discharge percentages, BMS limits, export settings). No control write experiments or automatic restoration without explicit owner permission and manufacturer-level assurance.
+
+
+## Diagnosis revision: SAJ not opted into SAPN overnight export controls — VPP email (2026-11-04)
+
+**Owner supplied correspondence:** Their electricity/VPP provider reports SAPN confirmed site is on Flexible Exports, but **SAJ has not opted into SAPN's overnight export controls**. Therefore SAJ inverter customers currently revert overnight to **1.5 kW per phase**, the default failsafe when dynamic instructions are not received. SAPN generally sends dynamic control instructions during daylight, and overnight only to opted-in inverter manufacturers. VPP provider directs this issue to SAJ for consideration.
+
+This is **reported, site-specific advice relayed via the VPP provider**, not independently inspected official SAJ opt-in registry. It provides a coherent, high-confidence causal account for the November 4 22:27 live meter plateau (site export mean ~1488 W, PV 0, battery mean ~1999 W, household ~510 W), despite 30% ~2970 W TOU discharge setting. Daytime 7.672 kW export is consistent with higher daytime flexible control. The issue is **manufacturer overnight dynamic-export participation**, not a battery incapacity or the local All-Day/TOU export-limit toggles.
+
+Next diagnostic work should **not** repeat inverter max discharge or guess hidden Modbus writes. Ask SAJ whether it will opt in and when; firmware/CSIP-AUS client/gateway requirements and eligible model; whether a certified external SCC supported by SAPN is an approved workaround. Request SAPN to confirm commissioning after vendor opts in. Keep fallback enforcement and connection limits intact. Maintain existing read-only metrics for verification after an officially supported change.
+
+Official broader background: \`https://www.sapowernetworks.com.au/industry/flexible-exports/\`, \`https://www.energymining.sa.gov.au/industry/hydrogen-and-renewable-energy/solar-batteries-and-smarter-homes/regulatory-changes-for-smarter-homes/dynamic-export-limits-requirement/questions-and-answers-for-industry\`.
