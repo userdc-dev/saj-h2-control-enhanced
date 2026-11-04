@@ -128,6 +128,21 @@ SA Power Networks confirms a variable Flexible Exports limit up to 10 kW/phase w
 
 **Next single request:** User taps **Time of Use Export Limitation Settings** and sends an image of all settings displayed, with no changes or Save. Check whether any nighttime 1500 W window exists. If not, investigate dynamic-export gateway/CSIP operating envelope, comms fallback, and whether observed 1.5 kW is a measured plateau rather than an applied limit. Under no circumstances bypass grid/export limits or disable compliance functions.
 
+## elekeeper Time-of-use export limitation screenshots — owner evidence (2026-11-04, approx 14:52–14:53 local)
+
+The owner provided three app screenshots:
+1. Page `Time-of-use export limitation` displays dropdown **Off** with a Save button, no schedule entries visible.
+2. Opening dropdown offers **Off** and **On** (no Save shown being pressed).
+3. Selecting **On** exposes `Add setting`, `Setting 1`, `Repeat 1` currently `Please select`, `Power 1` at `0`, allowed entry range **[0-9900] W**, and Save at top. This is an **unsaved UI editor state** unless independently confirmed otherwise. It is NOT proof a 0 W limit was ever applied.
+
+**Manufacturer reference**: SAJ eManager User Manual, page 63, `https://www.saj-electric.com/hubfs/Guides%20and%20Manuals/eManager/eManager_User_Manual_V3_en.pdf` says time-of-use export settings take priority over the general selling-power limit, and can run once or repeat. The eManager uses a distinct controller; this is credible functional guidance but **not proof this inverter's firmware and registers work identically**. An SAJ H2 family manual also describes the feature as limiting total export at different times of day; models differ.
+
+**Consequence**: the OFF value displayed initially weakens the hypothesis that the *local user-configured time-of-use export-limitation schedule* is the source of the observed ~1.5 kW nighttime battery-export plateau. It does **not** exclude a hidden/remote site-wide SAPN export envelope, a separate EMS/eManager gateway, installer settings, loss-of-communications fallback, or firmware constraint. Previous read-only Modbus `0x365C=0` is for a different local anti-reflux mode; **do not assert it encodes the TOU export enable**, nor guess register addresses for the timed export editor.
+
+**Safety warning**: owner should exit without Save or changing entries. Saving the currently selected On with Power=0 may create or apply a zero-export restriction; we have not tested behavior. Do not implement a Modbus write to TOU export limitation, production export limitation or generation-curtailment controls on this evidence.
+
+**Next evidence**: inspect the *parent* Export Limitation Settings screen read-only and any SAPN flexible-export gateway/device status, whether enabled and current effective allowance is displayed. If nighttime ceiling repeats, collect actual (not commanded) battery power, house load, site net grid export and status at the same time. Do not initiate new battery discharge solely to investigate.
+
 ## Next read-only field work
 
 1. Re-read 0x365A-0x365C and identify the corresponding elekeeper "Export Limitation Settings" page, **without saving**.
