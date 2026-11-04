@@ -143,6 +143,14 @@ The owner provided three app screenshots:
 
 **Next evidence**: inspect the *parent* Export Limitation Settings screen read-only and any SAPN flexible-export gateway/device status, whether enabled and current effective allowance is displayed. If nighttime ceiling repeats, collect actual (not commanded) battery power, house load, site net grid export and status at the same time. Do not initiate new battery discharge solely to investigate.
 
+## elekeeper parent Export limitation setting screen — screenshot evidence (2026-11-04 approx 14:57 local)
+
+Owner opened **Setting → Export limitation setting** on their H2-S3 inverter and provided a screenshot showing **All Day Export Limitation Settings: Off**. The second row leads to **Time of Use Export Limitation Settings**, which was independently shown **Off** in earlier 14:52 screenshot. The screen does not report an active watt limit. **No Save or changes were requested or evidenced.**
+
+The locally read Modbus `0x365C=0` is consistent with the community decoder's local anti-reflux mode being off, but the two elekeeper UI settings may use **different underlying register addresses**. We have *not* mapped the All Day/Time-of-Use UI switches to `0x365C`; treat them as three independently observed indications, not proof they are the same configuration. Local settings appearing off makes an explicitly user-enabled local 1.5 kW scheduled export cap less likely, but **does not rule out SAPN flexible export envelopes, external communications-loss fallback, gateway/installer controls, firmware-specific power constraints, or insufficient measured battery discharge**.
+
+**Next non-invasive checks:** inspect Power adjustment or relevant Running Info screens without Save; at time of observed night export plateau collect contemporaneous battery output, house load and signed grid export (known 0x40AD / 0xA03F), plus any dynamic export limit or communications status. Do not switch either export option On to test, do not write unknown registers, do not infer a lawful export allowance from an Off display.
+
 ## Next read-only field work
 
 1. Re-read 0x365A-0x365C and identify the corresponding elekeeper "Export Limitation Settings" page, **without saving**.
