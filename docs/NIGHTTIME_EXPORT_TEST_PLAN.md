@@ -96,3 +96,43 @@ The owner then ran six read-only observations through \`scripts/read_only_export
 - **Safety/cleanup essential:** The Wednesday discharge schedule **repeats weekly**. User was instructed to switch back to verified Self-consumption, delete and **save** the discharge schedule, and re-read to confirm **0/7 charge, 0/7 discharge, mode 0**. The user **has not yet supplied verification of cleanup**. Do not treat the test as completed operationally until the post-test device readback confirms these final conditions; never rely solely on its ending at 22:35.
 - **No further forced-discharge tests** are needed to establish the plateau. Investigate effective SAPN export-limit communication, approval, gateway and logged operating envelope via read-only channels. Don't write to unverified export-limit or voltage regulation registers.
 
+
+## Root-cause source attribution protocol — follow-up to 2026-11-04 field test
+
+**Important new comparative evidence (public, not proof for our site):** Other SA flexible export owners reported automatic reductions to 1.5 kW around **20:45–20:47**, including a FoxESS user who believed their dynamic commands stopped around **20:30**, with a roughly 15-minute instruction timeout. The exact expiry mechanism and cause were not independently verified. See the dated January 2026 Whirlpool posts:
+\`https://forums.whirlpool.net.au/thread/9vw4yv4x?p=-1\`.
+**Never suggest defeating these restrictions**; network instructions and default limit are connection safety constraints.
+
+**Best discriminator: the *site-specific* exported allowance recorded by SAPN at this exact interval**. Community members report that \`https://portal.sapowernetworks.com.au/\` sometimes provides a graph labeled **Export Limit** after choosing **Access to data from a property**. This is a community-reported portal workflow, NOT an officially guaranteed user entitlement; options may vary with account permissions. Check **2026-11-04 20:00–23:00 Australia/Adelaide**, especially **22:27–22:29**, and if available compare daytime when 7.672 kW was physically exported. Do not substitute the public postcode/area *Service Performance Checker* for the exact site's command history. Redact address, NMI, account and identifiers in screenshots.
+
+### Direct read-only SAJ control-source fingerprint
+
+At the Kamrui SSH prompt, after any active test has been restored safely, run:
+
+\`\`\`bash
+curl -fsSL https://raw.githubusercontent.com/userdc-dev/saj-h2-control-enhanced/vpp-preview-overnight-guard-20261103/scripts/read_only_export_source_probe.py | docker exec -i homeassistant python -
+\`\`\`
+
+This executes ONLY known Modbus FC03 reads: 0x3606..07 saved **charge/discharge masks**, 0x3647 mode, 0x364F..50 grid-port input/output percent, 0x365A..5C local anti-reflux/limit, 0x4031...36 grid voltage/frequency/inverter grid-port output, 0x406D..6F battery temperature and SOC, 0x40A0..AD house/battery/solar/site-grid, 0xA03D..42 independent meter phase-1. It **does not read SAPN's communications heartbeat or the active CSIP-AUS envelope**—register addresses for those are unknown on this firmware, and we won't invent them. The purpose is to verify *whether local controls themselves changed* and verify no weekly schedule remains active.
+
+### Attribution matrix
+
+| Site-specific SAPN limit | SAJ behavior / CSIP-AUS status | Diagnosis |
+| --- | --- | --- |
+| SAPN **issued 1.5 kW** specifically at 22:27 | SAJ exports ~1.5 kW | Genuine authorized network-set envelope (unless later evidence shows contradictory site status). |
+| SAPN **issued >1.5 kW** at 22:27 | SAJ locally holding ~1.5 kW; CSIP heartbeat expired / lost client connectivity / old command age | **Fallback path** likely; determine whether failure is the SAPN server, SAJ client, internet/dongle, or proxy aggregator using vendor/SAPN logs. Do not assume general internet connectivity proves CSIP client health. |
+| SAPN **issued >1.5 kW** at 22:27 | Client reports recent valid receipt / correct downstream limit but SAJ remains ~1.5 kW | SAJ firmware/site controller/installer setting path more likely; seek vendor per-device effective limit and command arbitration audit. |
+| SAPN history **unavailable**, or only area-level checker | SAJ exports ~1.5 kW | Root cause **still cannot be assigned**. Report precisely that the plateau is established, source isn't. |
+
+SAPN official: \`https://www.sapowernetworks.com.au/industry/flexible-exports/\`. South Australian Energy & Mining FAQ: \`https://energymining.sa.gov.au/industry/hydrogen-and-renewable-energy/solar-batteries-and-smarter-homes/regulatory-changes-for-smarter-homes/dynamic-export-limits-requirement/questions-and-answers-for-industry\`.
+
+The case should request SAPN and/or SAJ/installer:
+- Confirm connection approval: *fixed vs flexible*, commissioned status and relevant-agent/communications-provider type.
+- Identify manufacturer/model of CSIP-AUS **software client** (native inverter, separate gateway, or cloud proxy) and manufacturer of the export-limiting meter/CT.
+- For **2026-11-04 20:00–23:00 Adelaide local**: actual utility-server export allowance time series, command issue times, command validity/expiry, **last successfully received/acknowledged instruction**, site communications state and any fallback event.
+- If SAPN reports healthy >1.5 kW during the 22:27 test, SAJ should provide *actual effective site export limit at 22:27*, the origin of the prevailing instruction, any fallback mode and logs explaining why it took priority over the unsaved/off local export UI controls.
+- Do not request changes to inverter protection or limits for diagnosis.
+
+### Status gating
+
+The owner has **not yet confirmed restoration of the Wednesday recurring 22:23–22:35 discharge slot** after the live test. Before any further commands that *write* to the inverter, explicitly verify mode=0 and discharge mask=0 (0x3607); returning Self-consumption alone does not clear this weekly slot. Reading status is safe. A failure in schedule cleanup needs manual inspection; no automatic blind retries.
