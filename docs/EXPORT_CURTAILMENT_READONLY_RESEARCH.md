@@ -97,6 +97,22 @@ The homeowner ran another strictly read-only diagnostic of holding-register bloc
 - **Control design consequence:** monitor signed `0x40AD` as net export/import; do not substitute `0x4035` or `0x40A7` inverter-side output signals for export-limiting feedback. More importantly, do not implement a write to an unverified anti-reflux/generation-limit register. PV curtailment remains research-only; only user-confirmed hardware/firmware control semantics and a safe recoverable commissioning plan could permit changes.
 - Follow-up with owner: inspect (without touching Save) the elekeeper **Export/Generation Limitation Settings** screens and establish SAPN fixed/Flexible Exports approval and any dynamic export gateway. A screenshot of those settings would materially help map the live configuration.
 
+## Owner-observed day versus night export ceiling — hypothesis, NOT authorized limit (2026-11-04)
+
+The owner reports a **roughly 10 kW export ceiling in daylight and apparently ~1.5 kW grid export at night**, despite expecting more nighttime battery export. This is operational experience and **not** yet a concurrent day/night Modbus proof or documentary confirmation of an approved export connection. It aligns with the owner's direct midday net-export measurement `0xA03F=0x40AD=-7672 W`, proving that at least one daytime instantaneous export exceeded 1.5 kW.
+
+**Public policy facts (verified, distinguish from hypothesis):**
+- SA Power Networks says Flexible Exports varies site export limits between ~1.5 kW and up to 10 kW per phase in standard areas, dependent on network conditions, system capacity and communications. See `https://www.sapowernetworks.com.au/industry/flexible-exports/`.
+- SA Department for Energy and Mining confirms that CSIP-AUS/IEEE 2030.5 implements a 1.5 kW automatic **communications-loss fallback** if valid limit updates are not restored within a reasonable time; no evidence yet that this homeowner's communications failed: `https://www.energymining.sa.gov.au/industry/hydrogen-and-renewable-energy/solar-batteries-and-smarter-homes/regulatory-changes-for-smarter-homes/dynamic-export-limits-requirement/questions-and-answers-for-industry`.
+- SAPN states that solar in a hybrid PV/battery system must be dynamic-export capable, while the storage system is exempt from those *technical dynamic capability requirements*. **Not** proof of permission to export arbitrary battery power at night or override whole-site limits.
+- SAPN historical Flexible Exports trial material describes a high variable limit communicated **during daylight hours**; this might explain an apparent day/night difference, but does not establish the contractual or technical behavior of the owner's installation: `https://www.sapowernetworks.com.au/public/download.jsp?id=320975`.
+
+**Competing explanations to distinguish (no assumed root cause):** (a) nighttime scheduled dynamic operating envelope/expiry returning to fallback; (b) CSIP-AUS communications or heartbeat loss/timeouts, perhaps coincidentally appearing at night; (c) separate installer/gateway nighttime export configuration; (d) inverter firmware battery-export constraint or VPP setting; (e) measured battery discharge/available power and house load rather than a site-export cap.
+
+**Safe next evidence:** Ask owner whether the 1.5 kW is displayed *as an export limit* in elekeeper, or an observed plateau of **actual net grid export** while battery output is higher. Request simultaneous nighttime screenshots of elekeeper battery power, home consumption, solar power and grid export, optionally read-only `0x40AD`, `0x40A5`, `0x40A6`, mode `0x3647`, export-control `0x365A..0x365C`. Do **not** command discharge just for this test. If available, inspect dynamic-export gateway health, received operating envelope/time stamp and commissioning paperwork. Avoid local Modbus register writes or limits changes; network-authorized export envelopes take precedence.
+
+**Design impact:** Treat `10 kW by day / 1.5 kW at night` as a *user-observed pattern*, never a confirmed device setting or automatically enforceable/reprogrammable export schedule. Future VPP dispatch cannot assume nighttime high-rate battery export, must have verified effective time-varying site limit and fail closed when this is missing. Keep curtailment and live VPP commands disabled.
+
 ## Next read-only field work
 
 1. Re-read 0x365A-0x365C and identify the corresponding elekeeper "Export Limitation Settings" page, **without saving**.
