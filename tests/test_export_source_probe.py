@@ -18,7 +18,8 @@ class Reply:
 
 def blocks():
     return {
-        (0x3606, 2): [0, 1],  # test case: forgotten weekly discharge mask
+        (0x3604, 2): [0, 1],  # correct schedule enable masks (charge=0, discharge=slot 1)
+        (0x3606, 2): [2048, 2078],  # charge slot times 08:00–08:30; NOT masks
         (0x3647, 1): [1],
         (0x364F, 2): [1100, 1100],
         (0x365A, 3): [1100, 0, 0],
@@ -52,7 +53,9 @@ class TestSourceFingerprint(unittest.TestCase):
         r = probe.interpret(raw, errors)
         self.assertEqual(r["operating_mode_raw"], 1)
         self.assertEqual(r["discharge_mask_raw"], 1)
+        self.assertTrue(r["discharge_schedule_enabled"])
         self.assertEqual(r["charge_mask_raw"], 0)
+        self.assertFalse(r["charge_schedule_enabled"])
         self.assertEqual(r["grid_output_percent"], 110)
         self.assertEqual(r["local_limit_power_raw"], 1100)
         self.assertEqual(r["local_anti_reflux_mode_raw"], 0)
@@ -63,8 +66,17 @@ class TestSourceFingerprint(unittest.TestCase):
         self.assertEqual(r["export_w"], 1504)
         self.assertEqual(r["meter_phase_1_w"], -1484)
         self.assertEqual(r["soc_percent"], 95)
-        self.assertEqual([a for a, _, _ in c.calls], [0x3606, 0x3647, 0x364F,
+        self.assertEqual([a for a, _, _ in c.calls], [0x3604, 0x3647, 0x364F,
             0x365A, 0x4031, 0x406D, 0x40A0, 0xA03D])
+    def test_owner_22_39_charge_slot_times_must_not_be_interpreted_as_masks(self):
+        fake = blocks()
+        fake[(0x3604, 2)] = [0, 1]
+        fake[(0x3606, 2)] = [2048, 2078]  # 08:00 and 08:30; not masks
+        r = probe.interpret(*probe.take_snapshot(Client(fake)))
+        self.assertEqual(r["charge_mask_raw"], 0)
+        self.assertEqual(r["discharge_mask_raw"], 1)
+        self.assertNotEqual(r["discharge_mask_raw"], 2078)
+
     def test_legacy_slave_compatible(self):
         c = OldClient()
         raw, errors = probe.take_snapshot(c)
