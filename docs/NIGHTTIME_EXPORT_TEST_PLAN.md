@@ -136,3 +136,11 @@ The case should request SAPN and/or SAJ/installer:
 ### Status gating
 
 The owner has **not yet confirmed restoration of the Wednesday recurring 22:23–22:35 discharge slot** after the live test. Before any further commands that *write* to the inverter, explicitly verify mode=0 and discharge mask=0 (0x3607); returning Self-consumption alone does not clear this weekly slot. Reading status is safe. A failure in schedule cleanup needs manual inspection; no automatic blind retries.
+
+## 2026-11-04 22:39:06 (+10:30) — post-window snapshot, probe register-label correction
+
+Owner's \`read_only_export_source_probe.py\` returned **no read errors**, Time-of-Use mode **1**, PV **0 W**, house and battery each **569 W**, system grid **0 W** and meter phase 1 **-3 W**, SOC **94%**, battery temp **21.0 C**, AC voltage **246.3 V**, local anti-reflux mode **0**, grid-port input/output **110.0%**. This indicates the 22:23–22:35 discharge window is no longer actively exporting, with outside-TOU Self-consumption behavior despite operating mode still set to TOU. It does **not** establish schedule deletion or the mechanism of the earlier ~1.5kW cap.
+
+**IMPORTANT BUG CORRECTION:** The initial \`read_only_export_source_probe.py\` accidentally read \`0x3606\` and \`0x3607\` as charge/discharge enable masks. They are actually **charge slot 1 start/end time words**. Owner observed \`2048 = 0x0800 = 08:00\` and \`2078 = 0x081E = 08:30\`, and these have **no standing as schedule masks**. Correct mask addresses are \`0x3604\` (charge) and \`0x3605\` (discharge), independently defined and validated in \`custom_components/saj_h2_control_enhanced/tou_protocol.py\`. Source probe and offline test were corrected immediately; **the 22:39 readout did not determine whether the Wednesday discharge schedule was still enabled**. A fresh read with the corrected probe must precede any conclusion about cleanup.
+
+The user's live discharge at 22:27–22:29 independently established the ~1.5kW net-export plateau. The 22:39 reading is an ordinary post-window Self-consumption fallback observation and cannot identify whether the limit originated with SAPN, a CSIP-AUS communication fallback, or SAJ firmware.
