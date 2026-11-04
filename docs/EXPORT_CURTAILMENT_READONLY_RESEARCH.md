@@ -99,7 +99,7 @@ The homeowner ran another strictly read-only diagnostic of holding-register bloc
 
 ## Owner-observed day versus night export ceiling — hypothesis, NOT authorized limit (2026-11-04)
 
-The owner reports a **roughly 10 kW export ceiling in daylight and apparently ~1.5 kW grid export at night**, despite expecting more nighttime battery export. This is operational experience and **not** yet a concurrent day/night Modbus proof or documentary confirmation of an approved export connection. It aligns with the owner's direct midday net-export measurement `0xA03F=0x40AD=-7672 W`, proving that at least one daytime instantaneous export exceeded 1.5 kW.
+The owner reports a **roughly 10 kW export ceiling in daylight and apparently ~1.5 kW grid export at night**, despite expecting more nighttime battery export. On 2026-11-04 the owner **clarified option B**: they have **actually tried discharging the battery at night**, and observed **net grid export plateauing at approximately 1.5 kW despite the battery being capable of greater output**. This is an observed physical behavior, **not** a claim that elekeeper displays a configured 1,500 W limit. It is **not yet** a simultaneous nighttime Modbus trace or documentary confirmation of an approved export connection. It aligns with the owner's direct midday net-export measurement `0xA03F=0x40AD=-7672 W`, proving that at least one daytime instantaneous export exceeded 1.5 kW.
 
 **Public policy facts (verified, distinguish from hypothesis):**
 - SA Power Networks says Flexible Exports varies site export limits between ~1.5 kW and up to 10 kW per phase in standard areas, dependent on network conditions, system capacity and communications. See `https://www.sapowernetworks.com.au/industry/flexible-exports/`.
