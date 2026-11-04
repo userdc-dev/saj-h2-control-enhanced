@@ -163,3 +163,29 @@ SA Power Networks official: `https://www.sapowernetworks.com.au/industry/flexibl
 
 **Correction to older initial probe:** `0x3606=2048` (08:00) and `0x3607=2078` (08:30) are charge slot times, not enable masks. Source probe was fixed to read `0x3604/0x3605` for TOU enable masks. Those mask values are NOT export-control register values and should **not be used to infer SAPN limits**.
 
+
+
+## ROOT CAUSE IDENTIFIED THROUGH VPP PROVIDER'S SAPN ENQUIRY — 2026-11-04
+
+**New, materially decisive external evidence supplied by the system owner:** Their electricity/VPP company emailed that they asked SA Power Networks (SAPN) about this site, and SAPN confirmed:
+
+> SAPN has confirmed that your site is configured for flexible exports.
+> SAJ has not opted in to receive SAPN’s overnight export controls.
+> As a result, customers with SAJ inverters are currently restricted to the default export limit of 1.5 kW per phase overnight.
+> The 1.5 kW per phase limit is SAPN’s failsafe setting for flexible export sites when dynamic export limits are not being received.
+> SAPN generally sends dynamic export limits during daylight hours. Overnight controls are only enabled where the inverter manufacturer has opted in to receive them.
+
+The VPP provider directs the homeowner to raise SAJ's **overnight opt-in / supported implementation** with SAJ. This is **firsthand text of an email received by owner, relaying SAPN's site-specific advice**, not a direct public SAPN statement or vendor firmware changelog. Treat the explanation as **high-confidence reported root cause**, distinguished from independently verified protocol/network logs.
+
+**Diagnosis:** The owner's nighttime steady-state grid export around 1.5 kW is expected *under the current SAJ overnight dynamic export participation status*, rather than an indication of a defective 40.96 kWh battery or a Home Assistant TOU issue. In daytime a flexible limit can be higher (physical test measured 7.672 kW); at night, because SAJ has not enrolled to receive overnight dynamic export controls, the 1.5 kW default applies. The matching live night discharge test at 22:27 (actual 1.488 kW grid export, 2.0 kW battery discharge, 0.51 kW load against 2.97 kW ceiling) independently corroborates the *mechanical behavior*.
+
+**Public corroboration of protocol principles** (but *not* SAJ-specific overnight opt-in): SA government FAQ \`https://www.energymining.sa.gov.au/industry/hydrogen-and-renewable-energy/solar-batteries-and-smarter-homes/regulatory-changes-for-smarter-homes/dynamic-export-limits-requirement/questions-and-answers-for-industry\` says CSIP-AUS/IEEE2030.5 fallback limit applies when dynamic controls are unavailable; SAPN flexible exports \`https://www.sapowernetworks.com.au/industry/flexible-exports/\` documents dynamic export capacity and 1.5 kW lower limit for standard sites. SAPN inverter commissioning FAQ \`https://www.sapowernetworks.com.au/connections/connect-solar-and-ev-chargers/small-embedded-generation/cer-compliance/frequently-asked-questions/\` says registration is manufacturer specific.
+
+**Actionable follow-up, not further register write testing**:
+1. Open SAJ manufacturer technical case for **H2-10K-S3-A, firmware v2.018 (verify actual)**. Attach quoted VPP provider statement and actual dated export measurements; ask SAJ to **opt in to SAPN overnight export controls** and confirm eligibility for this inverter/communications module, minimum required firmware/client version, planned rollout/date, and a case reference.
+2. Ask SAJ if an installer-approved **compatible certified external CSIP-AUS software client/gateway** can provide overnight instructions for this model under SAPN rules, without a new inverter. Do **not** assume a Catch Power unit is presently installed or will solve overnight support without proof.
+3. If SAJ claims the overnight opt-in has already occurred, request the **effective date**, device-side last-successful overnight command/CSIP-AUS software client log, and confirmation from SAPN that the site is provisioned for overnight envelopes.
+4. Do **not** override \`0x365A...0x365C\`, manually disable fallback or attempt to circumvent network export controls with HA/TOU. Local network limits apply to the entire site's net exports. VPP can still use self-consumption or other permitted services, but economic overnight exports are constrained to ~1.5 kW per phase pending approved change.
+5. Fix any leftover temporary recurring TOU discharge schedule *separately*; the confirmed mechanism no longer needs more physical discharge tests.
+
+**Supersedes** the earlier undifferentiated speculation ("network actively sent 1.5 kW" versus "internet failure" versus "firmware unrelated"). The strong leading explanation is explicitly **no SAJ manufacturer opt-in for overnight control messages → default 1.5 kW overnight**. While an independent direct SAPN log has not been produced, extra Modbus meter tests cannot establish the missing manufacturer enrollment and are not the right next step.
