@@ -73,6 +73,30 @@ User executed the second requested **read-only** Modbus test in the Home Assista
 - SAJ manufacturer configuration guide, page 41 (total export cap vs phase caps) and page 67 (Export/Generation Limitation Settings, optional hard vs soft): `https://au.saj-electric.com/hubfs/Guides%20and%20Manuals/HS3/H2_HS2_HS3_AS2_AS3_Configuration_Instructions_V1.0_en.pdf`.
 - **Next safe step**: read only `0xA03D` count 18 (three phase meter A values) and contemporaneous `0x40AD`; compare meter sum of signed phase real powers, grid power and elekeeper. Never infer safe curtailment controls from negative FiT or local anti-reflux mode alone.
 
+## Third diagnostic — Meter A agrees exactly with system net grid power (2026-11-04 14:09:38 Australia/Adelaide)
+
+The homeowner ran another strictly read-only diagnostic of holding-register blocks `0xA03D` count 18 and `0x40AD` count 1. Terminal input had an inconsequential garbled paste fragment, but the complete read program ran and reported no setting changes.
+
+### Verified raw capture
+
+```
+0xA03D = 2489    # Meter A phase 1 voltage: 248.9 V
+0xA03E = 3275    # Phase 1 current: 32.75 A
+0xA03F = 57864   # Signed int16 = -7672 W net phase 1 power
+0xA040 = 8146    # Meter A phase 1 apparent power: 8146 VA
+0xA041 = 64595   # Signed int16 = -941, candidate PF = -0.941
+0xA042 = 5004    # Meter A phase 1 frequency: 50.04 Hz
+0xA043..0xA04E = all 0   # Phase 2 and phase 3 fields unavailable/zero
+0x40AD = 57864   # Signed int16 = -7672 W system net grid
+```
+
+- **Meter phase sum = -7672 W; system grid power 0x40AD = -7672 W; mismatch = 0 W.** This independently corroborates that `0x40AD` is the correct signed **net site grid-exchange** signal for monitoring on this SAJ H2 installation (negative export; positive import). It is *not* independently verified against a utility revenue meter.
+- Internal consistency: `248.9 V × 32.75 A ≈ 8151 VA` versus measured `8146 VA`; `7672 / 8146 ≈ 0.942` versus signed power-factor raw `-941` / 1000. Inverter appears to have **one active metered phase**, with phase 2/3 zero; verify meter topology before asserting service connection phase configuration.
+- Snapshot demonstrates **approximately 7.672 kW real power export** at this instant. It is greater than 5 kW, but **does not establish a compliance violation or a granted export allowance**; SAPN flexible exports, site connection agreement, additional export controller and momentary dynamic operating envelope remain unknown.
+- Since this reading occurred five minutes after the earlier 14:04 PV balance, do NOT combine the two snapshots to derive a simultaneous PV/load balance.
+- **Control design consequence:** monitor signed `0x40AD` as net export/import; do not substitute `0x4035` or `0x40A7` inverter-side output signals for export-limiting feedback. More importantly, do not implement a write to an unverified anti-reflux/generation-limit register. PV curtailment remains research-only; only user-confirmed hardware/firmware control semantics and a safe recoverable commissioning plan could permit changes.
+- Follow-up with owner: inspect (without touching Save) the elekeeper **Export/Generation Limitation Settings** screens and establish SAPN fixed/Flexible Exports approval and any dynamic export gateway. A screenshot of those settings would materially help map the live configuration.
+
 ## Next read-only field work
 
 1. Re-read 0x365A-0x365C and identify the corresponding elekeeper "Export Limitation Settings" page, **without saving**.
