@@ -80,11 +80,15 @@ def take_snapshot(client, *, unit_id=1, timestamp=None):
                 result["anti_reflux_power_raw"] = values[0]
                 result["anti_reflux_mode_raw"] = values[2]
             elif name == "battery":
-                result["battery_inverter_w"] = signed16(values[0])
-                result["battery_temp_c"] = signed16(values[1]) / 10
+                # Decode to local variables first. A bad SOC value must not
+                # leave a misleading partially accepted battery block.
+                inverter_w = signed16(values[0])
+                temperature_c = signed16(values[1]) / 10
                 raw_soc = values[2]
                 if raw_soc > 10000:
                     raise ValueError("SOC outside the documented 0–100% range")
+                result["battery_inverter_w"] = inverter_w
+                result["battery_temp_c"] = temperature_c
                 result["soc_percent"] = raw_soc / 100
             elif name == "flow":
                 result["house_w"] = signed16(values[0])
