@@ -144,3 +144,22 @@ Owner's \`read_only_export_source_probe.py\` returned **no read errors**, Time-o
 **IMPORTANT BUG CORRECTION:** The initial \`read_only_export_source_probe.py\` accidentally read \`0x3606\` and \`0x3607\` as charge/discharge enable masks. They are actually **charge slot 1 start/end time words**. Owner observed \`2048 = 0x0800 = 08:00\` and \`2078 = 0x081E = 08:30\`, and these have **no standing as schedule masks**. Correct mask addresses are \`0x3604\` (charge) and \`0x3605\` (discharge), independently defined and validated in \`custom_components/saj_h2_control_enhanced/tou_protocol.py\`. Source probe and offline test were corrected immediately; **the 22:39 readout did not determine whether the Wednesday discharge schedule was still enabled**. A fresh read with the corrected probe must precede any conclusion about cleanup.
 
 The user's live discharge at 22:27–22:29 independently established the ~1.5kW net-export plateau. The 22:39 reading is an ordinary post-window Self-consumption fallback observation and cannot identify whether the limit originated with SAPN, a CSIP-AUS communication fallback, or SAJ firmware.
+
+## Source-path narrowing: SAJ H2-10K-S3-A communications implementation (4 November 2026)
+
+An **older official Clean Energy Council List of Inverters with Software Communication Client, last updated 28 Oct 2024**, explicitly listed **Guangzhou Sanjing Electric / SAJ H2-10K-S3-A** with `Inverter Inbuilt OR Catch Power Catch Solar Relay` as capable communications implementations. Historical list: `https://cleanenergycouncil.org.au/getmedia/0d57d2a9-5ebe-4d43-8c1c-88d02f3f04af/Inverters-with-SCC-2024-10-28-1.pdf`, SAJ table around page 8. **This does NOT establish the actual installed SCC/gateway at this address**, and current certification should be confirmed via the live CEC CSIP-AUS database: `https://cleanenergycouncil.org.au/industry-programs/products-program/inverters/approved-inverters-csip-aus`.
+
+This provides a **new device-specific bifurcation** for root cause:
+- **SAJ inverter inbuilt dynamic-export client:** Need SAJ firmware or inverter communication-module operational logs, CSIP connection health, last received dynamic operating envelope and expiry/fallback.
+- **Catch Power Catch Solar Relay (or other installed gateway):** Need physical unit identity, gateway web/app health and log of CSIP receipts and downstream inverter commands. Do not assume the SAJ Wi-Fi dongle itself is the CSIP client from its appearance.
+- An official South Australian Technical Regulator Guideline (DER v1.5) additionally permits CSIP-AUS communication via cloud software clients, meaning that **a local ping or functioning eLEKeeper cloud account does not prove the dynamic-export control channel is healthy**.
+
+**Use the owner's exact real test interval:** `2026-11-04 22:27:03–22:28:46 Australia/Adelaide`: site meter was constrained to ~1.5 kW. Obtain the *site-specific* SAPN-issued export allowance for this same period, and ideally `20:15–21:15` to examine expiry/timeout around the owner's alleged evening transition. Do NOT confuse the network-issued limit with actual power flow, area-level forecasts or customer feed-in tariff. Distinguish:
+1. **SAPN issued 1.5kW**: limit was likely authorized, not a communications fault.
+2. **SAPN issued higher limit, SCC never received it and entered fallback**: communication path failure/expiry.
+3. **SAPN issued higher limit, SCC received it on time, inverter still applies 1.5kW**: downstream SAJ/gateway control arbitration, config or firmware.
+
+SA Power Networks official: `https://www.sapowernetworks.com.au/industry/flexible-exports/` explains 1.5–10kW flexibility and fallback to 1.5kW when communications unavailable. South Australian Energy & Mining Q&A: `https://energymining.sa.gov.au/industry/hydrogen-and-renewable-energy/solar-batteries-and-smarter-homes/regulatory-changes-for-smarter-homes/dynamic-export-limits-requirement/questions-and-answers-for-industry`.
+
+**Correction to older initial probe:** `0x3606=2048` (08:00) and `0x3607=2078` (08:30) are charge slot times, not enable masks. Source probe was fixed to read `0x3604/0x3605` for TOU enable masks. Those mask values are NOT export-control register values and should **not be used to infer SAPN limits**.
+
