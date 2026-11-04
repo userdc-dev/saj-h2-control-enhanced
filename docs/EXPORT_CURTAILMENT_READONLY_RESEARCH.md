@@ -160,7 +160,9 @@ Two screenshots supplied by owner (not yet evidence of *saving* changes):
 
 Manufacturer H2 family configuration reference: `https://au.saj-electric.com/hubfs/Guides%20and%20Manuals/HS3/H2_HS2_HS3_AS2_AS3_Configuration_Instructions_V1.0_en.pdf`. Other SAJ generation family manual explains soft export versus hard export/generation mode can differ materially during comms loss: `https://www.saj-electric.com/hubfs/Guides%20and%20Manuals/HS5/HS5-T/EK90_HS5-%288K-20K%29-T3-X_User_Manual_V0_en.pdf`; do **not** automatically transfer behavior to H2 firmware.
 
-**Critical clarification needed:** Did the owner only toggle All Day from Off to On to reveal the Power and Soft/Hard fields (without saving), or did they tap the first Save? If saved, re-check settings and Modbus to avoid mischaracterizing an altered active configuration. No commands to change or bypass export-limit, voltage/var, grid-code, or curtailment registers are authorized.
+**Owner confirmation (2026-11-04):** The owner selected **On only to reveal additional fields** in elekeeper and **did not press Save**. Therefore the earlier **Off** value remains the last observed saved/persisted setting; the screenshot showing On, Total power mode, 10,890 W, and Soft export limit is strictly an **unsaved editor preview**, NOT a change to the inverter. No inverter export settings were changed during this inspection.
+
+**Safety:** No commands to change or bypass export-limit, voltage/var, grid-code, or curtailment registers are authorized.
 
 ## Next read-only field work
 
