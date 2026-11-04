@@ -46,6 +46,33 @@ References:
 - Community decoder (anti-reflux enum): `https://github.com/stanus74/home-assistant-saj-h2-modbus/blob/main/custom_components/saj_h2_modbus/modbus_readers.py`
 - SA Power Networks Flexible Exports: `https://www.sapowernetworks.com.au/your-power/your-solar/`
 
+## Second diagnostic — midday grid export (2026-11-04 14:04:38 Australia/Adelaide)
+
+User executed the second requested **read-only** Modbus test in the Home Assistant container. The terminal paste was partly garbled, but output completed; no write functions were in the script and the complete requested blocks were printed.
+
+### Raw capture
+
+- Export control: `0x365A=1100, 0x365B=0, 0x365C=0`, unchanged from 2026-11-03.
+- Inverter-side phase/grid block `0x4031..0x4044`: `[2487,2648,5001,65530,5877,6588,891,0,0,0,0,0,0,0,0,0,0,0,0,0]`. Mapped as R-grid 248.7 V, 26.48 A, 50.01 Hz, 5877 W inverter-side grid port real power; S and T phase fields zero. `0x4034=65530` is -6 signed; the earlier quick test only printed signed for three fields.
+- Direction flags `0x4095..0x4098=[1,1,1,1]`; semantics not independently verified; do not interpret blindly.
+- Realtime `0x40A0..0x40AD=[943,0,0,0,0,6277,13,5848,6599,5821,6602,0,53,60189]`.
+  - `0x40A0=943 W`: site load/house consumption (community mapping).
+  - `0x40A5=6277 W`: PV total.
+  - `0x40A6=13 W`: battery essentially idle; verify sign with live app before relying on small readings.
+  - `0x40A7=5848 W`: inverter-side total grid output; **not the metered site import/export**.
+  - `0x40A9=5821 W`: inverter output.
+  - `0x40AD=60189` interpreted as signed int16 **-5347 W**, strong evidence of **net site export**. Community SAJ decoder labels this `gridPower`; another SAJ H2 template labels it `SysGridPowerWall` and uses signed positive-import/negative-export.
+  - Energy check: `6277 - 943 - 13 = 5321 W`, within 26 W of -5347 W signed site export. Variation likely asynchronous register samples or sensor tolerances; this is compelling but not yet physical meter proof.
+
+### Interpretation and follow-up
+
+- This snapshot proves there is substantial measured solar output and likely **~5.35 kW site export** with little battery charge/discharge at that time. It does **not** prove network export permission, curtailment, or absence of dynamic limits.
+- `0x4035` (inverter/grid port) and `0x40A7` (inverter grid power) are about 5.8 kW positive; they do **not** match the site balance and must **not** be used to compute site revenue or export control feedback. This differentiation is important for grid power sign handling in Home Assistant.
+- Community SAJ register list: `https://github.com/stanus74/home-assistant-saj-h2-modbus/blob/main/register_overview.md`
+- Independent per-phase metering investigation (Oct 2026): `https://github.com/evcc-io/evcc/issues/34757` reports actual meter phase power at `0xA03F,0xA045,0xA04B` signed positive import/negative export, distinct from inverter-side `0x4035` power. This is **external user evidence** on a different SAJ H2 and needs owner-specific readback validation.
+- SAJ manufacturer configuration guide, page 41 (total export cap vs phase caps) and page 67 (Export/Generation Limitation Settings, optional hard vs soft): `https://au.saj-electric.com/hubfs/Guides%20and%20Manuals/HS3/H2_HS2_HS3_AS2_AS3_Configuration_Instructions_V1.0_en.pdf`.
+- **Next safe step**: read only `0xA03D` count 18 (three phase meter A values) and contemporaneous `0x40AD`; compare meter sum of signed phase real powers, grid power and elekeeper. Never infer safe curtailment controls from negative FiT or local anti-reflux mode alone.
+
 ## Next read-only field work
 
 1. Re-read 0x365A-0x365C and identify the corresponding elekeeper "Export Limitation Settings" page, **without saving**.
