@@ -42,5 +42,6 @@ jobs:
           python -m unittest discover -s tests -p 'test_vpp_soc_readback.py'
           python -m unittest discover -s tests -p 'test_vpp_safety_supervisor.py'
           python -m unittest discover -s tests -p 'test_export_readonly_trace.py'
+          python -m unittest discover -s tests -p 'test_export_source_probe.py'
       - name: Verify zero-YAML installer syntax
         run: bash -n scripts/install.sh
