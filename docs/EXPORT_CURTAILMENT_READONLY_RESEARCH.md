@@ -164,6 +164,20 @@ Manufacturer H2 family configuration reference: `https://au.saj-electric.com/hub
 
 **Safety:** No commands to change or bypass export-limit, voltage/var, grid-code, or curtailment registers are authorized.
 
+## Tested read-only 2-minute export trace (development branch, 2026-11-04)
+
+Code: \`scripts/read_only_export_trace.py\` and offline mocks \`tests/test_export_readonly_trace.py\`. GitHub Actions runs test with fake response values from the owner's register captures. The Python script executes **only Modbus holding-register function 03**, with no changes to mode, inverter output, TOU, export limits, curtailment, battery BMS, or anything on the inverter. It logs six snapshots at 20-second spacing (roughly two minutes) using the existing Home Assistant container's pymodbus dependency. Each reading has its own error details; failures are unknown, never guessed as zero.
+
+At the owner's SSH prompt on Kamrui, **only when convenient, preferably while the observed ~1.5 kW nighttime export behavior is already occurring normally**:
+
+\`\`\`bash
+curl -fsSL https://raw.githubusercontent.com/userdc-dev/saj-h2-control-enhanced/vpp-preview-overnight-guard-20261103/scripts/read_only_export_trace.py | docker exec -i homeassistant python - --host 172.16.1.4 --samples 6 --interval 20
+\`\`\`
+
+The script compares the independent inverter-accessible meter-A sum with signed 0x40AD grid reading, plus PV 0x40A5, house 0x40A0, aggregate battery 0x40A6, inverter-side battery 0x406D, SOC 0x406F, battery temperature 0x406E, mode 0x3647 and anti-reflux 0x365A..0x365C. Blocks are sequential, not truly simultaneous. Do not try to provoke or create a nighttime export plateau by enabling TOU. No maximum-power or recurring schedule test is necessary at this stage.
+
+**Do not run a 10 minute maximum discharge merely to diagnose this**: existing TOU schedule slots repeat weekly; nighttime network limit authority is unknown and a software-only watchdog cannot guarantee rollback. A later low-power supervised field test would require separate explicit approval, an independently verified safe one-shot and recovery method, and verified SAPN/export permission before any live dispatch is enabled.
+
 ## Next read-only field work
 
 1. Re-read 0x365A-0x365C and identify the corresponding elekeeper "Export Limitation Settings" page, **without saving**.
