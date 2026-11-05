@@ -1,5 +1,15 @@
 # Developer handover — SAJ H2 Control Enhanced
 
+## v0.5.27 — Home Assistant 2026.11 interval callback compatibility (2026-11-05)
+
+Live post-install logs showed `scheduled_vpp_tick` running in a worker thread and
+Home Assistant rejecting `hass.async_create_task(vpp_watchdog_tick())` every 20
+seconds. The weekly learning wrapper had the same unsafe pattern. Both interval
+callbacks are now `async def` and directly await their coroutines, so the interval
+helper schedules them on the event loop. A static regression prevents restoring
+the rejected task-creation pattern. This changes scheduling only: no inverter
+write, Modbus, control, polling, or saved configuration behavior changed.
+
 ## v0.5.26 — Intermittent dashboard configuration errors (2026-11-05)
 
 The owner reports the entire SAJ dashboard temporarily failing, especially on

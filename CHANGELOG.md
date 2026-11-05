@@ -1,3 +1,14 @@
+## v0.5.27 — Home Assistant 2026.11 timer compatibility (2026-11-05)
+
+- Convert the weekly forecast-learning and 20-second VPP safety timer callbacks
+  to async callbacks awaited by Home Assistant's interval tracker. Home Assistant
+  2026.11 otherwise ran the synchronous wrappers on a worker thread and rejected
+  `hass.async_create_task`, producing a RuntimeError every 20 seconds.
+- No Modbus write, polling, control, schedule, or inverter configuration behavior
+  changed. The VPP watchdog remains no-write unless its existing explicit paths
+  and guards are used.
+- Add a static regression and bump the frontend resource to v0527.
+
 ## v0.5.26 — Dashboard loading and rendering recovery (2026-11-05)
 
 - Register the bundled card through Lovelace module resources to avoid relying

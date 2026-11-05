@@ -79,9 +79,10 @@ Unavailable monitor sensors must display unavailable values, never fabricated ze
 
 ## 6. Upgrades and troubleshooting
 
-### v0.5.26: intermittent dashboard Configuration error, including Android
+### v0.5.27: intermittent dashboard Configuration error, including Android
 
-This version registers the bundled card as a Lovelace **module resource**, rather
+Version 0.5.27 includes this dashboard fix plus Home Assistant 2026.11-safe async
+interval callbacks. It registers the bundled card as a Lovelace **module resource**, rather
 than relying solely on global extra JavaScript loading. This addresses a potential
 card-registration race on cold loads. Rendering failures now show a local retry
 message and recover on the next state update or view attachment. Unsaved drafts
@@ -90,16 +91,16 @@ Large recorded history responses no longer exceed browser function argument
 limits when calculating chart bounds.
 No automatic inverter commands are added.
 
-1. Once v0.5.26 is merged/released, update using HACS or the existing installer
+1. Once v0.5.27 is merged/released, update using HACS or the existing installer
    above. The installer downloads `main`; it does **not** install an unmerged PR.
    To test the PR before merge, download its branch ZIP from GitHub and replace
    only `custom_components/saj_h2_control_enhanced` in your HA config directory,
    keeping a copy of the previous folder. Leave the monitor and config files alone.
-2. Restart Home Assistant. Confirm the integration version is **0.5.26**.
+2. Restart Home Assistant. Confirm the integration version is **0.5.27**.
 3. In storage resource mode, the integration creates/updates only its own
    `/saj-h2-tou/v…/saj-tou-dynamic-card.js` module resource automatically. It does
    not replace dashboard layouts or unrelated resources. The new URL is
-   `/saj-h2-tou/v0526/saj-tou-dynamic-card.js`.
+   `/saj-h2-tou/v0527/saj-tou-dynamic-card.js`.
 4. If you manage Lovelace resources in YAML, update/add that URL with
    `type: module` in your existing resource list yourself; this version never
    rewrites YAML. A warning in HA logs identifies this case.

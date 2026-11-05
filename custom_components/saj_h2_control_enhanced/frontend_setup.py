@@ -12,8 +12,8 @@ import re
 from homeassistant.components.http import StaticPathConfig
 
 _LOGGER = logging.getLogger(__name__)
-CARD_URL = "/saj-h2-tou/v0526/saj-tou-dynamic-card.js"
-CARD_PATH = "/saj-h2-tou/v0526/saj-tou-dynamic-card.js"
+CARD_URL = "/saj-h2-tou/v0527/saj-tou-dynamic-card.js"
+CARD_PATH = "/saj-h2-tou/v0527/saj-tou-dynamic-card.js"
 DASHBOARD_PATH = "saj-tou-control"
 _REGISTERED = "saj_h2_control_enhanced_frontend_registered"
 

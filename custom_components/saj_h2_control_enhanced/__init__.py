@@ -931,8 +931,8 @@ async def async_setup_entry(hass: HomeAssistant, entry):
     async def scheduled_learning():
         await forecast.async_backfill_history(days=180)
     hass.async_create_task(scheduled_learning())
-    def weekly_learning(_now):
-        hass.async_create_task(scheduled_learning())
+    async def weekly_learning(_now):
+        await scheduled_learning()
     entry.async_on_unload(async_track_time_interval(
         hass,weekly_learning,timedelta(days=7)))
 
@@ -976,8 +976,8 @@ async def async_setup_entry(hass: HomeAssistant, entry):
         except Exception:
             _LOGGER.exception("VPP safety watchdog tick failed; no writes attempted")
 
-    def scheduled_vpp_tick(_now):
-        hass.async_create_task(vpp_watchdog_tick())
+    async def scheduled_vpp_tick(_now):
+        await vpp_watchdog_tick()
     entry.async_on_unload(async_track_time_interval(
         hass,scheduled_vpp_tick,timedelta(seconds=20)))
     return True
