@@ -83,6 +83,14 @@ class PackageAndUI(unittest.TestCase):
         self.assertIn('"preview_mode_change"', frontend)
         self.assertIn("this._refreshBusy", frontend)
 
+    def test_periodic_callbacks_are_asyncio_safe(self):
+        init = (CUSTOM / "__init__.py").read_text()
+        self.assertIn("async def weekly_learning(_now):", init)
+        self.assertIn("await scheduled_learning()", init)
+        self.assertIn("async def scheduled_vpp_tick(_now):", init)
+        self.assertIn("await vpp_watchdog_tick()", init)
+        self.assertNotIn("hass.async_create_task(vpp_watchdog_tick())", init)
+
 
 if __name__ == "__main__":
     unittest.main()

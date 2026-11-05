@@ -72,6 +72,41 @@ vm.runInNewContext(js,globals,{filename:"saj-tou-dynamic-card.js"});
 const Card=registry.get("saj-tou-dynamic-card");
 assert.ok(Card,"custom element registered");
 const card=new Card();
+const largeHistoryCard=new Card();
+largeHistoryCard._historyHours=168;
+largeHistoryCard._historyData={solar:Array.from({length:150000},(_,i)=>({
+  t:Date.now()-150000+i,y:i%2?12000:-3000
+}))};
+assert.doesNotThrow(()=>largeHistoryCard._historyChart(),
+  "large Recorder responses must not exceed WebView function argument limits");
+// HA can configure, connect and publish empty state in either order.
+const lifecycle=new Card();
+assert.doesNotThrow(()=>{
+  lifecycle.setConfig({type:"custom:saj-tou-dynamic-card"});
+  lifecycle.connectedCallback();
+  lifecycle.hass=undefined;
+  lifecycle.hass={states:{"sensor.partial":null,"sensor.restoring":{state:"unavailable"}}};
+});
+assert.ok(lifecycle.shadowRoot.textContent.includes("No SAJ H2 TOU devices"));
+const realRender=lifecycle._renderCard;
+const realConsoleError=console.error;
+let renderErrors=0;
+console.error=()=>renderErrors++;
+try{
+  lifecycle._drafts.set("editing",{changed:true,start:"17:00"});
+  lifecycle._renderCard=()=>{throw Error("temporary rendering failure");};
+  assert.doesNotThrow(()=>lifecycle.setConfig({}));
+  assert.ok(lifecycle.shadowRoot.textContent.includes("Retry dashboard"));
+  assert.equal(lifecycle.shadowRoot.querySelector(".controlPanel"),null);
+  lifecycle.hass={states:{}};
+  assert.equal(renderErrors,1,"avoid flooding console during repeated failures");
+  lifecycle._renderCard=realRender;
+  lifecycle.hass={states:{}};
+  assert.equal(lifecycle._renderFailed,false,"next state update recovers automatically");
+  assert.equal(lifecycle._drafts.get("editing").start,"17:00","preserve unsaved draft");
+  lifecycle.connectedCallback();
+  assert.equal(lifecycle._renderFailed,false,"resume is read-only and safe");
+}finally{console.error=realConsoleError;}
 const roles=[
   ["grid_signed_power","sensor.home_grid_signed_power","Grid power signed"],
   ["grid_import_power","sensor.home_grid_import_power","Power imported"],
@@ -455,6 +490,21 @@ async function main(){
   assert.equal(card._drafts.get(device.id),savedDraft,
     "navigating to Energy must not discard unsaved schedule edits");
   assert.equal(card._drafts.get(device.id).changed,true);
+  const restoredStates=card._hass.states;
+  const unavailableStates=Object.fromEntries(Object.entries(restoredStates).map(([id,state])=>[
+    id,{...state,state:"unavailable",attributes:{
+      saj_tou_role:state.attributes.saj_tou_role,
+      saj_tou_entry_id:state.attributes.saj_tou_entry_id,
+      write_controls_available:false
+    }}
+  ]));
+  card.hass={...card._hass,states:unavailableStates};
+  assert.equal(card._renderFailed,false,"unavailable readbacks do not break the card");
+  assert.equal(card._drafts.get(device.id),savedDraft,"outage preserves unsaved draft");
+  card.hass={...card._hass,states:restoredStates};
+  card.connectedCallback();
+  assert.equal(card._renderFailed,false,"restored readback and app resume recover");
+  assert.equal(card._drafts.get(device.id),savedDraft);
   navigate("Control");
   assert.equal(card._drafts.get(device.id).changed,true,
     "navigating back to Control must show the same unsaved draft");

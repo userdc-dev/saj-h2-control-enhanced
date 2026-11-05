@@ -1,3 +1,30 @@
+## v0.5.27 — Home Assistant 2026.11 timer compatibility (2026-11-05)
+
+- Convert the weekly forecast-learning and 20-second VPP safety timer callbacks
+  to async callbacks awaited by Home Assistant's interval tracker. Home Assistant
+  2026.11 otherwise ran the synchronous wrappers on a worker thread and rejected
+  `hass.async_create_task`, producing a RuntimeError every 20 seconds.
+- No Modbus write, polling, control, schedule, or inverter configuration behavior
+  changed. The VPP watchdog remains no-write unless its existing explicit paths
+  and guards are used.
+- Add a static regression and bump the frontend resource to v0527.
+
+## v0.5.26 — Dashboard loading and rendering recovery (2026-11-05)
+
+- Register the bundled card through Lovelace module resources to avoid relying
+  solely on global extra-JS registration during cold dashboard loads.
+- Upgrade only integration-owned resource URLs; preserve unrelated resources and
+  YAML configuration. Bump the frontend URL to v0526 for fresh mobile loads.
+- Contain render/state-update exceptions in a retry panel, automatically recover
+  on subsequent state updates or view reattachment, and retain in-memory drafts.
+- Skip missing state entries during sensor discovery. No changes to Modbus,
+  polling, service write guards or inverter settings.
+- Compute chart bounds without spreading Recorder samples into function
+  arguments; a 150,000-sample regression covers browser argument-limit failures.
+  Contain errors from asynchronous history-chart replacement as well.
+- Add offline resource-registration and card-lifecycle regression tests; pin Node
+  in CI. Real-device Android confirmation remains outstanding.
+
 ## v0.5.25 — Reliable VPP battery SOC preflight (2026-11-02)
 
 - Fixed the message **Recent battery state of charge is unavailable** when the Control dashboard was otherwise connected. The old preflight depended on a single assumed Home Assistant sensor ID and a 90-second sensor timestamp.

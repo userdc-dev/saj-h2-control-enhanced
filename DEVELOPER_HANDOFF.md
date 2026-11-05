@@ -1,5 +1,52 @@
 # Developer handover — SAJ H2 Control Enhanced
 
+## v0.5.27 — Home Assistant 2026.11 interval callback compatibility (2026-11-05)
+
+Live post-install logs showed `scheduled_vpp_tick` running in a worker thread and
+Home Assistant rejecting `hass.async_create_task(vpp_watchdog_tick())` every 20
+seconds. The weekly learning wrapper had the same unsafe pattern. Both interval
+callbacks are now `async def` and directly await their coroutines, so the interval
+helper schedules them on the event loop. A static regression prevents restoring
+the rejected task-creation pattern. This changes scheduling only: no inverter
+write, Modbus, control, polling, or saved configuration behavior changed.
+
+## v0.5.26 — Intermittent dashboard configuration errors (2026-11-05)
+
+The owner reports the entire SAJ dashboard temporarily failing, especially on
+Android companion **2026.10.1-full**. The dashboard contains one custom card, so
+card registration/render failure affects the whole view. No live HA logs or
+Android console trace were accessible; the exact reported failure remains
+unconfirmed. Global-only `add_extra_js_url` loading is a plausible cold-load race.
+
+`frontend_setup.py` now registers a Lovelace module resource using the existing
+storage collection and upgrades only URLs matching the integration-owned static
+path. YAML resources are never edited; log instructions and use global JS as a
+compatibility fallback. Registration is idempotent per HA process. Manifest
+0.5.26 matches frontend `/saj-h2-tou/v0526/saj-tou-dynamic-card.js`.
+
+The card contains exceptions from rendering and the `hass` setter, removes partial
+controls and shows a local retry panel. It retries on the next state update or
+view attachment; no service call or inverter write is triggered by recovery.
+Unsaved drafts remain in memory. Discovery skips missing state objects; existing
+telemetry update focus/draft guards remain in place. Modbus code, polling,
+coordinator availability, write guards and the bundled Safe Monitor are unchanged.
+Large Recorder responses also caused a concrete argument-limit failure via
+`Math.max(0,...values)`/`Math.min(0,...values)`. Chart bounds now reduce samples
+without argument spreading, including forecast actual data; a 150,000-sample
+regression exercises this. Asynchronous history-chart replacement has the same
+error boundary as full rendering.
+
+Validation: expanded Node smoke tests cover setup order, incomplete state,
+render failure/recovery, unavailable/restored readbacks, attachment, draft
+preservation and no lifecycle/navigation service calls. Four new offline mocked
+HA resource tests cover creation, repeat setup, owned URL upgrades, unrelated
+resources, YAML preservation and HTTP failure containment. Python discovery on
+Windows passes 154/156 after supplying UTF-8 and timezone data; two existing
+installer tests require Linux/bash and run in Ubuntu CI. Real Android/WebView
+verification is outstanding; do not claim device reproduction or hardware proof.
+See `docs/INSTALLATION.md` for pre-merge testing, update, cache reload, diagnostics
+and rollback. No installed HA configuration was changed during development.
+
 **Canonical current guide; updated 2026-11-02, Australia/Adelaide.** Read this before changing any code, dashboard, or Modbus control. **Current version at the time of this handover: 0.5.24.** The project was previously design-only, but now has a deployed Home Assistant control integration with working mode controls, schedule editing code, new fallback control, and read-only energy graphics/table within the TOU dashboard. **Not every writable feature has been proven on the owner's actual inverter.**
 
 **Repository:** https://github.com/userdc-dev/saj-h2-control-enhanced  

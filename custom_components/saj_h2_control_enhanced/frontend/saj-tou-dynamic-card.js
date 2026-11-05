@@ -39,7 +39,7 @@ const nativeTodayEnergy=(hass,key)=>{
     battery_discharge:"Battery discharged today"
   }[key];
   const state=direct||values.find(st=>
-    st.entity_id?.startsWith("sensor.") &&
+    st?.entity_id?.startsWith("sensor.") &&
     st.attributes?.unit_of_measurement==="kWh" &&
     typeof st.attributes?.friendly_name==="string" &&
     st.attributes.friendly_name.toLowerCase().includes(
@@ -441,8 +441,9 @@ const suffixes = {
 };
 function findDevices(hass) {
   const groups = new Map();
-  Object.entries(hass.states || {}).forEach(([id, state]) => {
+  Object.entries(hass?.states || {}).forEach(([id, state]) => {
     if (!id.startsWith("sensor.")) return;
+    if (!state?.attributes) return;
     let role = state.attributes.saj_tou_role;
     if (!roles.includes(role)) {
       // Compatibility with older v0.1.x entity IDs.
@@ -561,6 +562,20 @@ class SajTOUDynamicCard extends HTMLElement {
   setConfig(config) {this._cfg=config||{};this.render();}
   set hass(hass) {
     this._hass=hass;
+    try {
+      this._updateHass(hass);
+    } catch(error) {
+      this._showRenderError(error);
+    }
+  }
+  connectedCallback() {
+    // Android can detach and reattach the same card when resuming a view.
+    // Rebuild from the latest state without requesting services or writes.
+    this.render();
+  }
+  _updateHass(hass) {
+    if(!hass?.states)return;
+    if(this._renderFailed){this.render();return;}
     // Only re-render if actual published state/attributes changed,
     // preserving controls and their current focus between HA updates.
     const devices = findDevices(hass);
@@ -613,7 +628,7 @@ class SajTOUDynamicCard extends HTMLElement {
   _costState(){
     if(!this._hass?.states)return null;
     const entries=Object.values(this._hass.states).filter(s=>
-      s.attributes?.saj_tou_role==="cost_estimate");
+      s?.attributes?.saj_tou_role==="cost_estimate");
     return entries.find(s=>s.attributes.saj_tou_entry_id===this._selected)
       ||entries[0]||null;
   }
@@ -1252,7 +1267,7 @@ class SajTOUDynamicCard extends HTMLElement {
   _forecastState(){
     if(!this._hass?.states)return null;
     const states=Object.values(this._hass.states);
-    const matches=states.filter(st=>st.attributes?.saj_tou_role==="editable_forecast");
+    const matches=states.filter(st=>st?.attributes?.saj_tou_role==="editable_forecast");
     return matches.find(st=>st.attributes.saj_tou_entry_id===this._selected)
       ||matches[0]||null;
   }
@@ -1664,7 +1679,7 @@ class SajTOUDynamicCard extends HTMLElement {
       actual.push({t:item.t,hour:(item.t-midnightMs)/3600000,kwh:total});
       previous=item;
     }
-    const peak=Math.max(1,...projected.map(v=>v.kwh),...actual.map(v=>v.kwh));
+    const peak=[...projected,...actual].reduce((max,v)=>Math.max(max,v.kwh),1);
     const ns="http://www.w3.org/2000/svg";
     const svg=document.createElementNS(ns,"svg");
     svg.setAttribute("viewBox","0 0 920 300");
@@ -1881,7 +1896,10 @@ class SajTOUDynamicCard extends HTMLElement {
     }
     const now=Date.now(),start=now-this._historyHours*3600000;
     const values=displayed.filter(p=>p.t>=start&&p.t<=now).map(p=>p.y/1000);
-    const maxRaw=Math.max(0,...values),minRaw=Math.min(0,...values);
+    // Recorder can return hundreds of thousands of samples. Spreading them
+    // into Math.max/min exceeds WebView's function argument limit.
+    const maxRaw=values.reduce((max,value)=>Math.max(max,value),0);
+    const minRaw=values.reduce((min,value)=>Math.min(min,value),0);
     // Rounded human-readable major intervals: 0.5, 1, 2, 5, 10, ... kW
     const niceStep=(v)=>{
       if(v<=0)return 1;
@@ -2169,9 +2187,11 @@ class SajTOUDynamicCard extends HTMLElement {
       this._historyPending=false;
       if(hours!==this._historyHours){this._loadHistory();return;}
       if(this._page==="energy"){
-        const old=this.shadowRoot?.querySelector(".liveHistory");
-        if(old)old.replaceWith(this._historyChart());
-        else this.render();
+        try{
+          const old=this.shadowRoot?.querySelector(".liveHistory");
+          if(old)old.replaceWith(this._historyChart());
+          else this.render();
+        }catch(error){this._showRenderError(error);}
       }
       // Never re-render the control editor because history finished loading.
     }
@@ -2363,6 +2383,27 @@ class SajTOUDynamicCard extends HTMLElement {
     return panel;
   }
   render() {
+    try {
+      this._renderCard();
+      this._renderFailed=false;
+    } catch(error) {
+      this._showRenderError(error);
+    }
+  }
+  _showRenderError(error) {
+    if(!this._renderFailed)console.error("SAJ card rendering failed",error);
+    this._renderFailed=true;
+    // Clear all partial controls. Preserve drafts in memory, but never leave
+    // stale action buttons visible after an incomplete render.
+    const card=el("ha-card");
+    add(card,el("p",null,"SAJ dashboard temporarily unavailable. Waiting for a Home Assistant update."));
+    const retry=el("button",null,"Retry dashboard");
+    retry.type="button";
+    retry.addEventListener("click",()=>this.render());
+    add(card,retry);
+    this.shadowRoot.replaceChildren(el("style",null,CSS),card);
+  }
+  _renderCard() {
     if (!this.shadowRoot || !this._hass) return;
     const devices = findDevices(this._hass);
     if (!devices.some(g=>g.id===this._selected)) this._selected=devices[0]&&devices[0].id || "";
