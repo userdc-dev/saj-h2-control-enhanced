@@ -1,3 +1,16 @@
+## v0.5.26 — Dashboard loading and rendering recovery (2026-11-05)
+
+- Register the bundled card through Lovelace module resources to avoid relying
+  solely on global extra-JS registration during cold dashboard loads.
+- Upgrade only integration-owned resource URLs; preserve unrelated resources and
+  YAML configuration. Bump the frontend URL to v0526 for fresh mobile loads.
+- Contain render/state-update exceptions in a retry panel, automatically recover
+  on subsequent state updates or view reattachment, and retain in-memory drafts.
+- Skip missing state entries during sensor discovery. No changes to Modbus,
+  polling, service write guards or inverter settings.
+- Add offline resource-registration and card-lifecycle regression tests; pin Node
+  in CI. Real-device Android confirmation remains outstanding.
+
 ## v0.5.25 — Reliable VPP battery SOC preflight (2026-11-02)
 
 - Fixed the message **Recent battery state of charge is unavailable** when the Control dashboard was otherwise connected. The old preflight depended on a single assumed Home Assistant sensor ID and a 90-second sensor timestamp.

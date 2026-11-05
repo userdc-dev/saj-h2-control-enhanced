@@ -79,6 +79,44 @@ Unavailable monitor sensors must display unavailable values, never fabricated ze
 
 ## 6. Upgrades and troubleshooting
 
+### v0.5.26: intermittent dashboard Configuration error, including Android
+
+This version registers the bundled card as a Lovelace **module resource**, rather
+than relying solely on global extra JavaScript loading. This addresses a potential
+card-registration race on cold loads. Rendering failures now show a local retry
+message and recover on the next state update or view attachment. Unsaved drafts
+stay in memory, and partial control buttons are removed while rendering has failed.
+No automatic inverter commands are added.
+
+1. Once v0.5.26 is merged/released, update using HACS or the existing installer
+   above. The installer downloads `main`; it does **not** install an unmerged PR.
+   To test the PR before merge, download its branch ZIP from GitHub and replace
+   only `custom_components/saj_h2_control_enhanced` in your HA config directory,
+   keeping a copy of the previous folder. Leave the monitor and config files alone.
+2. Restart Home Assistant. Confirm the integration version is **0.5.26**.
+3. In storage resource mode, the integration creates/updates only its own
+   `/saj-h2-tou/v…/saj-tou-dynamic-card.js` module resource automatically. It does
+   not replace dashboard layouts or unrelated resources. The new URL is
+   `/saj-h2-tou/v0526/saj-tou-dynamic-card.js`.
+4. If you manage Lovelace resources in YAML, update/add that URL with
+   `type: module` in your existing resource list yourself; this version never
+   rewrites YAML. A warning in HA logs identifies this case.
+5. Fully close and reopen the Android app. If it still shows the old card, use
+   the companion app's frontend cache reset/refresh option if available, then
+   reopen the dashboard. A frontend reload is needed because custom elements
+   cannot be replaced in an already-open browser session.
+6. Check opening the dashboard fresh, backgrounding/resuming the app, and moving
+   between tabs. Confirm live data returns without pressing any inverter actions.
+
+If it persists, capture a screenshot (including any expanded error text), the
+time, HA Core and Android System WebView versions, and HA logs containing
+`frontend_setup`, `saj_h2_control_enhanced`, or `Custom element doesn't exist`.
+A browser console stack starting `SAJ card rendering failed` is particularly
+useful. Remove tokens, addresses and serial numbers before sharing. The automated
+tests use a mocked DOM and HA resources; actual Android/WebView verification is
+still required. To roll back, restore the backed-up controller folder and restart
+HA, then fully reopen the app; the integration will restore its versioned resource.
+
 - **Update using the same installation command** as section 1. Existing controller files are backed up. Existing `saj_h2_safe` files are preserved unchanged, including locally customized versions.
 - **Old UI:** restart Home Assistant and hard-refresh the browser. Inspect the versioned frontend asset and HA logs if necessary.
 - **Missing dashboard:** ensure the controller config flow completed; inspect the Home Assistant logs for dashboard setup errors.

@@ -10,6 +10,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: Syntax compile
         run: python -m compileall -q control_core custom_components bundled_components tests
       - name: Check dynamic dashboard JavaScript syntax
@@ -30,6 +33,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_schedule_transaction.py'
           python -m unittest discover -s tests -p 'test_supervised_fallback.py'
           python -m unittest discover -s tests -p 'test_dashboard_title.py'
+          python -m unittest discover -s tests -p 'test_frontend_setup.py'
           python -m unittest discover -s tests -p 'test_package_and_ui.py'
           python -m unittest discover -s tests -p 'test_install_script.py'
           python -m unittest discover -s tests -p 'test_forecast_dashboard.py'

@@ -7,26 +7,63 @@ not assumed sensor names. Schedule drafts support opt-in validated writes; mode 
 """
 from pathlib import Path
 import logging
+import re
 
 from homeassistant.components.http import StaticPathConfig
 
 _LOGGER = logging.getLogger(__name__)
-CARD_URL = "/saj-h2-tou/v0525/saj-tou-dynamic-card.js"
-CARD_PATH = "/saj-h2-tou/v0525/saj-tou-dynamic-card.js"
+CARD_URL = "/saj-h2-tou/v0526/saj-tou-dynamic-card.js"
+CARD_PATH = "/saj-h2-tou/v0526/saj-tou-dynamic-card.js"
 DASHBOARD_PATH = "saj-tou-control"
+_REGISTERED = "saj_h2_control_enhanced_frontend_registered"
+
+
+async def async_register_card_resource(hass):
+    """Use Lovelace's resource loader; global extra JS can race panel creation."""
+    from homeassistant.components.lovelace import LOVELACE_DATA
+    from homeassistant.components.lovelace.resources import ResourceStorageCollection
+
+    lovelace = hass.data.get(LOVELACE_DATA)
+    resources = getattr(lovelace, "resources", None)
+    if not isinstance(resources, ResourceStorageCollection):
+        # YAML resources belong to the user. Never rewrite them.
+        _LOGGER.warning(
+            "SAJ card requires a Lovelace module resource at %s; "
+            "add it to your YAML resources for reliable dashboard loading", CARD_URL
+        )
+        return False
+    if not resources.loaded:
+        await resources.async_load()
+        resources.loaded = True
+    owned = re.compile(r"^/saj-h2-tou/v[0-9]+/saj-tou-dynamic-card\.js(?:\?.*)?$")
+    matches = [item for item in resources.async_items()
+               if owned.fullmatch(item.get("url", ""))]
+    if not matches:
+        await resources.async_create_item({"res_type": "module", "url": CARD_URL})
+    else:
+        for item in matches:
+            if item.get("url") != CARD_URL or item.get("type") != "module":
+                await resources.async_update_item(
+                    item["id"], {"res_type": "module", "url": CARD_URL}
+                )
+    return True
 
 
 async def async_register_frontend(hass):
     """Serve card via integration path; no manual /config/www copy."""
+    if hass.data.get(_REGISTERED):
+        return
     try:
         path = Path(__file__).parent / "frontend" / "saj-tou-dynamic-card.js"
         await hass.http.async_register_static_paths(
             [StaticPathConfig(CARD_PATH, str(path), False)]
         )
-        # Home Assistant loads this URL as a global JS resource. The custom
-        # card itself is inert until a dashboard places it.
-        from homeassistant.components.frontend import add_extra_js_url
-        add_extra_js_url(hass, CARD_URL)
+        if not await async_register_card_resource(hass):
+            # Compatibility fallback only. Storage dashboards use the awaited
+            # Lovelace loader rather than two competing registration paths.
+            from homeassistant.components.frontend import add_extra_js_url
+            add_extra_js_url(hass, CARD_URL)
+        hass.data[_REGISTERED] = True
         _LOGGER.info("Registered dynamic TOU card at %s", CARD_URL)
     except Exception:
         _LOGGER.exception(
