@@ -72,6 +72,13 @@ vm.runInNewContext(js,globals,{filename:"saj-tou-dynamic-card.js"});
 const Card=registry.get("saj-tou-dynamic-card");
 assert.ok(Card,"custom element registered");
 const card=new Card();
+const largeHistoryCard=new Card();
+largeHistoryCard._historyHours=168;
+largeHistoryCard._historyData={solar:Array.from({length:150000},(_,i)=>({
+  t:Date.now()-150000+i,y:i%2?12000:-3000
+}))};
+assert.doesNotThrow(()=>largeHistoryCard._historyChart(),
+  "large Recorder responses must not exceed WebView function argument limits");
 // HA can configure, connect and publish empty state in either order.
 const lifecycle=new Card();
 assert.doesNotThrow(()=>{

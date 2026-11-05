@@ -86,6 +86,8 @@ than relying solely on global extra JavaScript loading. This addresses a potenti
 card-registration race on cold loads. Rendering failures now show a local retry
 message and recover on the next state update or view attachment. Unsaved drafts
 stay in memory, and partial control buttons are removed while rendering has failed.
+Large recorded history responses no longer exceed browser function argument
+limits when calculating chart bounds.
 No automatic inverter commands are added.
 
 1. Once v0.5.26 is merged/released, update using HACS or the existing installer

@@ -1679,7 +1679,7 @@ class SajTOUDynamicCard extends HTMLElement {
       actual.push({t:item.t,hour:(item.t-midnightMs)/3600000,kwh:total});
       previous=item;
     }
-    const peak=Math.max(1,...projected.map(v=>v.kwh),...actual.map(v=>v.kwh));
+    const peak=[...projected,...actual].reduce((max,v)=>Math.max(max,v.kwh),1);
     const ns="http://www.w3.org/2000/svg";
     const svg=document.createElementNS(ns,"svg");
     svg.setAttribute("viewBox","0 0 920 300");
@@ -1896,7 +1896,10 @@ class SajTOUDynamicCard extends HTMLElement {
     }
     const now=Date.now(),start=now-this._historyHours*3600000;
     const values=displayed.filter(p=>p.t>=start&&p.t<=now).map(p=>p.y/1000);
-    const maxRaw=Math.max(0,...values),minRaw=Math.min(0,...values);
+    // Recorder can return hundreds of thousands of samples. Spreading them
+    // into Math.max/min exceeds WebView's function argument limit.
+    const maxRaw=values.reduce((max,value)=>Math.max(max,value),0);
+    const minRaw=values.reduce((min,value)=>Math.min(min,value),0);
     // Rounded human-readable major intervals: 0.5, 1, 2, 5, 10, ... kW
     const niceStep=(v)=>{
       if(v<=0)return 1;
@@ -2184,9 +2187,11 @@ class SajTOUDynamicCard extends HTMLElement {
       this._historyPending=false;
       if(hours!==this._historyHours){this._loadHistory();return;}
       if(this._page==="energy"){
-        const old=this.shadowRoot?.querySelector(".liveHistory");
-        if(old)old.replaceWith(this._historyChart());
-        else this.render();
+        try{
+          const old=this.shadowRoot?.querySelector(".liveHistory");
+          if(old)old.replaceWith(this._historyChart());
+          else this.render();
+        }catch(error){this._showRenderError(error);}
       }
       // Never re-render the control editor because history finished loading.
     }

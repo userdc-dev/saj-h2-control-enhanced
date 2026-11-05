@@ -20,6 +20,11 @@ view attachment; no service call or inverter write is triggered by recovery.
 Unsaved drafts remain in memory. Discovery skips missing state objects; existing
 telemetry update focus/draft guards remain in place. Modbus code, polling,
 coordinator availability, write guards and the bundled Safe Monitor are unchanged.
+Large Recorder responses also caused a concrete argument-limit failure via
+`Math.max(0,...values)`/`Math.min(0,...values)`. Chart bounds now reduce samples
+without argument spreading, including forecast actual data; a 150,000-sample
+regression exercises this. Asynchronous history-chart replacement has the same
+error boundary as full rendering.
 
 Validation: expanded Node smoke tests cover setup order, incomplete state,
 render failure/recovery, unavailable/restored readbacks, attachment, draft

@@ -8,6 +8,9 @@
   on subsequent state updates or view reattachment, and retain in-memory drafts.
 - Skip missing state entries during sensor discovery. No changes to Modbus,
   polling, service write guards or inverter settings.
+- Compute chart bounds without spreading Recorder samples into function
+  arguments; a 150,000-sample regression covers browser argument-limit failures.
+  Contain errors from asynchronous history-chart replacement as well.
 - Add offline resource-registration and card-lifecycle regression tests; pin Node
   in CI. Real-device Android confirmation remains outstanding.
 
